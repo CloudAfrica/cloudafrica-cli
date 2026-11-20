@@ -16,7 +16,8 @@ Tokens are stored per profile in the user config directory (`~/.config/cloudafri
 on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE`, else `default`.
 
 For automation, `CLOUDAFRICA_TOKEN` (an API key) overrides any profile. `CLOUDAFRICA_ENDPOINT`
-selects another API endpoint; a profile can only be used against the endpoint it signed in to.
+selects another API endpoint, which must be https (plain http only to a loopback address); a profile
+can only be used against the endpoint it signed in to.
 
 ## Virtual machines
 

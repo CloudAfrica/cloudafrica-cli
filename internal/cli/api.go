@@ -32,7 +32,7 @@ func (a *App) apiCmd() *cobra.Command {
 			if err != nil {
 				return usageErr(err)
 			}
-			return a.withSession(cmd.Context(), func(s *session) error {
+			err = a.withSession(cmd.Context(), func(s *session) error {
 				var rd io.Reader
 				if body != nil {
 					rd = bytes.NewReader(body)
@@ -55,9 +55,7 @@ func (a *App) apiCmd() *cobra.Command {
 					return err
 				}
 				if err := cloudafrica.CheckResponse(resp, out); err != nil {
-					// The problem document goes to stdout as well, for scripts.
-					_, _ = a.Stdout.Write(out)
-					return err
+					return &problemBody{err: err, body: out}
 				}
 				if loc := resp.Header.Get("Location"); loc != "" && resp.StatusCode == http.StatusAccepted && len(out) == 0 {
 					fmt.Fprintf(a.Stdout, "{\"location\":%q}\n", loc)
@@ -69,6 +67,14 @@ func (a *App) apiCmd() *cobra.Command {
 				}
 				return err
 			})
+			// The problem document goes to stdout as well, for scripts; only
+			// the final attempt's, if a step-up re-authorization retried.
+			var pb *problemBody
+			if errors.As(err, &pb) {
+				_, _ = a.Stdout.Write(pb.body)
+				return pb.err
+			}
+			return err
 		},
 	}
 	cmd.Flags().StringVarP(&data, "data", "d", "", "JSON request body: a literal, @file or @- (stdin)")
@@ -93,3 +99,12 @@ func (a *App) readData(d string) ([]byte, error) {
 	}
 	return []byte(d), nil
 }
+
+// problemBody is an API error with the raw problem document that carried it.
+type problemBody struct {
+	err  error
+	body []byte
+}
+
+func (p *problemBody) Error() string { return p.err.Error() }
+func (p *problemBody) Unwrap() error { return p.err }

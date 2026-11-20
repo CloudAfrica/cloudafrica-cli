@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
 )
 
 func TestRawAPIDataForms(t *testing.T) {
@@ -63,5 +66,18 @@ func TestRawAPIBodilessAcceptedPrintsLocation(t *testing.T) {
 	h.mustRun("api", "POST", "/v1/vms/vm-1/actions/reboot")
 	if got := strings.TrimSpace(h.stdout.String()); got != `{"location":"/v1/operations/op/reboot-vm-1"}` {
 		t.Errorf("stdout = %s", got)
+	}
+}
+
+// After a step-up retry succeeds, stdout holds only the final response.
+func TestRawAPIStepUpRetryPrintsOnlyTheFinalResponse(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "protected:compute"}}, time.Now().Add(time.Hour))
+	h.fake.ElevateOnConsent = true
+	h.tty = true
+	h.stdin = "y\n"
+	h.mustRun("api", "DELETE", "/v1/vms/vm-1")
+	if out := h.stdout.String(); strings.Contains(out, "not-paired") || !strings.Contains(out, "op/delete-vm-1") {
+		t.Errorf("stdout = %s", out)
 	}
 }

@@ -157,3 +157,25 @@ func TestOperationGetEmptyBodyIsAnError(t *testing.T) {
 		t.Errorf("exit %d, stderr %s", code, h.stderr)
 	}
 }
+
+func TestBadOutputIsRejectedBeforeTheWrite(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "protected:compute"}, Elevated: true},
+		time.Now().Add(time.Hour))
+	if code := h.run("vm", "delete", "vm-1", "--yes", "-o", "xml"); code != ExitUsage || h.fake.DeleteCalls != 0 {
+		t.Errorf("exit %d, delete calls %d", code, h.fake.DeleteCalls)
+	}
+}
+
+func TestRAMOutOfRangeIsRejected(t *testing.T) {
+	for _, args := range [][]string{
+		append(append([]string{}, createArgs...), "--ram-gib", "18014398509481988"),
+		{"vm", "resize", "vm-1", "--ram-gib", "4194308"},
+		{"vm", "resize", "vm-1", "--ram-gib", "0"},
+	} {
+		h := signedIn(t)
+		if code := h.run(args...); code != ExitUsage || len(h.fake.Writes) != 0 {
+			t.Errorf("%v: exit %d, writes %d", args[len(args)-1], code, len(h.fake.Writes))
+		}
+	}
+}

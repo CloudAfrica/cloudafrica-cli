@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -226,6 +227,9 @@ func (a *App) vmCreate() *cobra.Command {
 			if !req.TermsAccepted {
 				return usageErr(errors.New("--accept-terms is required: creating a VM accepts the terms of use"))
 			}
+			if ramGib <= 0 || ramGib > math.MaxInt32/1024 {
+				return usageErr(fmt.Errorf("--ram-gib %d is out of range", ramGib))
+			}
 			req.RamMib = ramGib * 1024
 			if len(sshKeys) > 0 {
 				req.SshKeyIds = &sshKeys
@@ -291,6 +295,9 @@ func (a *App) vmResize() *cobra.Command {
 				body.Cpus = &vcpu
 			}
 			if cmd.Flags().Changed("ram-gib") {
+				if ramGib <= 0 || ramGib > math.MaxInt32/1024 {
+					return usageErr(fmt.Errorf("--ram-gib %d is out of range", ramGib))
+				}
 				mib := ramGib * 1024
 				body.RamMib = &mib
 			}

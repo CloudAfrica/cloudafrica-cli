@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -40,6 +41,9 @@ type Metadata struct {
 // and revocation endpoints receive refresh tokens, so a document pointing
 // elsewhere is refused rather than followed.
 func Discover(ctx context.Context, hc *http.Client, endpoint string) (*Metadata, error) {
+	if err := RequireTLS(endpoint); err != nil {
+		return nil, err
+	}
 	origin, err := Origin(endpoint)
 	if err != nil {
 		return nil, err
@@ -81,6 +85,24 @@ func Discover(ctx context.Context, hc *http.Client, endpoint string) (*Metadata,
 		return nil, fmt.Errorf("discovery: %s names no resource", origin+protectedResourcePath)
 	}
 	return m, nil
+}
+
+// RequireTLS refuses a plain-http endpoint unless its host is loopback:
+// credentials sent to it would cross the network in cleartext.
+func RequireTLS(endpoint string) error {
+	o, err := Origin(endpoint)
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse(o)
+	if u.Scheme == "https" {
+		return nil
+	}
+	h := u.Hostname()
+	if ip := net.ParseIP(h); h == "localhost" || (ip != nil && ip.IsLoopback()) {
+		return nil
+	}
+	return fmt.Errorf("%s is plain http; credentials are only sent over https (or http to a loopback address)", o)
 }
 
 // Origin is scheme://host of u, lowercased, with the scheme's default port dropped.

@@ -241,3 +241,49 @@ func TestRefreshDoesNotFollowRedirects(t *testing.T) {
 		t.Errorf("redirect target received %d requests", hits.Load())
 	}
 }
+
+func TestRequireTLS(t *testing.T) {
+	for ep, ok := range map[string]bool{
+		"https://api.cloudafrica.net": true,
+		"http://127.0.0.1:8080":       true,
+		"http://localhost:8080":       true,
+		"http://[::1]:8080":           true,
+		"http://api.example":          false,
+		"http://10.0.0.5":             false,
+	} {
+		if err := RequireTLS(ep); (err == nil) != ok {
+			t.Errorf("RequireTLS(%q) = %v", ep, err)
+		}
+	}
+	if _, err := Discover(context.Background(), HTTPClient(), "http://api.example"); err == nil {
+		t.Error("Discover accepted a plain-http non-loopback endpoint")
+	}
+}
+
+// A profile signed in to another endpoint since the session began is refused,
+// not refreshed against this source's endpoint.
+func TestSourceRefusesProfileMovedToAnotherEndpoint(t *testing.T) {
+	src, store := expired(t, fakeapi.New(t), true)
+	before, _ := store.Load("default")
+	src.Endpoint = "https://other.example"
+	_, err := src.Token(context.Background())
+	if !errors.Is(err, ErrLoginRequired) || !strings.Contains(err.Error(), "other.example") {
+		t.Errorf("err = %v", err)
+	}
+	if after, _ := store.Load("default"); after.RefreshToken != before.RefreshToken {
+		t.Error("refresh token was spent")
+	}
+}
+
+// Without a refresh token the access token is used until it actually expires.
+func TestSourceUsesUnrefreshableTokenUntilExpiry(t *testing.T) {
+	store := profile.Store{Dir: t.TempDir()}
+	if err := store.Save("default", &profile.Profile{Endpoint: "https://api.cloudafrica.net", AccessToken: "at",
+		Expiry: time.Now().Add(30 * time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	src := &Source{Store: store, Name: "default", HTTP: HTTPClient()}
+	if tok, err := src.Token(context.Background()); err != nil || tok != "at" {
+		t.Errorf("token %q, err %v", tok, err)
+	}
+}

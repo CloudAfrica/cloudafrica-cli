@@ -99,6 +99,9 @@ func (a *App) session() (*session, error) {
 		if ep == "" {
 			ep = DefaultEndpoint
 		}
+		if err := auth.RequireTLS(ep); err != nil {
+			return nil, usageErr(err)
+		}
 		s = &session{endpoint: ep, envToken: true}
 		c, err := a.newClient(ep, cloudafrica.StaticToken(tok))
 		if err != nil {
@@ -122,7 +125,7 @@ func (a *App) session() (*session, error) {
 		return nil, usageErr(fmt.Errorf("profile %q is signed in to %s, but CLOUDAFRICA_ENDPOINT is %s; use a profile signed in there",
 			name, p.Endpoint, ep))
 	}
-	src := &auth.Source{Store: a.Store, Name: name, HTTP: a.authHTTP()}
+	src := &auth.Source{Store: a.Store, Name: name, HTTP: a.authHTTP(), Endpoint: p.Endpoint}
 	c, err := a.newClient(p.Endpoint, src)
 	if err != nil {
 		return nil, err
@@ -197,6 +200,11 @@ func (a *App) Root() *cobra.Command {
 	root.SetErr(a.Stderr)
 	root.SetIn(a.Stdin)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageErr(err) })
+	// Reject a bad --output before a command creates, changes or deletes anything.
+	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+		_, err := a.printer()
+		return err
+	}
 	pf := root.PersistentFlags()
 	pf.StringVar(&a.profileFlag, "profile", "", "profile to use (default $CLOUDAFRICA_PROFILE, then \"default\")")
 	pf.StringVarP(&a.outputFlag, "output", "o", "", "output format: table, json or yaml (default table on a terminal, json otherwise)")

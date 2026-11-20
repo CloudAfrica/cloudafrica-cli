@@ -137,3 +137,26 @@ func TestStepUpInteractiveNotPairedNamesTheLapsedWindow(t *testing.T) {
 		t.Errorf("delete calls %d, stderr %s", h.fake.DeleteCalls, h.stderr)
 	}
 }
+
+func TestEnvTokenRefusesPlainHTTPEndpoint(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_test"
+	h.env["CLOUDAFRICA_ENDPOINT"] = "http://api.example"
+	if code := h.run("vm", "list"); code != ExitUsage || !strings.Contains(h.stderr.String(), "plain http") {
+		t.Errorf("exit %d, stderr %s", code, h.stderr)
+	}
+}
+
+// A missing ordinary scope is a permission error: no step-up prompt, exit 1.
+func TestOrdinaryScopeRefusalIsNotStepUp(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute"}}, time.Now().Add(time.Hour))
+	h.tty = true
+	h.stdin = "y\n"
+	if code := h.run("vm", "start", "vm-1"); code != ExitAPI {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if strings.Contains(h.stderr.String(), "[y/N]") || strings.Contains(h.stderr.String(), "--elevate") || len(h.fake.Authorizations) != 0 {
+		t.Errorf("treated as step-up: %s", h.stderr)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
 
@@ -41,8 +42,14 @@ func stepUpSlug(err error) (string, bool) {
 		return "", false
 	}
 	switch s := e.Slug(); s {
-	case "not-paired", "insufficient-scope":
+	case "not-paired":
 		return s, true
+	case "insufficient-scope":
+		// A missing ordinary scope (read:/write:) is a permission error that
+		// elevation cannot fix.
+		if e.Scope == "" || strings.HasPrefix(e.Scope, "protected:") {
+			return s, true
+		}
 	}
 	return "", false
 }

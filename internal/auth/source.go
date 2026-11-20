@@ -44,6 +44,10 @@ type Source struct {
 	Name  string
 	HTTP  *http.Client
 	Now   func() time.Time
+	// Endpoint, when set, is the API this source serves; a profile reloaded
+	// after a sign-in to another endpoint is refused rather than refreshed
+	// against this one's token endpoint.
+	Endpoint string
 
 	mu   sync.Mutex
 	cur  *profile.Profile
@@ -57,8 +61,30 @@ func (s *Source) now() time.Time {
 	return time.Now()
 }
 
+// fresh reports whether p's access token can be used as is. A token that can
+// be refreshed is renewed RefreshMargin early; one that cannot is used until
+// it actually expires.
 func (s *Source) fresh(p *profile.Profile) bool {
-	return p != nil && p.AccessToken != "" && s.now().Add(RefreshMargin).Before(p.Expiry)
+	if p == nil || p.AccessToken == "" {
+		return false
+	}
+	margin := RefreshMargin
+	if p.RefreshToken == "" {
+		margin = 0
+	}
+	return s.now().Add(margin).Before(p.Expiry)
+}
+
+func (s *Source) checkEndpoint(p *profile.Profile) error {
+	if s.Endpoint == "" {
+		return nil
+	}
+	a, err1 := Origin(s.Endpoint)
+	b, err2 := Origin(p.Endpoint)
+	if err1 != nil || err2 != nil || a != b {
+		return &LoginRequiredError{Profile: s.Name, Reason: fmt.Sprintf("profile %q is now signed in to %s, not %s", s.Name, p.Endpoint, s.Endpoint)}
+	}
+	return nil
 }
 
 // Profile returns the profile as last loaded or refreshed.
@@ -88,6 +114,9 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if err := s.checkEndpoint(p); err != nil {
+			return "", err
+		}
 		s.cur = p
 	}
 	if s.fresh(s.cur) {
@@ -106,6 +135,9 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 		return "", &LoginRequiredError{Profile: s.Name, Reason: fmt.Sprintf("profile %q was signed out", s.Name)}
 	}
 	if err != nil {
+		return "", err
+	}
+	if err := s.checkEndpoint(p); err != nil {
 		return "", err
 	}
 	if s.fresh(p) {
