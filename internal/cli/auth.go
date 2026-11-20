@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,29 +20,55 @@ import (
 	"github.com/CloudAfrica/cloudafrica-cli/internal/profile"
 )
 
-var (
-	defaultScopes = []string{"read:compute", "write:compute"}
-	elevateScopes = []string{"protected:compute"}
+// defaultScopes is what every sign-in requests. Holding protected:compute is
+// not enough for a protected action: the sign-in must also be paired, which
+// is `ca auth elevate`.
+var defaultScopes = []string{"read:compute", "write:compute", "protected:compute", "read:network", "read:ssh-keys"}
+
+const (
+	elevatePollDefault    = 2 * time.Second
+	elevateTimeoutDefault = 5 * time.Minute
+	elevateLabel          = "CloudAfrica CLI (ca)"
 )
+
+var errEnvTokenElevate = errors.New("CLOUDAFRICA_TOKEN is set: a user API token pairs through its own " +
+	"X-CloudAfrica-Elevation header, not `ca auth elevate`; unset it to pair a profile's sign-in")
 
 func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
-	var elevate bool
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
 		Long: "Sign in through the browser and store the session in a profile. One profile holds one account: " +
-			"to use several accounts, sign in once per account with --profile.",
+			"to use several accounts, sign in once per account with --profile. Signing in never allows " +
+			"protected actions such as vm delete; `ca auth elevate` does.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			name, err := a.profileName()
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name, elevate)
+			return a.login(cmd.Context(), name)
 		},
 	}
-	login.Flags().BoolVar(&elevate, "elevate", false, "also request protected:compute (protected actions such as vm delete; needs step-up)")
+	elevate := &cobra.Command{
+		Use:   "elevate",
+		Short: "Allow protected actions (such as vm delete) for this sign-in",
+		Long: "Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you " +
+			"step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. " +
+			"The pairing lasts for the account's elevation window.",
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) != "" {
+				return usageErr(errEnvTokenElevate)
+			}
+			s, err := a.session()
+			if err != nil {
+				return err
+			}
+			return a.elevate(cmd.Context(), s)
+		},
+	}
 
 	status := &cobra.Command{
 		Use:   "status",
@@ -61,7 +88,7 @@ func (a *App) authCmd() *cobra.Command {
 		Args:  noArgs,
 		RunE:  func(cmd *cobra.Command, _ []string) error { return a.logout(cmd.Context()) },
 	}
-	cmd.AddCommand(login, status, list, logout)
+	cmd.AddCommand(login, elevate, status, list, logout)
 	return cmd
 }
 
@@ -70,7 +97,7 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name string, elevate bool) error {
+func (a *App) login(ctx context.Context, name string) error {
 	old, err := a.loadForReplace(name)
 	if err != nil {
 		return err
@@ -88,9 +115,6 @@ func (a *App) login(ctx context.Context, name string, elevate bool) error {
 		return err
 	}
 	scopes := append([]string{}, defaultScopes...)
-	if elevate {
-		scopes = append(scopes, elevateScopes...)
-	}
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
 		Scopes:  scopes,
 		Open:    a.OpenBrowser,
@@ -143,6 +167,89 @@ func (a *App) login(ctx context.Context, name string, elevate bool) error {
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
 	return nil
+}
+
+// elevate pairs s's grant for protected actions: it asks for a pairing,
+// opens the confirm page, and repeats the request until the answer is
+// paired or the wait runs out. The gateway derives the page and code from
+// the grant, so the page is opened once. A sign-in known to lack
+// protected:compute is refused before any request, since pairing it would
+// not allow protected actions.
+func (a *App) elevate(ctx context.Context, s *session) error {
+	if s.envToken {
+		return usageErr(errEnvTokenElevate)
+	}
+	if s.scope != "" && !slices.Contains(strings.Fields(s.scope), "protected:compute") {
+		return &hintedError{err: errNoProtectedScope,
+			hint: "Run `ca auth login` and tick protected:compute on the consent page, then `ca auth elevate`."}
+	}
+	poll, limit := a.ElevatePoll, a.ElevateTimeout
+	if poll <= 0 {
+		poll = elevatePollDefault
+	}
+	if limit <= 0 {
+		limit = elevateTimeoutDefault
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	timedOut := func() error {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("the pairing was not confirmed within %s: %w", limit, context.DeadlineExceeded)
+		}
+		return ctx.Err()
+	}
+	label := elevateLabel
+	shown := ""
+	for {
+		r, err := s.client.API.CreateElevationRequestWithResponse(ctx, &cloudafrica.CreateElevationRequestParams{},
+			cloudafrica.PublicElevationRequestBody{Label: &label})
+		if err != nil {
+			if ctx.Err() != nil {
+				return timedOut()
+			}
+			return err
+		}
+		if err := cloudafrica.CheckResponse(r.HTTPResponse, r.Body); err != nil {
+			return err
+		}
+		if r.JSON200 == nil {
+			return errors.New("empty elevation response")
+		}
+		if d := r.JSON200; d.Paired != nil && *d.Paired {
+			if shown == "" {
+				fmt.Fprintln(a.Stderr, "This sign-in is already allowed protected actions.")
+			} else {
+				fmt.Fprintln(a.Stderr, "Paired: this sign-in may use protected actions for the elevation window.")
+			}
+			return nil
+		}
+		page, code := output.S(r.JSON200.Url), output.S(r.JSON200.Code)
+		if page == "" {
+			return errors.New("the elevation response has neither paired nor a page to confirm on")
+		}
+		if code == "" {
+			return errors.New("the elevation response carries no confirmation code")
+		}
+		if shown == "" {
+			if err := auth.RequireTLS(page); err != nil {
+				return fmt.Errorf("refusing the pairing page: %w", err)
+			}
+			fmt.Fprintf(a.Stderr, "Opening your browser to allow protected actions. If it does not open, visit:\n\n"+
+				"  %s\n\nCheck that the page shows the code %s, then confirm it.\n", page, code)
+			if a.OpenBrowser != nil {
+				if err := a.OpenBrowser(page); err != nil {
+					fmt.Fprintf(a.Stderr, "(could not open a browser: %v)\n", err)
+				}
+			}
+			fmt.Fprintln(a.Stderr, "Waiting for confirmation...")
+			shown = page
+		}
+		select {
+		case <-ctx.Done():
+			return timedOut()
+		case <-time.After(poll):
+		}
+	}
 }
 
 // loadForReplace loads a profile about to be replaced: nil when

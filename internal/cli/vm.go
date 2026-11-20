@@ -138,31 +138,26 @@ func (a *App) vmList() *cobra.Command {
 				return err
 			}
 			return a.withSession(cmd.Context(), func(s *session) error {
-				vms := []cloudafrica.PublicVmDto{}
-				var cursor *string
-				limit := 200
-				for {
+				vms, err := listAll(func(cursor *string) (*[]cloudafrica.PublicVmDto, *string, error) {
+					limit := pageLimit
 					p := &cloudafrica.ListVmsParams{Cursor: cursor, Limit: &limit}
 					if slug != "" {
 						p.Slug = &slug
 					}
 					r, err := s.client.API.ListVmsWithResponse(cmd.Context(), p)
 					if err != nil {
-						return err
+						return nil, nil, err
 					}
 					if err := cloudafrica.CheckResponse(r.HTTPResponse, r.Body); err != nil {
-						return err
+						return nil, nil, err
 					}
 					if r.JSON200 == nil {
-						return errors.New("empty VM list response")
+						return nil, nil, errors.New("empty VM list response")
 					}
-					if r.JSON200.Data != nil {
-						vms = append(vms, *r.JSON200.Data...)
-					}
-					if r.JSON200.NextCursor == nil || *r.JSON200.NextCursor == "" {
-						break
-					}
-					cursor = r.JSON200.NextCursor
+					return r.JSON200.Data, r.JSON200.NextCursor, nil
+				})
+				if err != nil {
+					return err
 				}
 				res := output.Result{Value: vms, Headers: vmHeaders}
 				for _, v := range vms {
@@ -263,14 +258,14 @@ func (a *App) vmCreate() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&req.Name, "name", "", "DNS-style name, unique in the account (required)")
-	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug (required)")
+	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug, from `ca datacenter list` (required)")
 	f.StringVar(&req.OsImageId, "image", "", "OS image id (required)")
-	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id the VM joins (required)")
+	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id the VM joins, from `ca vpc list` (required)")
 	f.Int32Var(&req.Vcpu, "vcpu", 0, "vCPU count, even (required)")
 	f.Int64Var(&ramGib, "ram-gib", 0, "RAM in GiB, even (required)")
 	f.Int64Var(&req.BootDiskGib, "boot-disk-gib", 0, "boot disk size in GiB (required)")
 	f.Int64SliceVar(&extraDisks, "extra-disk-gib", nil, "extra data disk in GiB (repeatable, max 8)")
-	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id to install (repeatable)")
+	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id to install, from `ca ssh-key list` (repeatable)")
 	f.BoolVar(&publicIP, "public-ip", false, "attach a public IP")
 	f.StringVar(&reservedIP, "reserved-ip", "", "build onto this reserved public IP id")
 	f.StringVar(&placementGroup, "placement-group", "", "placement group id")
@@ -354,7 +349,7 @@ func (a *App) vmDelete() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "delete VM_ID",
-		Short: "Delete a VM (a protected action: needs an elevated sign-in)",
+		Short: "Delete a stopped VM (a protected action: needs `ca auth elevate`)",
 		Args:  exactArgs(1, "VM_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
@@ -371,6 +366,10 @@ func (a *App) vmDelete() *cobra.Command {
 					return err
 				}
 				opID, err := accepted202(r.HTTPResponse, r.Body, r.JSON202)
+				if cloudafrica.IsSlug(err, "conflict") {
+					return &hintedError{err: err, hint: fmt.Sprintf("If the VM is running, stop it with `ca vm shutdown %[1]s "+
+						"--wait` (or `ca vm force-stop %[1]s --wait`), then delete it; otherwise the message above gives the reason.", args[0])}
+				}
 				if err != nil {
 					return err
 				}

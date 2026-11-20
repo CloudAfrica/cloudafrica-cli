@@ -25,7 +25,7 @@ type Grant struct {
 	Revoked  bool
 }
 
-func (g *Grant) has(scope string) bool {
+func (g *Grant) Has(scope string) bool {
 	for _, s := range g.Scopes {
 		if s == scope {
 			return true
@@ -48,8 +48,15 @@ type Server struct {
 
 	// GrantScopes, when set, overrides the scopes the consent "grants".
 	GrantScopes func(requested []string) []string
-	// ElevateOnConsent marks grants that hold protected:compute as elevated.
-	ElevateOnConsent bool
+	// PairOnPoll, when > 0, confirms a grant's pairing on its PairOnPoll-th
+	// elevation request, as the user confirming on /pair would.
+	PairOnPoll int
+	// PairURL, when set, replaces the confirm page an elevation request returns.
+	PairURL string
+	// NoPairCode makes an elevation request answer a page with no code.
+	NoPairCode bool
+	// AlwaysNotPaired makes VM delete answer not-paired even once paired.
+	AlwaysNotPaired bool
 	// ExpiresIn is the access-token lifetime in seconds (default 3600).
 	ExpiresIn int64
 	// Failure switches.
@@ -77,6 +84,11 @@ type Server struct {
 	Bodies         []map[string]any // decoded JSON body of each /v1 write (nil if none)
 	IdemKeys       []string
 	DeleteCalls    int
+	ElevationCalls int
+	ElevationBody  []map[string]any // decoded body of each elevation request
+	SSHKeys        []map[string]any
+	VPCs           []map[string]any
+	Datacenters    []map[string]any
 }
 
 // New starts a fake server.
@@ -130,6 +142,12 @@ func problem(w http.ResponseWriter, status int, slug, title string, extra map[st
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// insufficientScope mirrors the gateway: the scope is named only in detail.
+func insufficientScope(w http.ResponseWriter, scope string) {
+	problem(w, 403, "insufficient-scope", "Insufficient scope",
+		map[string]any{"detail": "This token is missing the required scope: " + scope})
 }
 
 func oauthErr(w http.ResponseWriter, code, desc string) {
@@ -193,8 +211,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	if s.GrantScopes != nil {
 		granted = s.GrantScopes(requested)
 	}
+	// Consent grants scopes; it never pairs (elevation is its own step).
 	g := &Grant{Scopes: granted}
-	g.Elevated = s.ElevateOnConsent && g.has("protected:compute")
 	code := s.next("code_")
 	s.codes[code] = &pendingCode{challenge: q.Get("code_challenge"), redirectURI: redirect, resource: q.Get("resource"), grant: g}
 	http.Redirect(w, r, redirect+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), http.StatusFound)
@@ -272,6 +290,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	g := s.access[tok]
 	if strings.HasPrefix(tok, "cak_") {
 		g = &Grant{Scopes: []string{"read:compute", "write:compute"}}
+		if strings.HasPrefix(tok, "cak_protected") { // holds the scope, unpaired
+			g.Scopes = append(g.Scopes, "protected:compute")
+		}
 	}
 	if g == nil || g.Revoked {
 		problem(w, 401, "invalid-token", "Invalid token", nil)
@@ -292,11 +313,28 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		need = "write:compute"
 	}
-	if p != "/v1/account" && !g.has(need) {
-		problem(w, 403, "insufficient-scope", "Insufficient scope", map[string]any{"scope": need})
+	switch p {
+	case "/v1/ssh-keys":
+		need = "read:ssh-keys"
+	case "/v1/vpcs":
+		need = "read:network"
+	}
+	if strings.HasPrefix(p, "/v1/vpcs/") && r.Method == http.MethodDelete {
+		need = "protected:network"
+	}
+	if p != "/v1/account" && p != "/v1/elevation-requests" && !g.Has(need) {
+		insufficientScope(w, need)
 		return
 	}
 	switch {
+	case p == "/v1/elevation-requests" && r.Method == http.MethodPost:
+		s.elevationRequest(w, r, tok, g)
+	case p == "/v1/ssh-keys" && r.Method == http.MethodGet:
+		page(w, r, s.SSHKeys)
+	case p == "/v1/vpcs" && r.Method == http.MethodGet:
+		page(w, r, s.VPCs)
+	case p == "/v1/placement-groups/datacenters" && r.Method == http.MethodGet:
+		writeJSON(w, 200, map[string]any{"data": orEmpty(s.Datacenters)})
 	case p == "/v1/account":
 		writeJSON(w, 200, map[string]any{"accountId": "acc-1", "accountName": "Globex"})
 	case p == "/v1/vms" && r.Method == http.MethodGet:
@@ -313,10 +351,12 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(p, "/v1/vms/") && r.Method == http.MethodDelete:
 		s.DeleteCalls++
 		switch {
-		case !g.has("protected:compute"):
-			problem(w, 403, "insufficient-scope", "Insufficient scope", map[string]any{"scope": "protected:compute"})
-		case !g.Elevated:
-			problem(w, 403, "not-paired", "Not paired", nil)
+		case !g.Has("protected:compute"):
+			insufficientScope(w, "protected:compute")
+		case !g.Elevated || s.AlwaysNotPaired:
+			problem(w, 403, "not-paired", "Client not paired", nil)
+		case s.vmStatus(strings.TrimPrefix(p, "/v1/vms/")) == "running":
+			problem(w, 409, "conflict", "Conflict", map[string]any{"detail": "The VM must be stopped first."})
 		default:
 			s.accept(w, "op/delete-"+strings.TrimPrefix(p, "/v1/vms/"))
 		}
@@ -366,15 +406,69 @@ func (s *Server) accept(w http.ResponseWriter, opID string) {
 }
 
 // listVMs pages two VMs at a time.
-func (s *Server) listVMs(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listVMs(w http.ResponseWriter, r *http.Request) { page(w, r, s.VMs) }
+
+// page serves rows two at a time, following ?cursor=.
+func page(w http.ResponseWriter, r *http.Request, rows []map[string]any) {
 	start := 0
 	if c := r.URL.Query().Get("cursor"); c != "" {
 		_, _ = fmt.Sscanf(c, "c%d", &start)
 	}
-	end := min(start+2, len(s.VMs))
-	page := map[string]any{"data": s.VMs[start:end]}
-	if end < len(s.VMs) {
-		page["nextCursor"] = fmt.Sprintf("c%d", end)
+	start = min(start, len(rows))
+	end := min(start+2, len(rows))
+	body := map[string]any{"data": orEmpty(rows[start:end])}
+	if end < len(rows) {
+		body["nextCursor"] = fmt.Sprintf("c%d", end)
 	}
-	writeJSON(w, 200, page)
+	writeJSON(w, 200, body)
+}
+
+func orEmpty(rows []map[string]any) []map[string]any {
+	if rows == nil {
+		return []map[string]any{}
+	}
+	return rows
+}
+
+func (s *Server) vmStatus(id string) string {
+	for _, vm := range s.VMs {
+		if vm["id"] == id {
+			status, _ := vm["status"].(string)
+			return status
+		}
+	}
+	return ""
+}
+
+// elevationRequest mirrors POST /v1/elevation-requests: an OAuth grant pairs
+// with no header; a user API token (cak_) must send its elevation header.
+// The page and code stay the same while the request is pending.
+func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok string, g *Grant) {
+	s.ElevationCalls++
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	s.ElevationBody = append(s.ElevationBody, body)
+	if strings.HasPrefix(tok, "cak_") && r.Header.Get("X-CloudAfrica-Elevation") == "" {
+		problem(w, 400, "validation-failed", "Validation failed", nil)
+		return
+	}
+	if r.Header.Get("X-CloudAfrica-Elevation") != "" && !strings.HasPrefix(tok, "cak_") {
+		s.T.Errorf("an OAuth sign-in sent an elevation header")
+	}
+	if s.PairOnPoll > 0 && s.ElevationCalls >= s.PairOnPoll {
+		g.Elevated = true
+	}
+	if g.Elevated {
+		writeJSON(w, 200, map[string]any{"paired": true})
+		return
+	}
+	page := s.URL + "/pair?h=abc"
+	if s.PairURL != "" {
+		page = s.PairURL
+	}
+	resp := map[string]any{"paired": false, "url": page, "code": "ABCD-1234"}
+	if s.NoPairCode {
+		delete(resp, "code")
+	}
+	writeJSON(w, 200, resp)
 }

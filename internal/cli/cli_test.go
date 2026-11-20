@@ -31,8 +31,9 @@ type harness struct {
 	// redirect to the loopback callback.
 	browser func(u string) error
 	// cacheDir is App.CacheDir ("" disables the update-check cache).
-	cacheDir     string
-	loginTimeout time.Duration
+	cacheDir       string
+	loginTimeout   time.Duration
+	elevateTimeout time.Duration
 }
 
 func newHarness(t *testing.T) *harness {
@@ -75,6 +76,13 @@ func (h *harness) run(args ...string) int {
 		Store:        h.store,
 		CacheDir:     h.cacheDir,
 		LoginTimeout: lt,
+		ElevatePoll:  10 * time.Millisecond,
+		ElevateTimeout: func() time.Duration {
+			if h.elevateTimeout > 0 {
+				return h.elevateTimeout
+			}
+			return 5 * time.Second
+		}(),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -104,6 +112,11 @@ func compute() *fakeapi.Grant {
 	return &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute"}}
 }
 
+// protected holds every default scope but is not paired.
+func protected() *fakeapi.Grant {
+	return &fakeapi.Grant{Scopes: append([]string{}, defaultScopes...)}
+}
+
 func TestLoginStoresProfileWithPKCEAndAccount(t *testing.T) {
 	h := newHarness(t)
 	h.mustRun("auth", "login")
@@ -122,7 +135,7 @@ func TestLoginStoresProfileWithPKCEAndAccount(t *testing.T) {
 		t.Error("stored access token is not one the server issued")
 	}
 	q := h.fake.Authorizations[0]
-	if q.Get("scope") != "read:compute write:compute" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" {
+	if q.Get("scope") != "read:compute write:compute protected:compute read:network read:ssh-keys" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" {
 		t.Errorf("authorize query = %v", q)
 	}
 	if runtime.GOOS != "windows" {
@@ -136,11 +149,19 @@ func TestLoginStoresProfileWithPKCEAndAccount(t *testing.T) {
 	}
 }
 
-func TestLoginElevateRequestsProtectedScope(t *testing.T) {
+// Sign-in requests protected:compute but never pairs; --elevate is gone.
+func TestLoginDoesNotPairAndElevateFlagIsGone(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("auth", "login", "--elevate")
-	if got := h.fake.Authorizations[0].Get("scope"); got != "read:compute write:compute protected:compute" {
-		t.Errorf("scope = %q", got)
+	if code := h.run("auth", "login", "--elevate"); code != ExitUsage || len(h.fake.Authorizations) != 0 {
+		t.Fatalf("--elevate: exit %d, authorizations %d", code, len(h.fake.Authorizations))
+	}
+	h.mustRun("auth", "login")
+	p, _ := h.store.Load("default")
+	if g := h.fake.GrantOf(p.AccessToken); g == nil || !g.Has("protected:compute") || g.Elevated {
+		t.Errorf("grant = %+v", g)
+	}
+	if h.fake.ElevationCalls != 0 {
+		t.Errorf("login asked for a pairing")
 	}
 }
 
@@ -356,35 +377,46 @@ func TestOperationGetJoinsSlashedID(t *testing.T) {
 	}
 }
 
-func TestStepUpNonInteractiveExits5(t *testing.T) {
+// Off a terminal each refusal exits 5 and names its own remedy.
+func TestStepUpNonInteractiveExits5WithTheMatchingCommand(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
-	h.fake.ElevateOnConsent = true
 	h.stdin = "y\n" // off a terminal the CLI must not prompt, even with an answer waiting
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
 		t.Fatalf("exit = %d, want %d", code, ExitStepUp)
 	}
-	if len(h.fake.Authorizations) != 0 || strings.Contains(h.stderr.String(), "[y/N]") {
-		t.Errorf("prompted or re-authorized off a terminal: %s", h.stderr)
+	if len(h.fake.Authorizations) != 0 || h.fake.ElevationCalls != 0 || strings.Contains(h.stderr.String(), "[y/N]") {
+		t.Errorf("prompted, re-authorized or paired off a terminal: %s", h.stderr)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "ca auth login --elevate") || !strings.Contains(s, "Allow protected actions") {
-		t.Errorf("stderr lacks both remedies: %s", s)
+	if s := h.stderr.String(); !strings.Contains(s, "not granted protected:compute") || !strings.Contains(s, "Run `ca auth login`") {
+		t.Errorf("insufficient-scope hint: %s", s)
 	}
-	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "protected:compute"}}, time.Now().Add(time.Hour))
+	h.seed("default", protected(), time.Now().Add(time.Hour))
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp || !strings.Contains(h.stderr.String(), "not-paired") {
-		t.Fatalf("lapsed window: exit = %d; %s", code, h.stderr)
+		t.Fatalf("not paired: exit = %d; %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "Run `ca auth elevate`") || !strings.Contains(s, "Allow protected actions") ||
+		strings.Contains(s, "ca auth login") {
+		t.Errorf("not-paired hint: %s", s)
 	}
 }
 
-func TestStepUpInteractiveReauthorizesAndRetriesOnce(t *testing.T) {
+// A sign-in without protected:compute is offered `ca auth login`; the new
+// sign-in is then refused not-paired and offered `ca auth elevate`.
+func TestStepUpInteractiveSignsInThenPairs(t *testing.T) {
 	h := newHarness(t)
 	old := h.seed("default", compute(), time.Now().Add(time.Hour))
-	h.fake.ElevateOnConsent = true
+	h.fake.PairOnPoll = 2
 	h.tty = true
-	h.stdin = "y\n"
+	h.stdin = "y\ny\n"
 	h.mustRun("vm", "delete", "vm-1", "--yes")
-	if h.fake.DeleteCalls != 2 {
-		t.Errorf("delete calls = %d, want 2 (refused, then retried)", h.fake.DeleteCalls)
+	if h.fake.DeleteCalls != 3 || h.fake.ElevationCalls != 2 || len(h.fake.Authorizations) != 1 {
+		t.Errorf("delete calls %d (want 3), elevation calls %d (want 2), authorizations %d (want 1)",
+			h.fake.DeleteCalls, h.fake.ElevationCalls, len(h.fake.Authorizations))
+	}
+	s := h.stderr.String()
+	if li, ei := strings.Index(s, "`ca auth login`"), strings.Index(s, "`ca auth elevate`"); li < 0 || ei < 0 || li > ei {
+		t.Errorf("remedies missing or out of order: %s", s)
 	}
 	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
 		t.Errorf("re-authorize scope = %q", got)

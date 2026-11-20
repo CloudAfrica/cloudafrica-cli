@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
@@ -33,9 +34,50 @@ func usageErr(err error) error {
 	return &usageError{err}
 }
 
-// stepUpSlug reports whether err is the gateway refusing a protected action
-// for want of elevation: not-paired (scope held, window lapsed) or
-// insufficient-scope (the grant lacks the scope).
+// scopeDetailPrefix starts the gateway's insufficient-scope detail, which
+// is where the gateway names the missing scope.
+const scopeDetailPrefix = "missing the required scope: "
+
+// requiredScope is the scope an insufficient-scope refusal names: the word
+// after scopeDetailPrefix in its detail, or a scope member should the
+// gateway send one, else "".
+func requiredScope(e *cloudafrica.APIError) string {
+	if e.Scope != "" {
+		return e.Scope
+	}
+	_, after, ok := strings.Cut(e.Detail, scopeDetailPrefix)
+	if !ok {
+		return ""
+	}
+	if f := strings.Fields(after); len(f) > 0 {
+		return strings.TrimRight(f[0], ".,;")
+	}
+	return ""
+}
+
+// refusedScope is the scope an insufficient-scope refusal names, or "".
+func refusedScope(err error) string {
+	var e *cloudafrica.APIError
+	if !errors.As(err, &e) || e.Status != http.StatusForbidden || e.Slug() != "insufficient-scope" {
+		return ""
+	}
+	return requiredScope(e)
+}
+
+// loginGrants reports whether `ca auth login` requests scope, so that
+// signing in again can add it. An unknown scope ("") counts as yes.
+func loginGrants(scope string) bool {
+	return scope == "" || slices.Contains(defaultScopes, scope)
+}
+
+// errNoProtectedScope refuses to pair a sign-in that was not granted
+// protected:compute: pairing cannot add the scope.
+var errNoProtectedScope = errors.New("this sign-in was not granted protected:compute, so pairing it would not " +
+	"allow protected actions")
+
+// stepUpSlug reports whether err is the gateway refusing a protected action:
+// not-paired (scope held, this sign-in not paired) or insufficient-scope
+// (the grant lacks a protected: scope).
 func stepUpSlug(err error) (string, bool) {
 	var e *cloudafrica.APIError
 	if !errors.As(err, &e) || e.Status != http.StatusForbidden {
@@ -47,12 +89,30 @@ func stepUpSlug(err error) (string, bool) {
 	case "insufficient-scope":
 		// A missing ordinary scope (read:/write:) is a permission error that
 		// elevation cannot fix.
-		if e.Scope == "" || strings.HasPrefix(e.Scope, "protected:") {
+		if sc := requiredScope(e); sc == "" || strings.HasPrefix(sc, "protected:") {
 			return s, true
 		}
 	}
 	return "", false
 }
+
+// missingOrdinaryScope is the read:/write: scope an insufficient-scope
+// refusal names, or "".
+func missingOrdinaryScope(err error) string {
+	if sc := refusedScope(err); !strings.HasPrefix(sc, "protected:") {
+		return sc
+	}
+	return ""
+}
+
+// hintedError carries a remedy for one command's refusal.
+type hintedError struct {
+	err  error
+	hint string
+}
+
+func (e *hintedError) Error() string { return e.err.Error() }
+func (e *hintedError) Unwrap() error { return e.err }
 
 // ExitCode maps an error to the documented exit code.
 func ExitCode(err error) int {
@@ -67,6 +127,8 @@ func ExitCode(err error) int {
 		return ExitAuth
 	case errors.Is(err, context.DeadlineExceeded):
 		return ExitTimeout
+	case errors.Is(err, errNoProtectedScope):
+		return ExitStepUp
 	}
 	if _, ok := stepUpSlug(err); ok {
 		return ExitStepUp
@@ -77,18 +139,65 @@ func ExitCode(err error) int {
 	return ExitAPI
 }
 
-func hint(err error) string {
+// hint is the remedy printed under an error; envToken is whether
+// CLOUDAFRICA_TOKEN supplied the credential.
+func hint(err error, envToken bool) string {
+	var he *hintedError
+	if errors.As(err, &he) {
+		return he.hint
+	}
 	var ae *cloudafrica.APIError
 	if slug, ok := stepUpSlug(err); ok {
-		if slug == "insufficient-scope" && errors.As(err, &ae) && ae.Scope != "" {
-			return "This needs the " + ae.Scope + " scope. Run `ca auth login --elevate`, or in the portal open " +
-				"Connected apps and choose \"Allow protected actions\"."
+		if slug == "not-paired" {
+			if envToken {
+				return "CLOUDAFRICA_TOKEN is a user API token: it uses protected actions through its own pairing " +
+					"(POST /v1/elevation-requests with an X-CloudAfrica-Elevation header). Unset it to use your profile."
+			}
+			return "This is a protected action, and this sign-in is not paired for it. Run `ca auth elevate`, or in " +
+				"the portal open Connected apps and choose \"Allow protected actions\"."
 		}
-		return "This is a protected action. Run `ca auth login --elevate`, or in the portal open " +
-			"Connected apps and choose \"Allow protected actions\" to re-elevate this sign-in."
+		return scopeHint(refusedScope(err), envToken, true)
+	}
+	if sc := missingOrdinaryScope(err); sc != "" {
+		return scopeHint(sc, envToken, false)
 	}
 	if errors.As(err, &ae) && ae.Status == http.StatusUnauthorized {
 		return "The credential was refused. Run `ca auth login`, or check CLOUDAFRICA_TOKEN."
 	}
 	return ""
+}
+
+// scopeHint is the remedy for a refusal naming scope ("" when unknown);
+// protected is whether the action also needs pairing afterwards, which `ca`
+// can do only for a profile's sign-in, never for CLOUDAFRICA_TOKEN.
+func scopeHint(scope string, envToken, protected bool) string {
+	named := scope
+	if named == "" {
+		named = "a scope this action needs"
+	}
+	switch {
+	case protected && !loginGrants(scope):
+		return "`ca` cannot perform this action: it needs " + scope + ", which a `ca auth login` sign-in cannot " +
+			"hold, and `ca` cannot pair an API token. Call the API directly with a token that has it and its own " +
+			"X-CloudAfrica-Elevation pairing."
+	case protected && envToken:
+		return "CLOUDAFRICA_TOKEN was not granted " + named + ", and `ca` cannot pair an API token. Unset it, " +
+			"run `ca auth login`, then `ca auth elevate`."
+	case envToken && scope == "":
+		return "CLOUDAFRICA_TOKEN was not granted a scope this action needs; use a token that has it."
+	case envToken:
+		return "CLOUDAFRICA_TOKEN was not granted " + scope + "; use a token that has it."
+	case !loginGrants(scope):
+		return "A `ca auth login` sign-in cannot be granted " + scope + ". Use a user API token that has it, " +
+			"in CLOUDAFRICA_TOKEN."
+	}
+	then := ""
+	if protected {
+		then = ", then `ca auth elevate`"
+	}
+	if scope == "" {
+		return "This sign-in was not granted a scope this action needs. Run `ca auth login` and tick every scope " +
+			"on the consent page" + then + "."
+	}
+	return "This sign-in was not granted " + scope + ". Run `ca auth login` and tick it on the consent page" + then + "."
 }

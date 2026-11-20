@@ -42,6 +42,9 @@ type App struct {
 	Transport http.RoundTripper
 	// LoginTimeout bounds the wait for the browser sign-in (0: the default).
 	LoginTimeout time.Duration
+	// ElevatePoll and ElevateTimeout pace `ca auth elevate` (0: 2 s and 5 min).
+	ElevatePoll    time.Duration
+	ElevateTimeout time.Duration
 
 	stdin *bufio.Reader // shared by every prompt, so none swallows another's answer
 
@@ -56,6 +59,7 @@ type session struct {
 	name     string // profile name; "" for CLOUDAFRICA_TOKEN
 	endpoint string
 	envToken bool
+	scope    string // the profile's granted scopes, space-separated; "" when unknown
 	source   *auth.Source
 	client   *cloudafrica.Client
 }
@@ -130,7 +134,7 @@ func (a *App) session() (*session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &session{name: name, endpoint: p.Endpoint, source: src, client: c}, nil
+	return &session{name: name, endpoint: p.Endpoint, scope: p.Scope, source: src, client: c}, nil
 }
 
 func sameOrigin(a, b string) bool {
@@ -145,36 +149,57 @@ func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource) (*cloudafri
 		cloudafrica.WithTransport(a.Transport))
 }
 
-// withSession runs fn against a session. A step-up refusal on an
-// interactive terminal with a stored profile offers to re-authorize with
-// protected scopes, then runs fn once more.
+// withSession runs fn against a session. On an interactive terminal with a
+// stored profile, a step-up refusal offers its remedy and runs fn again:
+// not-paired offers `ca auth elevate`; insufficient-scope offers `ca auth
+// login` when signing in can grant the scope, since pairing cannot add one.
+// Each remedy is offered at most once, so a fresh sign-in that is then
+// refused not-paired can still be paired, and a refusal that persists after
+// its remedy ends the loop.
 func (a *App) withSession(ctx context.Context, fn func(s *session) error) error {
 	s, err := a.session()
 	if err != nil {
 		return err
 	}
 	err = fn(s)
-	slug, ok := stepUpSlug(err)
-	if !ok || s.envToken || !a.TTY {
+	if s.envToken || !a.TTY {
 		return err
 	}
-	fmt.Fprintf(a.Stderr, "%v\n", err)
-	if slug == "not-paired" {
-		fmt.Fprintln(a.Stderr, "This action needs protected access, and the elevation window has lapsed.")
-	} else {
-		fmt.Fprintln(a.Stderr, "This action needs a scope this sign-in was not granted.")
+	signedIn, paired := false, false
+	for {
+		slug, ok := stepUpSlug(err)
+		if !ok {
+			return err
+		}
+		switch {
+		case slug == "not-paired" && !paired:
+			fmt.Fprintf(a.Stderr, "%v\n", err)
+			fmt.Fprintln(a.Stderr, "This is a protected action, and this sign-in is not paired for it.")
+			if !a.confirm("Allow protected actions now (`ca auth elevate`)?") {
+				return err
+			}
+			if perr := a.elevate(ctx, s); perr != nil {
+				return perr
+			}
+			paired = true
+		case slug == "insufficient-scope" && !signedIn && loginGrants(refusedScope(err)):
+			fmt.Fprintf(a.Stderr, "%v\n", err)
+			fmt.Fprintln(a.Stderr, "This sign-in was not granted the scope this action needs; pairing cannot add one.")
+			if !a.confirm("Sign in again in the browser now (`ca auth login`)?") {
+				return err
+			}
+			if lerr := a.login(ctx, s.name); lerr != nil {
+				return lerr
+			}
+			signedIn = true
+		default:
+			return err
+		}
+		if s, err = a.session(); err != nil {
+			return err
+		}
+		err = fn(s)
 	}
-	if !a.confirm("Re-authorize in the browser with protected access now?") {
-		return err
-	}
-	if lerr := a.login(ctx, s.name, true); lerr != nil {
-		return lerr
-	}
-	s, serr := a.session()
-	if serr != nil {
-		return serr
-	}
-	return fn(s)
 }
 
 // confirm asks a yes/no question on the terminal; anything but y/yes is no.
@@ -210,7 +235,8 @@ func (a *App) Root() *cobra.Command {
 	pf.StringVarP(&a.outputFlag, "output", "o", "", "output format: table, json or yaml (default table on a terminal, json otherwise)")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "print ids only")
 
-	root.AddCommand(a.authCmd(), a.vmCmd(), a.operationCmd(), a.apiCmd(), a.versionCmd())
+	root.AddCommand(a.authCmd(), a.vmCmd(), a.sshKeyCmd(), a.vpcCmd(), a.datacenterCmd(), a.operationCmd(),
+		a.apiCmd(), a.versionCmd())
 	return root
 }
 
@@ -224,7 +250,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	}
 	code := ExitCode(err)
 	fmt.Fprintf(a.Stderr, "Error: %v\n", err)
-	if hint := hint(err); hint != "" {
+	if hint := hint(err, strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) != ""); hint != "" {
 		fmt.Fprintln(a.Stderr, hint)
 	}
 	return code
