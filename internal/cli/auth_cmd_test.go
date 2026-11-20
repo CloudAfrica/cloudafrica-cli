@@ -124,8 +124,18 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 	if strings.Contains(h.stderr.String(), "[y/N]") || len(h.fake.Authorizations) != 0 {
 		t.Errorf("prompted or re-authorized: %s", h.stderr)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN is a user API token") || strings.Contains(s, "ca auth") {
-		t.Errorf("env-token hint: %s", s)
+	// The token lacks protected:compute: pairing cannot add it.
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted protected:compute") ||
+		strings.Contains(s, "pairing") || strings.Contains(s, "ca auth") {
+		t.Errorf("env-token insufficient-scope hint: %s", s)
+	}
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("not paired: exit %d", code)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN is a user API token") ||
+		strings.Contains(s, "not granted") || strings.Contains(s, "ca auth") {
+		t.Errorf("env-token not-paired hint: %s", s)
 	}
 }
 
@@ -139,6 +149,73 @@ func TestStepUpInteractiveNotPairedOffersElevate(t *testing.T) {
 	h.mustRun("vm", "delete", "vm-1", "--yes")
 	if !strings.Contains(h.stderr.String(), "`ca auth elevate`") || h.fake.DeleteCalls != 2 || len(h.fake.Authorizations) != 0 {
 		t.Errorf("delete calls %d, authorizations %d, stderr %s", h.fake.DeleteCalls, len(h.fake.Authorizations), h.stderr)
+	}
+}
+
+func TestStepUpInteractiveNotPairedDeclinedPairsNothing(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.tty = true
+	h.stdin = "n\n"
+	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("exit %d", code)
+	}
+	if h.fake.DeleteCalls != 1 || h.fake.ElevationCalls != 0 || len(h.fake.Authorizations) != 0 {
+		t.Errorf("delete calls %d, elevation calls %d, authorizations %d",
+			h.fake.DeleteCalls, h.fake.ElevationCalls, len(h.fake.Authorizations))
+	}
+}
+
+// A not-paired refusal that persists after pairing ends the loop: pairing
+// is offered once.
+func TestStepUpPersistentNotPairedOffersElevateOnce(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.PairOnPoll = 1
+	h.fake.AlwaysNotPaired = true
+	h.tty = true
+	h.stdin = "y\ny\n"
+	h.browser = func(string) error { return nil }
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || h.fake.DeleteCalls != 2 || h.fake.ElevationCalls != 1 {
+		t.Errorf("prompts %d, delete calls %d, elevation calls %d", n, h.fake.DeleteCalls, h.fake.ElevationCalls)
+	}
+}
+
+// A sign-in that is still not granted the scope after signing in again is
+// not offered a second sign-in.
+func TestStepUpScopeStillMissingAfterLoginOffersLoginOnce(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", compute(), time.Now().Add(time.Hour))
+	h.fake.GrantScopes = func([]string) []string { return []string{"read:compute", "write:compute"} }
+	h.tty = true
+	h.stdin = "y\ny\n"
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || len(h.fake.Authorizations) != 1 || h.fake.DeleteCalls != 2 {
+		t.Errorf("prompts %d, authorizations %d, delete calls %d", n, len(h.fake.Authorizations), h.fake.DeleteCalls)
+	}
+}
+
+// A scope `ca auth login` never requests is not offered a sign-in.
+func TestScopeLoginCannotGrantIsNotOfferedLogin(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.tty = true
+	h.stdin = "y\n"
+	if code := h.run("api", "DELETE", "/v1/vpcs/vpc-1"); code != ExitStepUp {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	s := h.stderr.String()
+	if strings.Contains(s, "[y/N]") || len(h.fake.Authorizations) != 0 {
+		t.Errorf("offered a sign-in: %s", s)
+	}
+	if !strings.Contains(s, "cannot be granted protected:network") || strings.Contains(s, "Run `ca auth login`") {
+		t.Errorf("hint: %s", s)
 	}
 }
 

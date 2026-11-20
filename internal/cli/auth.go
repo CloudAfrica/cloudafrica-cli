@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -170,11 +171,17 @@ func (a *App) login(ctx context.Context, name string) error {
 
 // elevate pairs s's grant for protected actions: it asks for a pairing,
 // opens the confirm page, and repeats the request until the answer is
-// paired or the wait runs out. Repeating while a request is pending returns
-// the same page; a new page (the old request lapsed) is opened in turn.
+// paired or the wait runs out. The gateway derives the page and code from
+// the grant, so the page is opened once. A sign-in known to lack
+// protected:compute is refused before any request, since pairing it would
+// not allow protected actions.
 func (a *App) elevate(ctx context.Context, s *session) error {
 	if s.envToken {
 		return usageErr(errEnvTokenElevate)
+	}
+	if s.scope != "" && !slices.Contains(strings.Fields(s.scope), "protected:compute") {
+		return &hintedError{err: errNoProtectedScope,
+			hint: "Run `ca auth login` and tick protected:compute on the consent page, then `ca auth elevate`."}
 	}
 	poll, limit := a.ElevatePoll, a.ElevateTimeout
 	if poll <= 0 {
@@ -220,7 +227,10 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 		if page == "" {
 			return errors.New("the elevation response has neither paired nor a page to confirm on")
 		}
-		if page != shown {
+		if code == "" {
+			return errors.New("the elevation response carries no confirmation code")
+		}
+		if shown == "" {
 			if err := auth.RequireTLS(page); err != nil {
 				return fmt.Errorf("refusing the pairing page: %w", err)
 			}

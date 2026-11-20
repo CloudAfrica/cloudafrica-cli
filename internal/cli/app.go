@@ -59,6 +59,7 @@ type session struct {
 	name     string // profile name; "" for CLOUDAFRICA_TOKEN
 	endpoint string
 	envToken bool
+	scope    string // the profile's granted scopes, space-separated; "" when unknown
 	source   *auth.Source
 	client   *cloudafrica.Client
 }
@@ -133,7 +134,7 @@ func (a *App) session() (*session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &session{name: name, endpoint: p.Endpoint, source: src, client: c}, nil
+	return &session{name: name, endpoint: p.Endpoint, scope: p.Scope, source: src, client: c}, nil
 }
 
 func sameOrigin(a, b string) bool {
@@ -151,9 +152,10 @@ func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource) (*cloudafri
 // withSession runs fn against a session. On an interactive terminal with a
 // stored profile, a step-up refusal offers its remedy and runs fn again:
 // not-paired offers `ca auth elevate`; insufficient-scope offers `ca auth
-// login`, since pairing cannot add a scope. Each remedy is offered at most
-// once, so a fresh sign-in that is then refused not-paired can still be
-// paired.
+// login` when signing in can grant the scope, since pairing cannot add one.
+// Each remedy is offered at most once, so a fresh sign-in that is then
+// refused not-paired can still be paired, and a refusal that persists after
+// its remedy ends the loop.
 func (a *App) withSession(ctx context.Context, fn func(s *session) error) error {
 	s, err := a.session()
 	if err != nil {
@@ -180,7 +182,7 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 				return perr
 			}
 			paired = true
-		case slug == "insufficient-scope" && !signedIn:
+		case slug == "insufficient-scope" && !signedIn && loginGrants(refusedScope(err)):
 			fmt.Fprintf(a.Stderr, "%v\n", err)
 			fmt.Fprintln(a.Stderr, "This sign-in was not granted the scope this action needs; pairing cannot add one.")
 			if !a.confirm("Sign in again in the browser now (`ca auth login`)?") {

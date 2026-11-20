@@ -18,6 +18,7 @@ on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE
 Signing in grants scopes but never allows protected actions. `ca auth elevate` opens a portal page
 where you step up and confirm the code it prints; the sign-in may then use protected actions for the
 account's elevation window. Connected apps → "Allow protected actions" in the portal does the same.
+A sign-in made before `ca auth login` requested protected:compute must sign in again first.
 
 For automation, `CLOUDAFRICA_TOKEN` (an API key) overrides any profile. `CLOUDAFRICA_ENDPOINT`
 selects another API endpoint, which must be https (plain http only to a loopback address); a profile
@@ -52,6 +53,6 @@ Output is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` p
 | 2 | usage error |
 | 3 | `--wait` timed out, or `ca auth elevate` was not confirmed in 5 minutes |
 | 4 | not signed in, or the session ended (`ca auth login`) |
-| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope) |
+| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope; a scope `ca auth login` does not request needs an API key) |
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

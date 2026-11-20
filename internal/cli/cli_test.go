@@ -414,8 +414,9 @@ func TestStepUpInteractiveSignsInThenPairs(t *testing.T) {
 		t.Errorf("delete calls %d (want 3), elevation calls %d (want 2), authorizations %d (want 1)",
 			h.fake.DeleteCalls, h.fake.ElevationCalls, len(h.fake.Authorizations))
 	}
-	if s := h.stderr.String(); strings.Index(s, "`ca auth login`") > strings.Index(s, "`ca auth elevate`") {
-		t.Errorf("remedies out of order: %s", s)
+	s := h.stderr.String()
+	if li, ei := strings.Index(s, "`ca auth login`"), strings.Index(s, "`ca auth elevate`"); li < 0 || ei < 0 || li > ei {
+		t.Errorf("remedies missing or out of order: %s", s)
 	}
 	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
 		t.Errorf("re-authorize scope = %q", got)

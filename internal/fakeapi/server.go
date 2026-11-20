@@ -53,6 +53,10 @@ type Server struct {
 	PairOnPoll int
 	// PairURL, when set, replaces the confirm page an elevation request returns.
 	PairURL string
+	// NoPairCode makes an elevation request answer a page with no code.
+	NoPairCode bool
+	// AlwaysNotPaired makes VM delete answer not-paired even once paired.
+	AlwaysNotPaired bool
 	// ExpiresIn is the access-token lifetime in seconds (default 3600).
 	ExpiresIn int64
 	// Failure switches.
@@ -286,6 +290,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	g := s.access[tok]
 	if strings.HasPrefix(tok, "cak_") {
 		g = &Grant{Scopes: []string{"read:compute", "write:compute"}}
+		if strings.HasPrefix(tok, "cak_protected") { // holds the scope, unpaired
+			g.Scopes = append(g.Scopes, "protected:compute")
+		}
 	}
 	if g == nil || g.Revoked {
 		problem(w, 401, "invalid-token", "Invalid token", nil)
@@ -311,6 +318,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		need = "read:ssh-keys"
 	case "/v1/vpcs":
 		need = "read:network"
+	}
+	if strings.HasPrefix(p, "/v1/vpcs/") && r.Method == http.MethodDelete {
+		need = "protected:network"
 	}
 	if p != "/v1/account" && p != "/v1/elevation-requests" && !g.Has(need) {
 		insufficientScope(w, need)
@@ -343,7 +353,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case !g.Has("protected:compute"):
 			insufficientScope(w, "protected:compute")
-		case !g.Elevated:
+		case !g.Elevated || s.AlwaysNotPaired:
 			problem(w, 403, "not-paired", "Client not paired", nil)
 		case s.vmStatus(strings.TrimPrefix(p, "/v1/vms/")) == "running":
 			problem(w, 409, "conflict", "Conflict", map[string]any{"detail": "The VM must be stopped first."})
@@ -456,5 +466,9 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 	if s.PairURL != "" {
 		page = s.PairURL
 	}
-	writeJSON(w, 200, map[string]any{"paired": false, "url": page, "code": "ABCD-1234"})
+	resp := map[string]any{"paired": false, "url": page, "code": "ABCD-1234"}
+	if s.NoPairCode {
+		delete(resp, "code")
+	}
+	writeJSON(w, 200, resp)
 }

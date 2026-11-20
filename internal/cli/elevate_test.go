@@ -76,6 +76,29 @@ func TestElevateRefusesAPlainHTTPPage(t *testing.T) {
 	}
 }
 
+// Pairing a sign-in without protected:compute would not allow protected
+// actions, so elevate refuses before asking.
+func TestElevateWithoutProtectedScopeOffersLogin(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", compute(), time.Now().Add(time.Hour))
+	if code := h.run("auth", "elevate"); code != ExitStepUp || h.fake.ElevationCalls != 0 {
+		t.Fatalf("exit %d, elevation calls %d", code, h.fake.ElevationCalls)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "not granted protected:compute") || !strings.Contains(s, "`ca auth login`") {
+		t.Errorf("stderr %s", s)
+	}
+}
+
+func TestElevateRefusesAPageWithoutACode(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.NoPairCode = true
+	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
+	if code := h.run("auth", "elevate"); code != ExitAPI || !strings.Contains(h.stderr.String(), "no confirmation code") {
+		t.Errorf("exit %d, stderr %s", code, h.stderr)
+	}
+}
+
 func TestElevateNotSignedInExits4(t *testing.T) {
 	h := newHarness(t)
 	if code := h.run("auth", "elevate"); code != ExitAuth {
