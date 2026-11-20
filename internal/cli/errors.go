@@ -168,9 +168,21 @@ func hint(err error, envToken bool) string {
 }
 
 // scopeHint is the remedy for a refusal naming scope ("" when unknown);
-// protected is whether the action also needs pairing afterwards.
+// protected is whether the action also needs pairing afterwards, which `ca`
+// can do only for a profile's sign-in, never for CLOUDAFRICA_TOKEN.
 func scopeHint(scope string, envToken, protected bool) string {
+	named := scope
+	if named == "" {
+		named = "a scope this action needs"
+	}
 	switch {
+	case protected && !loginGrants(scope):
+		return "`ca` cannot perform this action: it needs " + scope + ", which a `ca auth login` sign-in cannot " +
+			"hold, and `ca` cannot pair an API token. Call the API directly with a token that has it and its own " +
+			"X-CloudAfrica-Elevation pairing."
+	case protected && envToken:
+		return "CLOUDAFRICA_TOKEN was not granted " + named + ", and `ca` cannot pair an API token. Unset it, " +
+			"run `ca auth login`, then `ca auth elevate`."
 	case envToken && scope == "":
 		return "CLOUDAFRICA_TOKEN was not granted a scope this action needs; use a token that has it."
 	case envToken:

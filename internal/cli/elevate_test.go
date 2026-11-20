@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -191,5 +192,17 @@ func TestListAllRefusesARepeatedCursor(t *testing.T) {
 	})
 	if err == nil || calls != 2 {
 		t.Errorf("err %v after %d calls", err, calls)
+	}
+	cycle := []string{"a", "b"}
+	calls = 0
+	_, err = listAll(func(*string) (*[]int, *string, error) {
+		calls++
+		if calls > 10 {
+			return nil, nil, errors.New("listAll did not stop on the cycle")
+		}
+		return &[]int{calls}, &cycle[calls%2], nil
+	})
+	if err == nil || calls != 3 {
+		t.Errorf("cycle: err %v after %d calls", err, calls)
 	}
 }

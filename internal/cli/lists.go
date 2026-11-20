@@ -15,11 +15,12 @@ import (
 const pageLimit = 200
 
 // listAll follows nextCursor from the first page to the last. page returns
-// one page's rows and its nextCursor; a cursor that repeats is an error, not
+// one page's rows and its nextCursor; a cursor seen before is an error, not
 // an endless loop.
 func listAll[T any](page func(cursor *string) (data *[]T, next *string, err error)) ([]T, error) {
 	out := []T{}
 	var cursor *string
+	seen := map[string]bool{}
 	for {
 		data, next, err := page(cursor)
 		if err != nil {
@@ -31,9 +32,10 @@ func listAll[T any](page func(cursor *string) (data *[]T, next *string, err erro
 		if next == nil || *next == "" {
 			return out, nil
 		}
-		if cursor != nil && *next == *cursor {
+		if seen[*next] {
 			return nil, fmt.Errorf("the server repeated the page cursor %q", *next)
 		}
+		seen[*next] = true
 		cursor = next
 	}
 }

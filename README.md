@@ -53,6 +53,6 @@ Output is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` p
 | 2 | usage error |
 | 3 | `--wait` timed out, or `ca auth elevate` was not confirmed in 5 minutes |
 | 4 | not signed in, or the session ended (`ca auth login`) |
-| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope; a scope `ca auth login` does not request needs an API key) |
+| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope); `ca` cannot pair an API key, and cannot perform a protected action whose scope `ca auth login` does not request |
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
