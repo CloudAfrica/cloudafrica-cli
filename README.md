@@ -23,8 +23,8 @@ selects another API endpoint; a profile can only be used against the endpoint it
 ```sh
 ca vm list
 ca vm get <id>
-ca vm create --name web --datacenter <dc> --image <image> --vpc <vpc> \
-  --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key <key> --accept-terms --wait
+ca vm create --name web --datacenter <dc-slug> --image <image-id> --vpc <vpc> \
+  --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key <key-id> --accept-terms --wait
 ca vm start|shutdown|reboot|force-stop <id> [--wait] [--timeout 10m]
 ca vm resize <id> --vcpu 4 --ram-gib 8
 ca vm rename <id> <name>
