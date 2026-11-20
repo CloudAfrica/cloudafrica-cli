@@ -367,7 +367,7 @@ func (a *App) vmDelete() *cobra.Command {
 				}
 				opID, err := accepted202(r.HTTPResponse, r.Body, r.JSON202)
 				if cloudafrica.IsSlug(err, "conflict") {
-					return &hintedError{err: err, hint: fmt.Sprintf("A running VM cannot be deleted. Stop it first "+
+					return &hintedError{err: err, hint: fmt.Sprintf("A VM must be stopped before it is deleted. If it is running, stop it "+
 						"with `ca vm shutdown %[1]s --wait` (or `ca vm force-stop %[1]s --wait`), then delete it.", args[0])}
 				}
 				if err != nil {
