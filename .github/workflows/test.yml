@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GOPRIVATE: github.com/CloudAfrica
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      # cloudafrica-go is private until the v0.1.0 release makes it public.
+      - name: Read access to cloudafrica-go
+        env:
+          SDK_READ_TOKEN: ${{ secrets.SDK_READ_TOKEN }}
+        run: |
+          [ -z "$SDK_READ_TOKEN" ] && exit 0
+          git config --global url."https://x-access-token:${SDK_READ_TOKEN}@github.com/CloudAfrica/".insteadOf "https://github.com/CloudAfrica/"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+      - name: Release dry run
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: '~> v2'
+          args: release --snapshot --clean
