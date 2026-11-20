@@ -56,3 +56,12 @@ func TestRawAPIUsageErrors(t *testing.T) {
 		t.Errorf("writes = %d", len(h.fake.Writes))
 	}
 }
+
+func TestRawAPIBodilessAcceptedPrintsLocation(t *testing.T) {
+	h := signedIn(t)
+	h.fake.OmitOperationID = true
+	h.mustRun("api", "POST", "/v1/vms/vm-1/actions/reboot")
+	if got := strings.TrimSpace(h.stdout.String()); got != `{"location":"/v1/operations/op/reboot-vm-1"}` {
+		t.Errorf("stdout = %s", got)
+	}
+}
