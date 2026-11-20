@@ -124,17 +124,33 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 	if strings.Contains(h.stderr.String(), "[y/N]") || len(h.fake.Authorizations) != 0 {
 		t.Errorf("prompted or re-authorized: %s", h.stderr)
 	}
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN is a user API token") || strings.Contains(s, "ca auth") {
+		t.Errorf("env-token hint: %s", s)
+	}
 }
 
-func TestStepUpInteractiveNotPairedNamesTheLapsedWindow(t *testing.T) {
+// not-paired offers pairing, never a new sign-in.
+func TestStepUpInteractiveNotPairedOffersElevate(t *testing.T) {
 	h := newHarness(t)
-	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "protected:compute"}}, time.Now().Add(time.Hour))
-	h.fake.ElevateOnConsent = true
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.PairOnPoll = 2
 	h.tty = true
 	h.stdin = "y\n"
 	h.mustRun("vm", "delete", "vm-1", "--yes")
-	if !strings.Contains(h.stderr.String(), "elevation window has lapsed") || h.fake.DeleteCalls != 2 {
-		t.Errorf("delete calls %d, stderr %s", h.fake.DeleteCalls, h.stderr)
+	if !strings.Contains(h.stderr.String(), "`ca auth elevate`") || h.fake.DeleteCalls != 2 || len(h.fake.Authorizations) != 0 {
+		t.Errorf("delete calls %d, authorizations %d, stderr %s", h.fake.DeleteCalls, len(h.fake.Authorizations), h.stderr)
+	}
+}
+
+// When the pairing is not confirmed, the step-up refusal is not retried.
+func TestStepUpInteractiveElevateTimeoutStops(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.elevateTimeout = 50 * time.Millisecond
+	h.tty = true
+	h.stdin = "y\n"
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitTimeout || h.fake.DeleteCalls != 1 {
+		t.Errorf("exit %d, delete calls %d", code, h.fake.DeleteCalls)
 	}
 }
 
@@ -156,7 +172,11 @@ func TestOrdinaryScopeRefusalIsNotStepUp(t *testing.T) {
 	if code := h.run("vm", "start", "vm-1"); code != ExitAPI {
 		t.Fatalf("exit %d, stderr %s", code, h.stderr)
 	}
-	if strings.Contains(h.stderr.String(), "[y/N]") || strings.Contains(h.stderr.String(), "--elevate") || len(h.fake.Authorizations) != 0 {
-		t.Errorf("treated as step-up: %s", h.stderr)
+	if s := h.stderr.String(); strings.Contains(s, "[y/N]") || strings.Contains(s, "elevate") || len(h.fake.Authorizations) != 0 {
+		t.Errorf("treated as step-up: %s", s)
+	}
+	// The gateway names the scope only in detail.
+	if s := h.stderr.String(); !strings.Contains(s, "not granted write:compute") || !strings.Contains(s, "`ca auth login`") {
+		t.Errorf("hint does not name the scope: %s", s)
 	}
 }

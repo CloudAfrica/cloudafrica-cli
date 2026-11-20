@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
 )
 
 func TestRawAPIDataForms(t *testing.T) {
@@ -72,8 +70,8 @@ func TestRawAPIBodilessAcceptedPrintsLocation(t *testing.T) {
 // After a step-up retry succeeds, stdout holds only the final response.
 func TestRawAPIStepUpRetryPrintsOnlyTheFinalResponse(t *testing.T) {
 	h := newHarness(t)
-	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "protected:compute"}}, time.Now().Add(time.Hour))
-	h.fake.ElevateOnConsent = true
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.PairOnPoll = 2
 	h.tty = true
 	h.stdin = "y\n"
 	h.mustRun("api", "DELETE", "/v1/vms/vm-1")
