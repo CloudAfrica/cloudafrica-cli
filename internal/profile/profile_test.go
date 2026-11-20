@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -107,21 +108,32 @@ func TestLockSerialisesContenders(t *testing.T) {
 	}
 }
 
-// A holder that dies without releasing (its descriptor closed by the OS)
-// leaves no lock behind.
+// A holder that exits without releasing leaves no lock behind: the child
+// process takes the lock and exits, and the parent then gets it at once.
 func TestLockFreedWhenHolderDies(t *testing.T) {
+	if dir := os.Getenv("CA_LOCK_HOLDER_DIR"); dir != "" {
+		if _, err := (Store{Dir: dir}).Lock(context.Background(), "default"); err != nil {
+			os.Exit(3)
+		}
+		os.Exit(0)
+	}
 	s := Store{Dir: t.TempDir()}
-	if _, err := s.Lock(context.Background(), "default"); err != nil {
-		t.Fatal(err)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestLockFreedWhenHolderDies$")
+	cmd.Env = append(os.Environ(), "CA_LOCK_HOLDER_DIR="+s.Dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("holder: %v %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir, "default.lock")); err != nil {
+		t.Fatalf("holder left no lock file: %v", err)
 	}
 	f, err := os.OpenFile(filepath.Join(s.Dir, "default.lock"), os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := tryLock(f); ok {
-		t.Fatal("lock not held")
+	defer f.Close()
+	if ok, err := tryLock(f); !ok {
+		t.Fatalf("lock still held after the holder exited: %v", err)
 	}
-	f.Close()
 }
 
 func TestLoadCorruptIsErrCorruptNamingThePath(t *testing.T) {

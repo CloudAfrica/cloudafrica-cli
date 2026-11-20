@@ -36,7 +36,7 @@ type App struct {
 	TTY         bool
 	OpenBrowser func(url string) error
 	Store       profile.Store
-	// CacheDir holds non-secret caches (the update check); "" disables them.
+	// CacheDir holds non-secret caches; "" disables them and the update check.
 	CacheDir string
 	// Transport is the base RoundTripper for API and OAuth calls (nil: the default).
 	Transport http.RoundTripper

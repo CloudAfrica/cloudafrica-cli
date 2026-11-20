@@ -49,7 +49,7 @@ func TestVersionNoticeOnTerminalOnceADay(t *testing.T) {
 	}
 }
 
-func TestVersionNoCheckOffTerminalOrOnDevBuild(t *testing.T) {
+func TestVersionNoCheckOffTerminalOrOnDevBuildOrWithoutCache(t *testing.T) {
 	n := releases(t, http.StatusOK, "v0.2.0")
 	h := newHarness(t)
 	h.cacheDir = t.TempDir()
@@ -60,12 +60,18 @@ func TestVersionNoCheckOffTerminalOrOnDevBuild(t *testing.T) {
 	h.tty = true
 	h.cacheDir = ""
 	h.mustRun("version")
+	if n.Load() != 0 {
+		t.Fatalf("without a cache dir: %d requests", n.Load())
+	}
+	h.cacheDir = t.TempDir()
+	h.mustRun("version")
 	h.app.Version = "dev"
+	h.app.CacheDir = t.TempDir()
 	if code := h.app.Run(t.Context(), []string{"version"}); code != ExitOK {
 		t.Fatalf("dev: exit %d", code)
 	}
 	if n.Load() != 1 {
-		t.Errorf("requests = %d, want 1 (the TTY run only)", n.Load())
+		t.Errorf("requests = %d, want 1 (the cached TTY run only)", n.Load())
 	}
 }
 

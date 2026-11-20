@@ -47,28 +47,22 @@ type updateCache struct {
 
 // latestRelease returns the newest release tag, asking GitHub at most once a
 // day: a failed ask is cached too, so an unreachable GitHub costs one try a
-// day. Any failure yields "": the notice is a courtesy, never an error. The
+// day. With no CacheDir there is no way to keep that promise, so it does not
+// ask. Any failure yields "": the notice is a courtesy, never an error. The
 // cache lives under CacheDir, away from the profiles.
 func (a *App) latestRelease(ctx context.Context) string {
-	if a.Version == "" || a.Version == "dev" {
+	if a.Version == "" || a.Version == "dev" || a.CacheDir == "" {
 		return ""
 	}
-	path := ""
-	if a.CacheDir != "" {
-		path = filepath.Join(a.CacheDir, "update-check.json")
-	}
+	path := filepath.Join(a.CacheDir, "update-check.json")
 	var c updateCache
-	if path != "" {
-		if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &c) == nil && time.Since(c.CheckedAt) < updateCheckEvery {
-			return c.Latest
-		}
+	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &c) == nil && time.Since(c.CheckedAt) < updateCheckEvery {
+		return c.Latest
 	}
 	latest := a.fetchLatest(ctx)
-	if path != "" {
-		c = updateCache{CheckedAt: time.Now(), Latest: latest}
-		if data, err := json.Marshal(c); err == nil && os.MkdirAll(a.CacheDir, 0o700) == nil {
-			_ = os.WriteFile(path, data, 0o600)
-		}
+	c = updateCache{CheckedAt: time.Now(), Latest: latest}
+	if data, err := json.Marshal(c); err == nil && os.MkdirAll(a.CacheDir, 0o700) == nil {
+		_ = os.WriteFile(path, data, 0o600)
 	}
 	return latest
 }
