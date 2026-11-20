@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,10 +36,14 @@ type App struct {
 	TTY         bool
 	OpenBrowser func(url string) error
 	Store       profile.Store
+	// CacheDir holds non-secret caches (the update check); "" disables them.
+	CacheDir string
 	// Transport is the base RoundTripper for API and OAuth calls (nil: the default).
 	Transport http.RoundTripper
 	// LoginTimeout bounds the wait for the browser sign-in (0: the default).
 	LoginTimeout time.Duration
+
+	stdin *bufio.Reader // shared by every prompt, so none swallows another's answer
 
 	// Flags.
 	profileFlag string
@@ -172,7 +177,10 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 // confirm asks a yes/no question on the terminal; anything but y/yes is no.
 func (a *App) confirm(q string) bool {
 	fmt.Fprintf(a.Stderr, "%s [y/N] ", q)
-	line, _ := bufio.NewReader(a.Stdin).ReadString('\n')
+	if a.stdin == nil {
+		a.stdin = bufio.NewReader(a.Stdin)
+	}
+	line, _ := a.stdin.ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true
@@ -220,7 +228,14 @@ func NewFromOS(version string, tty bool, open func(string) error) (*App, error) 
 	if err != nil {
 		return nil, err
 	}
+	cache, err := os.UserCacheDir()
+	if err == nil {
+		cache = filepath.Join(cache, "cloudafrica")
+	} else {
+		cache = ""
+	}
 	return &App{
+		CacheDir:    cache,
 		Version:     version,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,

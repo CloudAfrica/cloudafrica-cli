@@ -30,6 +30,9 @@ type harness struct {
 	// browser replaces the default "browser", which follows the authorize
 	// redirect to the loopback callback.
 	browser func(u string) error
+	// cacheDir is App.CacheDir ("" disables the update-check cache).
+	cacheDir     string
+	loginTimeout time.Duration
 }
 
 func newHarness(t *testing.T) *harness {
@@ -57,6 +60,10 @@ func (h *harness) run(args ...string) int {
 	if open == nil {
 		open = followBrowser
 	}
+	lt := h.loginTimeout
+	if lt == 0 {
+		lt = 5 * time.Second
+	}
 	h.app = &App{
 		Version:      "0.1.0",
 		Stdout:       h.stdout,
@@ -66,7 +73,8 @@ func (h *harness) run(args ...string) int {
 		TTY:          h.tty,
 		OpenBrowser:  open,
 		Store:        h.store,
-		LoginTimeout: 5 * time.Second,
+		CacheDir:     h.cacheDir,
+		LoginTimeout: lt,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -455,6 +463,9 @@ func TestNewer(t *testing.T) {
 		{"v0.10.0", "0.9.0", true},
 		{"v0.1.0", "0.1.0-rc.1", true},
 		{"v0.1.0-rc.2", "0.1.0", false},
+		{"v0.1.0-rc.10", "0.1.0-rc.2", true},
+		{"v0.1.0-rc.2", "0.1.0-rc.10", false},
+		{"v0.1.0-rc.1.1", "0.1.0-rc.1", true},
 		{"garbage", "0.1.0", false},
 	} {
 		if got := newer(c.a, c.b); got != c.want {

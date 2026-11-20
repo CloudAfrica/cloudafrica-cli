@@ -36,13 +36,17 @@ var validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 // ErrNotFound is returned by Load for a profile that has no file.
 var ErrNotFound = errors.New("profile not found")
 
+// ErrCorrupt is returned by Load for a profile file that is not valid JSON.
+var ErrCorrupt = errors.New("profile file is corrupt")
+
 // Store is a directory of profile files.
 type Store struct {
 	Dir string
 }
 
-// DefaultDir is $XDG_CONFIG_HOME/cloudafrica, ~/.config/cloudafrica, or
-// %AppData%\cloudafrica on Windows (os.UserConfigDir).
+// DefaultDir is cloudafrica under os.UserConfigDir: $XDG_CONFIG_HOME or
+// ~/.config on Linux, ~/Library/Application Support on macOS, %AppData% on
+// Windows.
 func DefaultDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -59,14 +63,15 @@ func ValidateName(name string) error {
 	return nil
 }
 
-func (s Store) path(name string) string { return filepath.Join(s.Dir, name+".json") }
+// Path is the file a profile is stored in.
+func (s Store) Path(name string) string { return filepath.Join(s.Dir, name+".json") }
 
 // Load reads a profile; ErrNotFound when it has no file.
 func (s Store) Load(name string) (*Profile, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(s.path(name))
+	data, err := os.ReadFile(s.Path(name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, name)
 	}
@@ -75,7 +80,7 @@ func (s Store) Load(name string) (*Profile, error) {
 	}
 	var p Profile
 	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("profile %s is corrupt: %w", name, err)
+		return nil, fmt.Errorf("%w: %s (%s): %v", ErrCorrupt, name, s.Path(name), err)
 	}
 	return &p, nil
 }
@@ -117,7 +122,7 @@ func (s Store) Save(name string, p *Profile) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, s.path(name)); err != nil {
+	if err := os.Rename(tmp, s.Path(name)); err != nil {
 		return err
 	}
 	ok = true
@@ -129,7 +134,7 @@ func (s Store) Delete(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
 	}
-	err := os.Remove(s.path(name))
+	err := os.Remove(s.Path(name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

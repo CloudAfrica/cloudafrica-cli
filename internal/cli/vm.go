@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -27,18 +29,32 @@ func vmRow(v cloudafrica.PublicVmDto) []string {
 		output.S(v.PrivateIp), output.S(v.PublicIp)}
 }
 
-// accepted202 turns a generated 202 response into its operation id, or the API error.
+// accepted202 turns a generated 202 response into its operation id, or the
+// API error. A body without the id falls back to the id in the Location
+// header (/v1/operations/<id>, as a path or a URL).
 func accepted202(h *http.Response, body []byte, op *cloudafrica.OperationAccepted) (string, error) {
 	if err := cloudafrica.CheckResponse(h, body); err != nil {
 		return "", err
 	}
-	if op == nil || op.OperationId == nil {
-		if loc := h.Header.Get("Location"); loc != "" {
-			return loc, nil
-		}
-		return "", fmt.Errorf("HTTP %d with no operation", h.StatusCode)
+	if op != nil && op.OperationId != nil && *op.OperationId != "" {
+		return *op.OperationId, nil
 	}
-	return *op.OperationId, nil
+	if id, ok := operationIDFromLocation(h.Header.Get("Location")); ok {
+		return id, nil
+	}
+	return "", fmt.Errorf("HTTP %d with no operation id", h.StatusCode)
+}
+
+func operationIDFromLocation(loc string) (string, bool) {
+	u, err := url.Parse(loc)
+	if err != nil {
+		return "", false
+	}
+	id, ok := strings.CutPrefix(u.Path, "/v1/operations/")
+	if !ok || id == "" {
+		return "", false
+	}
+	return id, true
 }
 
 func (a *App) vmCmd() *cobra.Command {

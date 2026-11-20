@@ -69,9 +69,10 @@ func (a *App) authCmd() *cobra.Command {
 // profile's existing endpoint, else the default. A successful login into an
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
+// A corrupt profile file is replaced, since login is how it gets repaired.
 func (a *App) login(ctx context.Context, name string, elevate bool) error {
-	old, err := a.Store.Load(name)
-	if err != nil && !errors.Is(err, profile.ErrNotFound) {
+	old, err := a.loadForReplace(name)
+	if err != nil {
 		return err
 	}
 	endpoint := a.envEndpoint()
@@ -111,7 +112,19 @@ func (a *App) login(ctx context.Context, name string, elevate bool) error {
 	} else {
 		p.AccountID, p.AccountName = acct.id, acct.name
 	}
-	if err := a.Store.Save(name, p); err != nil {
+	// Under the profile lock, so a refresh in another process cannot
+	// overwrite this save; re-read, because that refresh may have rotated the
+	// grant being replaced.
+	release, err := a.Store.Lock(ctx, name)
+	if err != nil {
+		return err
+	}
+	if cur, err := a.Store.Load(name); err == nil {
+		old = cur
+	}
+	err = a.Store.Save(name, p)
+	release()
+	if err != nil {
 		return err
 	}
 	if missing := missingScopes(scopes, tok.Scope); len(missing) > 0 {
@@ -130,6 +143,21 @@ func (a *App) login(ctx context.Context, name string, elevate bool) error {
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
 	return nil
+}
+
+// loadForReplace loads a profile about to be replaced: nil when
+// it has no file, and nil with a warning when its file is corrupt.
+func (a *App) loadForReplace(name string) (*profile.Profile, error) {
+	p, err := a.Store.Load(name)
+	switch {
+	case errors.Is(err, profile.ErrNotFound):
+		return nil, nil
+	case errors.Is(err, profile.ErrCorrupt):
+		fmt.Fprintf(a.Stderr, "Warning: %v; replacing it. Any session it held stays listed under Connected apps "+
+			"in the portal.\n", err)
+		return nil, nil
+	}
+	return p, err
 }
 
 func (a *App) revokeOld(ctx context.Context, old *profile.Profile) error {
@@ -296,18 +324,29 @@ func (a *App) logout(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p, err := a.Store.Load(name)
-	if errors.Is(err, profile.ErrNotFound) {
-		fmt.Fprintf(a.Stderr, "Profile %q is not signed in.\n", name)
-		return nil
-	}
+	// Under the profile lock, so a refresh in another process cannot save
+	// the profile back after it is deleted.
+	release, err := a.Store.Lock(ctx, name)
 	if err != nil {
 		return err
 	}
-	if p.RefreshToken != "" {
+	defer release()
+	p, err := a.Store.Load(name)
+	switch {
+	case errors.Is(err, profile.ErrNotFound):
+		fmt.Fprintf(a.Stderr, "Profile %q is not signed in.\n", name)
+		return nil
+	case errors.Is(err, profile.ErrCorrupt):
+		fmt.Fprintf(a.Stderr, "Warning: %v; deleting it. Any session it held stays listed under Connected apps "+
+			"in the portal.\n", err)
+		p = nil
+	case err != nil:
+		return err
+	}
+	if p != nil && p.RefreshToken != "" {
 		if err := a.revokeOld(ctx, p); err != nil {
-			return fmt.Errorf("revoking the session failed, so the profile was kept (run logout again, or remove it "+
-				"under Connected apps in the portal): %w", err)
+			return fmt.Errorf("revoking the session failed, so the profile was kept: run logout again, remove it "+
+				"under Connected apps in the portal, or delete %s: %w", a.Store.Path(name), err)
 		}
 	}
 	if err := a.Store.Delete(name); err != nil {
@@ -372,8 +411,11 @@ func decodeJSON(resp *http.Response, v any) error {
 	if err := cloudafrica.CheckResponse(resp, data); err != nil {
 		return err
 	}
-	if v == nil || len(data) == 0 {
+	if v == nil {
 		return nil
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("HTTP %d with an empty body", resp.StatusCode)
 	}
 	return json.Unmarshal(data, v)
 }

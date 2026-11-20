@@ -2,8 +2,12 @@ package profile
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -21,9 +25,12 @@ func TestResolvePrecedence(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"../x", "a/b", ".hidden", "", "x.json"} {
-		if err := ValidateName(bad); err == nil && bad != "" {
+		if err := ValidateName(bad); err == nil {
 			t.Errorf("ValidateName(%q) accepted", bad)
 		}
+	}
+	if _, err := Resolve("", func(string) string { return "../etc" }); err == nil {
+		t.Error("CLOUDAFRICA_PROFILE traversal accepted")
 	}
 }
 
@@ -48,7 +55,7 @@ func TestSaveReplacesAtomicallyAndLeavesNoTemp(t *testing.T) {
 	}
 }
 
-func TestLockExcludesAndBreaksStale(t *testing.T) {
+func TestLockExcludes(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	release, err := s.Lock(context.Background(), "default")
 	if err != nil {
@@ -65,17 +72,65 @@ func TestLockExcludesAndBreaksStale(t *testing.T) {
 		t.Fatalf("lock after release: %v", err)
 	}
 	r2()
+}
 
-	// An abandoned lock (its holder died) is broken once it is stale.
-	path := filepath.Join(s.Dir, "default.lock")
-	if err := os.WriteFile(path, []byte("1\n"), 0o600); err != nil {
+// Many contenders: never more than one inside at a time, and all get in.
+func TestLockSerialisesContenders(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	var inside, maxInside, done atomic.Int32
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			release, err := s.Lock(context.Background(), "default")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			n := inside.Add(1)
+			for {
+				m := maxInside.Load()
+				if n <= m || maxInside.CompareAndSwap(m, n) {
+					break
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+			inside.Add(-1)
+			done.Add(1)
+			release()
+		}()
+	}
+	wg.Wait()
+	if maxInside.Load() != 1 || done.Load() != 8 {
+		t.Errorf("max inside = %d, done = %d", maxInside.Load(), done.Load())
+	}
+}
+
+// A holder that dies without releasing (its descriptor closed by the OS)
+// leaves no lock behind.
+func TestLockFreedWhenHolderDies(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	if _, err := s.Lock(context.Background(), "default"); err != nil {
 		t.Fatal(err)
 	}
-	old := time.Now().Add(-2 * staleLock)
-	_ = os.Chtimes(path, old, old)
-	r3, err := s.Lock(context.Background(), "default")
+	f, err := os.OpenFile(filepath.Join(s.Dir, "default.lock"), os.O_RDWR, 0)
 	if err != nil {
-		t.Fatalf("stale lock not broken: %v", err)
+		t.Fatal(err)
 	}
-	r3()
+	if ok, _ := tryLock(f); ok {
+		t.Fatal("lock not held")
+	}
+	f.Close()
+}
+
+func TestLoadCorruptIsErrCorruptNamingThePath(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	if err := os.WriteFile(s.Path("default"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Load("default")
+	if !errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), s.Path("default")) {
+		t.Errorf("err = %v", err)
+	}
 }

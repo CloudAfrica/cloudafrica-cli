@@ -46,16 +46,34 @@ type updateCache struct {
 }
 
 // latestRelease returns the newest release tag, asking GitHub at most once a
-// day. Any failure yields "": the notice is a courtesy, never an error.
+// day: a failed ask is cached too, so an unreachable GitHub costs one try a
+// day. Any failure yields "": the notice is a courtesy, never an error. The
+// cache lives under CacheDir, away from the profiles.
 func (a *App) latestRelease(ctx context.Context) string {
 	if a.Version == "" || a.Version == "dev" {
 		return ""
 	}
-	path := filepath.Join(a.Store.Dir, "update-check.json")
-	var c updateCache
-	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &c) == nil && time.Since(c.CheckedAt) < updateCheckEvery {
-		return c.Latest
+	path := ""
+	if a.CacheDir != "" {
+		path = filepath.Join(a.CacheDir, "update-check.json")
 	}
+	var c updateCache
+	if path != "" {
+		if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &c) == nil && time.Since(c.CheckedAt) < updateCheckEvery {
+			return c.Latest
+		}
+	}
+	latest := a.fetchLatest(ctx)
+	if path != "" {
+		c = updateCache{CheckedAt: time.Now(), Latest: latest}
+		if data, err := json.Marshal(c); err == nil && os.MkdirAll(a.CacheDir, 0o700) == nil {
+			_ = os.WriteFile(path, data, 0o600)
+		}
+	}
+	return latest
+}
+
+func (a *App) fetchLatest(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, LatestReleaseURL, nil)
@@ -78,10 +96,6 @@ func (a *App) latestRelease(ctx context.Context) string {
 	}
 	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel) != nil {
 		return ""
-	}
-	c = updateCache{CheckedAt: time.Now(), Latest: rel.TagName}
-	if data, err := json.Marshal(c); err == nil && os.MkdirAll(a.Store.Dir, 0o700) == nil {
-		_ = os.WriteFile(path, data, 0o600)
 	}
 	return rel.TagName
 }
@@ -108,7 +122,26 @@ func newer(a, b string) bool {
 	case pb.pre == "":
 		return false
 	}
-	return pa.pre > pb.pre
+	return comparePre(pa.pre, pb.pre) > 0
+}
+
+// comparePre orders prerelease strings by dot-separated identifier,
+// numerically where both are numbers (semver §11), so rc.10 follows rc.2.
+func comparePre(a, b string) int {
+	xs, ys := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(xs) && i < len(ys); i++ {
+		x, errx := strconv.Atoi(xs[i])
+		y, erry := strconv.Atoi(ys[i])
+		switch {
+		case errx == nil && erry == nil:
+			if x != y {
+				return x - y
+			}
+		case xs[i] != ys[i]:
+			return strings.Compare(xs[i], ys[i])
+		}
+	}
+	return len(xs) - len(ys)
 }
 
 type version struct {

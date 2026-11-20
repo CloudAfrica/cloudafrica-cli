@@ -4,10 +4,12 @@
 package fakeapi
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -50,6 +52,13 @@ type Server struct {
 	ElevateOnConsent bool
 	// ExpiresIn is the access-token lifetime in seconds (default 3600).
 	ExpiresIn int64
+	// Failure switches.
+	DenyConsent        bool   // authorize redirects with error=access_denied
+	RevokeFails        bool   // revoke answers 503
+	RefreshStatus      int    // when set, refresh answers this status
+	TokenRedirect      string // when set, the token endpoint 307s here
+	OmitOperationID    bool   // 202s carry only the Location header
+	EmptyOperationBody bool   // GET /v1/operations/* answers 200 with no body
 
 	codes    map[string]*pendingCode
 	access   map[string]*Grant
@@ -64,6 +73,8 @@ type Server struct {
 	Revoked        []string
 	Authorizations []url.Values
 	Writes         []*http.Request
+	WriteURLs      []string         // method, path and query of each /v1 write
+	Bodies         []map[string]any // decoded JSON body of each /v1 write (nil if none)
 	IdemKeys       []string
 	DeleteCalls    int
 }
@@ -144,6 +155,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	case p == "/oauth/token":
 		s.token(w, r)
 	case p == "/oauth/revoke":
+		if s.RevokeFails {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		_ = r.ParseForm()
 		s.Revoked = append(s.Revoked, r.PostForm.Get("token"))
 		if g := s.refresh[r.PostForm.Get("token")]; g != nil {
@@ -167,6 +182,10 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" ||
 		!strings.HasPrefix(redirect, "http://127.0.0.1:") || q.Get("resource") != s.URL+"/v1/mcp" {
 		http.Error(w, "bad authorize request", 400)
+		return
+	}
+	if s.DenyConsent {
+		http.Redirect(w, r, redirect+"?error=access_denied&state="+url.QueryEscape(q.Get("state")), http.StatusFound)
 		return
 	}
 	requested := strings.Fields(q.Get("scope"))
@@ -196,6 +215,10 @@ func (s *Server) issue(w http.ResponseWriter, g *Grant) {
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
+	if s.TokenRedirect != "" {
+		http.Redirect(w, r, s.TokenRedirect, http.StatusTemporaryRedirect)
+		return
+	}
 	_ = r.ParseForm()
 	f := r.PostForm
 	if f.Get("client_id") != "cloudafrica-cli" {
@@ -222,6 +245,10 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		s.issue(w, pc.grant)
 	case "refresh_token":
 		s.RefreshCalls++
+		if s.RefreshStatus != 0 {
+			http.Error(w, "refresh failed", s.RefreshStatus)
+			return
+		}
 		rt := f.Get("refresh_token")
 		if s.spent[rt] {
 			oauthErr(w, "invalid_grant", "refresh token already used")
@@ -252,7 +279,13 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	}
 	p := r.URL.Path
 	if r.Method != http.MethodGet {
+		raw, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
 		s.Writes = append(s.Writes, r)
+		s.WriteURLs = append(s.WriteURLs, r.Method+" "+r.URL.RequestURI())
+		s.Bodies = append(s.Bodies, body)
 		s.IdemKeys = append(s.IdemKeys, r.Header.Get("Idempotency-Key"))
 	}
 	need := "read:compute"
@@ -275,6 +308,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(p, "/v1/vms/") && strings.Contains(p, "/actions/"):
 		parts := strings.Split(strings.TrimPrefix(p, "/v1/vms/"), "/actions/")
 		s.accept(w, "op/"+parts[1]+"-"+parts[0])
+	case strings.HasPrefix(p, "/v1/vms/") && (r.Method == http.MethodPatch || r.Method == http.MethodPut):
+		s.accept(w, "op/update-"+strings.TrimPrefix(p, "/v1/vms/"))
 	case strings.HasPrefix(p, "/v1/vms/") && r.Method == http.MethodDelete:
 		s.DeleteCalls++
 		switch {
@@ -296,6 +331,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		problem(w, 404, "not-found", "Not found", nil)
 	case strings.HasPrefix(p, "/v1/operations/"):
 		id := strings.TrimPrefix(p, "/v1/operations/")
+		if s.EmptyOperationBody {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		states := s.OpStates[id]
 		state := "complete"
 		if len(states) > 0 {
@@ -319,6 +358,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) accept(w http.ResponseWriter, opID string) {
 	w.Header().Set("Location", "/v1/operations/"+opID)
+	if s.OmitOperationID {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	writeJSON(w, 202, map[string]any{"operationId": opID})
 }
 
