@@ -163,6 +163,7 @@ func TestElevationEnvRefusedBeforeAnyRequest(t *testing.T) {
 		"malformed":     {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": "cae_short"},
 		"no prefix":     {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": strings.TrimPrefix(testSecret, "cae_") + "AAAA"},
 		"bad character": {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": testSecret + "="},
+		"42 random":     {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": testSecret[:len(testSecret)-1]},
 		"without token": {"CLOUDAFRICA_ELEVATION": testSecret},
 	} {
 		t.Run(name, func(t *testing.T) {

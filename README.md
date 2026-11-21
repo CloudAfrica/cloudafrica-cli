@@ -62,10 +62,11 @@ export CLOUDAFRICA_ELEVATION
 
 Keep the assignment on its own line. `eval "$(ca auth elevate)"` and
 `export CLOUDAFRICA_ELEVATION=$(ca auth elevate)` both return 0 when `ca auth elevate` fails, so the
-`|| exit` would never fire. In PowerShell:
+`|| exit` would never fire. In PowerShell, check the exit code yourself:
 
 ```powershell
 $env:CLOUDAFRICA_ELEVATION = ca auth elevate
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
 In CI, store the printed value as a masked variable alongside the token. Running `ca auth elevate`
