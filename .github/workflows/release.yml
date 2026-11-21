@@ -50,5 +50,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Without it goreleaser picks the rc tag when an rc and the final share a commit.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
           # Contents write on homebrew-tap and scoop-bucket; unused by a prerelease.
           PACKAGES_GITHUB_TOKEN: ${{ secrets.PACKAGES_GITHUB_TOKEN }}
