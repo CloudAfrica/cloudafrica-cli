@@ -28,13 +28,15 @@ var errElevationMalformed = errors.New(elevationEnv + " must be " + elevationPre
 
 // wellFormedElevation reports whether v is cae_ followed by at least 43
 // base64url characters.
+const base64URLAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
 func wellFormedElevation(v string) bool {
 	rest, ok := strings.CutPrefix(v, elevationPrefix)
 	if !ok || len(rest) < elevationMinRandom {
 		return false
 	}
 	for _, c := range rest {
-		if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+		if !strings.ContainsRune(base64URLAlphabet, c) {
 			return false
 		}
 	}

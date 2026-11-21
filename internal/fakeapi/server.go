@@ -489,6 +489,8 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 // PairToken records tok's pairing by secret, as a confirm on /pair would.
 func (s *Server) PairToken(tok, secret string) { s.tokenPairs[tok+"|"+secret] = true }
 
+const base64URLAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
 // wellFormed is the gateway's rule for the elevation header.
 func wellFormed(v string) bool {
 	rest, ok := strings.CutPrefix(v, "cae_")
@@ -496,7 +498,7 @@ func wellFormed(v string) bool {
 		return false
 	}
 	for _, c := range rest {
-		if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+		if !strings.ContainsRune(base64URLAlphabet, c) {
 			return false
 		}
 	}
