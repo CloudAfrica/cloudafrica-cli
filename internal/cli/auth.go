@@ -211,8 +211,11 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 		params.XCloudAfricaElevation = &secret
 	}
 	paired := func() error {
-		if secret != "" {
-			fmt.Fprintln(a.Stdout, secret)
+		if secret == "" {
+			return nil
+		}
+		if _, err := fmt.Fprintln(a.Stdout, secret); err != nil {
+			return fmt.Errorf("writing the elevation secret to stdout: %w", err)
 		}
 		return nil
 	}

@@ -101,17 +101,36 @@ func TestElevateEnvTokenPairsANewSecretAndPrintsItAlone(t *testing.T) {
 	}
 }
 
-// A set secret is paired again rather than replaced, so a script's value
-// survives a re-elevate after the window.
-func TestElevateEnvTokenReusesTheSetSecret(t *testing.T) {
+// A set secret that lapsed is paired again rather than replaced, so a
+// script's value survives a re-elevate after the window.
+func TestElevateEnvTokenRepairsTheSetSecret(t *testing.T) {
 	h := newHarness(t)
 	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
 	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
-	h.fake.PairOnPoll = 1
-	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
+	h.fake.PairOnPoll = 3
+	var opened []string
+	h.browser = func(u string) error { opened = append(opened, u); return nil }
 	h.mustRun("auth", "elevate")
-	if h.stdout.String() != testSecret+"\n" || !strings.Contains(h.stderr.String(), "This API token is already allowed") {
-		t.Errorf("stdout %q, stderr %s", h.stdout, h.stderr)
+	if h.stdout.String() != testSecret+"\n" || len(opened) != 1 ||
+		!strings.Contains(h.stderr.String(), "Paired: this API token") {
+		t.Errorf("stdout %q, opened %v, stderr %s", h.stdout, opened, h.stderr)
+	}
+	for _, line := range h.fake.ElevationHeaders {
+		if !strings.HasSuffix(line, " "+testSecret) {
+			t.Errorf("request without the set secret: %q", line)
+		}
+	}
+	h.mustRun("vm", "delete", "vm-1", "--yes")
+}
+
+// The secret is the command's whole output: failing to write it fails.
+func TestElevateEnvTokenFailsWhenTheSecretCannotBeWritten(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.fake.PairOnPoll = 1
+	h.failStdout = true
+	if code := h.run("auth", "elevate"); code == 0 || !strings.Contains(h.stderr.String(), "writing the elevation secret") {
+		t.Errorf("exit %d, stderr %s", code, h.stderr)
 	}
 }
 

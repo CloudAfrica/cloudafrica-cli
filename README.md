@@ -60,9 +60,16 @@ export CLOUDAFRICA_ELEVATION
 ./teardown.sh
 ```
 
+Keep the assignment on its own line. `eval "$(ca auth elevate)"` and
+`export CLOUDAFRICA_ELEVATION=$(ca auth elevate)` both return 0 when `ca auth elevate` fails, so the
+`|| exit` would never fire. In PowerShell:
+
 ```powershell
 $env:CLOUDAFRICA_ELEVATION = ca auth elevate
 ```
+
+In CI, store the printed value as a masked variable alongside the token. Running `ca auth elevate`
+without capturing it prints the secret to the terminal, where it stays in the scrollback.
 
 `ca auth elevate` opens a portal page where the person steps up and confirms the code; it then prints
 only the pairing secret on stdout, which `ca` sends with every request while `CLOUDAFRICA_ELEVATION`

@@ -12,10 +12,11 @@ const (
 	// elevationEnv holds a user API token's pairing secret, which `ca auth
 	// elevate` prints for a script to set.
 	elevationEnv = "CLOUDAFRICA_ELEVATION"
-	// elevationHeader carries it; the gateway reads it only on a protected route.
+	// elevationHeader carries it.
 	elevationHeader = "X-CloudAfrica-Elevation"
 	elevationPrefix = "cae_"
-	// elevationMinRandom is the gateway's minimum: 32 bytes, base64url, unpadded.
+	// elevationMinRandom is the shortest random part accepted: 32 bytes,
+	// base64url, unpadded.
 	elevationMinRandom = 43
 )
 
@@ -25,7 +26,8 @@ var errElevationWithoutToken = errors.New(elevationEnv + " is set but CLOUDAFRIC
 var errElevationMalformed = errors.New(elevationEnv + " must be " + elevationPrefix +
 	" followed by at least 43 base64url characters, as `ca auth elevate` prints it")
 
-// wellFormedElevation applies the gateway's rule for the elevation header.
+// wellFormedElevation reports whether v is cae_ followed by at least 43
+// base64url characters.
 func wellFormedElevation(v string) bool {
 	rest, ok := strings.CutPrefix(v, elevationPrefix)
 	if !ok || len(rest) < elevationMinRandom {

@@ -145,7 +145,7 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 		t.Fatalf("lapsed: exit %d", code)
 	}
 	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_ELEVATION is no longer paired") ||
-		!strings.Contains(s, "pairs the same value") || strings.Contains(s, "is not paired") {
+		!strings.Contains(s, "with this same CLOUDAFRICA_ELEVATION set") || strings.Contains(s, "is not paired") {
 		t.Errorf("env-token lapsed hint: %s", s)
 	}
 }
