@@ -54,9 +54,9 @@ func (a *App) authCmd() *cobra.Command {
 		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
 		Long: "Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you " +
 			"step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. " +
-			"The pairing lasts for the account's elevation window, while your portal session lasts.\n\n" +
+			"The pairing lasts for the account's elevation window.\n\n" +
 			"With CLOUDAFRICA_TOKEN set, it pairs that API token instead and prints its secret, alone, on " +
-			"stdout; a script sets it with\n\n" +
+			"stdout; that pairing also ends with the confirming person's portal session. A script sets it with\n\n" +
 			"  CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit; export CLOUDAFRICA_ELEVATION\n\n" +
 			"An existing CLOUDAFRICA_ELEVATION is paired again rather than replaced.",
 		Args: noArgs,
