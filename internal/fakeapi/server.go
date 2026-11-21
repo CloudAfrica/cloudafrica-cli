@@ -67,13 +67,16 @@ type Server struct {
 	OmitOperationID    bool   // 202s carry only the Location header
 	EmptyOperationBody bool   // GET /v1/operations/* answers 200 with no body
 
-	codes    map[string]*pendingCode
-	access   map[string]*Grant
-	refresh  map[string]*Grant // live refresh tokens
-	spent    map[string]bool   // used refresh tokens
-	seq      int
-	VMs      []map[string]any
-	OpStates map[string][]string // operation id → states served in turn
+	codes map[string]*pendingCode
+	// tokenPairs holds paired (API token, elevation secret) pairs; a token
+	// pairs by the secret it sends, never by itself.
+	tokenPairs map[string]bool
+	access     map[string]*Grant
+	refresh    map[string]*Grant // live refresh tokens
+	spent      map[string]bool   // used refresh tokens
+	seq        int
+	VMs        []map[string]any
+	OpStates   map[string][]string // operation id → states served in turn
 
 	// Observations.
 	RefreshCalls   int
@@ -86,20 +89,24 @@ type Server struct {
 	DeleteCalls    int
 	ElevationCalls int
 	ElevationBody  []map[string]any // decoded body of each elevation request
-	SSHKeys        []map[string]any
-	VPCs           []map[string]any
-	Datacenters    []map[string]any
+	// ElevationHeaders is "METHOD path header" for every /v1 request
+	// (header "" when absent).
+	ElevationHeaders []string
+	SSHKeys          []map[string]any
+	VPCs             []map[string]any
+	Datacenters      []map[string]any
 }
 
 // New starts a fake server.
 func New(t testing.TB) *Server {
 	s := &Server{
-		T:        t,
-		codes:    map[string]*pendingCode{},
-		access:   map[string]*Grant{},
-		refresh:  map[string]*Grant{},
-		spent:    map[string]bool{},
-		OpStates: map[string][]string{},
+		T:          t,
+		codes:      map[string]*pendingCode{},
+		tokenPairs: map[string]bool{},
+		access:     map[string]*Grant{},
+		refresh:    map[string]*Grant{},
+		spent:      map[string]bool{},
+		OpStates:   map[string][]string{},
 	}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
 	t.Cleanup(s.Close)
@@ -290,10 +297,12 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	g := s.access[tok]
 	if strings.HasPrefix(tok, "cak_") {
 		g = &Grant{Scopes: []string{"read:compute", "write:compute"}}
-		if strings.HasPrefix(tok, "cak_protected") { // holds the scope, unpaired
+		if strings.HasPrefix(tok, "cak_protected") { // holds the scope; paired only by a confirmed secret
 			g.Scopes = append(g.Scopes, "protected:compute")
 		}
+		g.Elevated = s.tokenPairs[tok+"|"+r.Header.Get("X-CloudAfrica-Elevation")]
 	}
+	s.ElevationHeaders = append(s.ElevationHeaders, r.Method+" "+r.URL.Path+" "+r.Header.Get("X-CloudAfrica-Elevation"))
 	if g == nil || g.Revoked {
 		problem(w, 401, "invalid-token", "Invalid token", nil)
 		return
@@ -448,7 +457,8 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	s.ElevationBody = append(s.ElevationBody, body)
-	if strings.HasPrefix(tok, "cak_") && r.Header.Get("X-CloudAfrica-Elevation") == "" {
+	secret := r.Header.Get("X-CloudAfrica-Elevation")
+	if strings.HasPrefix(tok, "cak_") && !wellFormed(secret) {
 		problem(w, 400, "validation-failed", "Validation failed", nil)
 		return
 	}
@@ -457,6 +467,9 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 	}
 	if s.PairOnPoll > 0 && s.ElevationCalls >= s.PairOnPoll {
 		g.Elevated = true
+		if strings.HasPrefix(tok, "cak_") {
+			s.tokenPairs[tok+"|"+secret] = true
+		}
 	}
 	if g.Elevated {
 		writeJSON(w, 200, map[string]any{"paired": true})
@@ -471,4 +484,23 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 		delete(resp, "code")
 	}
 	writeJSON(w, 200, resp)
+}
+
+// PairToken records tok's pairing by secret, as a confirm on /pair would.
+func (s *Server) PairToken(tok, secret string) { s.tokenPairs[tok+"|"+secret] = true }
+
+const base64URLAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+// wellFormed is the gateway's rule for the elevation header.
+func wellFormed(v string) bool {
+	rest, ok := strings.CutPrefix(v, "cae_")
+	if !ok || len(rest) < 43 {
+		return false
+	}
+	for _, c := range rest {
+		if !strings.ContainsRune(base64URLAlphabet, c) {
+			return false
+		}
+	}
+	return true
 }

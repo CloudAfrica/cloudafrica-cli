@@ -44,9 +44,39 @@ where you step up and confirm the code it prints; the sign-in may then use prote
 account's elevation window. Connected apps → "Allow protected actions" in the portal does the same.
 A sign-in made before `ca auth login` requested protected:compute must sign in again first.
 
-For automation, `CLOUDAFRICA_TOKEN` (an API key) overrides any profile. `CLOUDAFRICA_ENDPOINT`
+For automation, `CLOUDAFRICA_TOKEN` (a user API token) overrides any profile. `CLOUDAFRICA_ENDPOINT`
 selects another API endpoint, which must be https (plain http only to a loopback address); a profile
 can only be used against the endpoint it signed in to.
+
+## Scripts
+
+A script uses `CLOUDAFRICA_TOKEN`. For protected actions (`vm delete`) the token must hold the
+protected scope, and a person pairs it before the run:
+
+```sh
+export CLOUDAFRICA_TOKEN=cak_...
+CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit
+export CLOUDAFRICA_ELEVATION
+./teardown.sh
+```
+
+Keep the assignment on its own line. `eval "$(ca auth elevate)"` and
+`export CLOUDAFRICA_ELEVATION=$(ca auth elevate)` both return 0 when `ca auth elevate` fails, so the
+`|| exit` would never fire. In PowerShell, check the exit code yourself:
+
+```powershell
+$env:CLOUDAFRICA_ELEVATION = ca auth elevate
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+```
+
+In CI, store the printed value as a masked variable alongside the token. Running `ca auth elevate`
+without capturing it prints the secret to the terminal, where it stays in the scrollback.
+
+`ca auth elevate` opens a portal page where the person steps up and confirms the code; it then prints
+only the pairing secret on stdout, which `ca` sends with every request while `CLOUDAFRICA_ELEVATION`
+is set. The pairing lasts for the account's elevation window and only while that person's portal
+session does. Run `ca auth elevate` again with the variable still set to pair the same value. The
+secret is useless without the token, but treat it as one: do not log it or commit it.
 
 ## Virtual machines
 
@@ -77,6 +107,6 @@ Output is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` p
 | 2 | usage error |
 | 3 | `--wait` timed out, or `ca auth elevate` was not confirmed in 5 minutes |
 | 4 | not signed in, or the session ended (`ca auth login`) |
-| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope); `ca` cannot pair an API key, and cannot perform a protected action whose scope `ca auth login` does not request |
+| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope); a scope `ca auth login` does not request needs a user API token that has it (see Scripts) |
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

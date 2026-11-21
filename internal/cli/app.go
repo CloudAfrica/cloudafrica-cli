@@ -59,9 +59,11 @@ type session struct {
 	name     string // profile name; "" for CLOUDAFRICA_TOKEN
 	endpoint string
 	envToken bool
-	scope    string // the profile's granted scopes, space-separated; "" when unknown
-	source   *auth.Source
-	client   *cloudafrica.Client
+	// elevation is CLOUDAFRICA_ELEVATION for CLOUDAFRICA_TOKEN, else "".
+	elevation string
+	scope     string // the profile's granted scopes, space-separated; "" when unknown
+	source    *auth.Source
+	client    *cloudafrica.Client
 }
 
 func (a *App) authHTTP() *http.Client {
@@ -95,10 +97,19 @@ func (a *App) envEndpoint() string {
 
 // session resolves the credential: CLOUDAFRICA_TOKEN overrides any profile;
 // otherwise the selected profile, whose endpoint must agree with
-// CLOUDAFRICA_ENDPOINT when that is set.
+// CLOUDAFRICA_ENDPOINT when that is set. CLOUDAFRICA_ELEVATION goes with
+// CLOUDAFRICA_TOKEN only, and must be well formed.
 func (a *App) session() (*session, error) {
 	var s *session
-	if tok := strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")); tok != "" {
+	tok := strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN"))
+	elevation := strings.TrimSpace(a.Getenv(elevationEnv))
+	switch {
+	case elevation != "" && tok == "":
+		return nil, usageErr(errElevationWithoutToken)
+	case elevation != "" && !wellFormedElevation(elevation):
+		return nil, usageErr(errElevationMalformed)
+	}
+	if tok != "" {
 		ep := a.envEndpoint()
 		if ep == "" {
 			ep = DefaultEndpoint
@@ -106,8 +117,8 @@ func (a *App) session() (*session, error) {
 		if err := auth.RequireTLS(ep); err != nil {
 			return nil, usageErr(err)
 		}
-		s = &session{endpoint: ep, envToken: true}
-		c, err := a.newClient(ep, cloudafrica.StaticToken(tok))
+		s = &session{endpoint: ep, envToken: true, elevation: elevation}
+		c, err := a.newClient(ep, cloudafrica.StaticToken(tok), elevation)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +141,7 @@ func (a *App) session() (*session, error) {
 			name, p.Endpoint, ep))
 	}
 	src := &auth.Source{Store: a.Store, Name: name, HTTP: a.authHTTP(), Endpoint: p.Endpoint}
-	c, err := a.newClient(p.Endpoint, src)
+	c, err := a.newClient(p.Endpoint, src, "")
 	if err != nil {
 		return nil, err
 	}
@@ -143,10 +154,21 @@ func sameOrigin(a, b string) bool {
 	return err1 == nil && err2 == nil && oa == ob
 }
 
-func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource) (*cloudafrica.Client, error) {
+// newClient builds the API client. A non-empty elevation is sent on every
+// request; it wraps this client's transport only, never a.Transport, which
+// the update check also uses.
+func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource, elevation string) (*cloudafrica.Client, error) {
+	rt := a.Transport
+	if elevation != "" {
+		base := rt
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		rt = &elevationTransport{base: base, secret: elevation}
+	}
 	return cloudafrica.New(endpoint, ts,
 		cloudafrica.WithUserAgent("ca/"+a.Version),
-		cloudafrica.WithTransport(a.Transport))
+		cloudafrica.WithTransport(rt))
 }
 
 // withSession runs fn against a session. On an interactive terminal with a
@@ -250,7 +272,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	}
 	code := ExitCode(err)
 	fmt.Fprintf(a.Stderr, "Error: %v\n", err)
-	if hint := hint(err, strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) != ""); hint != "" {
+	envToken := strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) != ""
+	if hint := hint(err, envToken, envToken && strings.TrimSpace(a.Getenv(elevationEnv)) != ""); hint != "" {
 		fmt.Fprintln(a.Stderr, hint)
 	}
 	return code

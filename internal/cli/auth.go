@@ -29,10 +29,8 @@ const (
 	elevatePollDefault    = 2 * time.Second
 	elevateTimeoutDefault = 5 * time.Minute
 	elevateLabel          = "CloudAfrica CLI (ca)"
+	elevateTokenLabel     = "CloudAfrica CLI (ca) — API token"
 )
-
-var errEnvTokenElevate = errors.New("CLOUDAFRICA_TOKEN is set: a user API token pairs through its own " +
-	"X-CloudAfrica-Elevation header, not `ca auth elevate`; unset it to pair a profile's sign-in")
 
 func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
@@ -53,15 +51,16 @@ func (a *App) authCmd() *cobra.Command {
 	}
 	elevate := &cobra.Command{
 		Use:   "elevate",
-		Short: "Allow protected actions (such as vm delete) for this sign-in",
+		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
 		Long: "Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you " +
 			"step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. " +
-			"The pairing lasts for the account's elevation window.",
+			"The pairing lasts for the account's elevation window.\n\n" +
+			"With CLOUDAFRICA_TOKEN set, it pairs that API token instead and prints its secret, alone, on " +
+			"stdout; that pairing also ends with the confirming person's portal session. A script sets it with\n\n" +
+			"  CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit; export CLOUDAFRICA_ELEVATION\n\n" +
+			"An existing CLOUDAFRICA_ELEVATION is paired again rather than replaced.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) != "" {
-				return usageErr(errEnvTokenElevate)
-			}
 			s, err := a.session()
 			if err != nil {
 				return err
@@ -174,11 +173,10 @@ func (a *App) login(ctx context.Context, name string) error {
 // paired or the wait runs out. The gateway derives the page and code from
 // the grant, so the page is opened once. A sign-in known to lack
 // protected:compute is refused before any request, since pairing it would
-// not allow protected actions.
+// not allow protected actions. For CLOUDAFRICA_TOKEN it pairs a secret
+// instead (CLOUDAFRICA_ELEVATION, else a new one) and prints it, alone, on
+// stdout once paired, whatever -o says: a script captures it with $(...).
 func (a *App) elevate(ctx context.Context, s *session) error {
-	if s.envToken {
-		return usageErr(errEnvTokenElevate)
-	}
 	if s.scope != "" && !slices.Contains(strings.Fields(s.scope), "protected:compute") {
 		return &hintedError{err: errNoProtectedScope,
 			hint: "Run `ca auth login` and tick protected:compute on the consent page, then `ca auth elevate`."}
@@ -198,10 +196,32 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 		}
 		return ctx.Err()
 	}
-	label := elevateLabel
+	label, who := elevateLabel, "this sign-in"
+	params := &cloudafrica.CreateElevationRequestParams{}
+	secret := ""
+	if s.envToken {
+		label, who = elevateTokenLabel, "this API token"
+		secret = s.elevation
+		if secret == "" {
+			var err error
+			if secret, err = newElevationSecret(); err != nil {
+				return fmt.Errorf("generating the elevation secret: %w", err)
+			}
+		}
+		params.XCloudAfricaElevation = &secret
+	}
+	paired := func() error {
+		if secret == "" {
+			return nil
+		}
+		if _, err := fmt.Fprintln(a.Stdout, secret); err != nil {
+			return fmt.Errorf("writing the elevation secret to stdout: %w", err)
+		}
+		return nil
+	}
 	shown := ""
 	for {
-		r, err := s.client.API.CreateElevationRequestWithResponse(ctx, &cloudafrica.CreateElevationRequestParams{},
+		r, err := s.client.API.CreateElevationRequestWithResponse(ctx, params,
 			cloudafrica.PublicElevationRequestBody{Label: &label})
 		if err != nil {
 			if ctx.Err() != nil {
@@ -217,11 +237,11 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 		}
 		if d := r.JSON200; d.Paired != nil && *d.Paired {
 			if shown == "" {
-				fmt.Fprintln(a.Stderr, "This sign-in is already allowed protected actions.")
+				fmt.Fprintf(a.Stderr, "%s is already allowed protected actions.\n", capitalise(who))
 			} else {
-				fmt.Fprintln(a.Stderr, "Paired: this sign-in may use protected actions for the elevation window.")
+				fmt.Fprintf(a.Stderr, "Paired: %s may use protected actions for the elevation window.\n", who)
 			}
-			return nil
+			return paired()
 		}
 		page, code := output.S(r.JSON200.Url), output.S(r.JSON200.Code)
 		if page == "" {
@@ -294,7 +314,7 @@ func missingScopes(requested []string, granted string) []string {
 type account struct{ id, name string }
 
 func (a *App) fetchAccount(ctx context.Context, endpoint, token string) (*account, error) {
-	c, err := a.newClient(endpoint, cloudafrica.StaticToken(token))
+	c, err := a.newClient(endpoint, cloudafrica.StaticToken(token), "")
 	if err != nil {
 		return nil, err
 	}
@@ -328,11 +348,17 @@ func (a *App) authStatus() error {
 		if ep == "" {
 			ep = DefaultEndpoint
 		}
-		v := map[string]any{"credential": "CLOUDAFRICA_TOKEN", "endpoint": ep}
+		elevation := strings.TrimSpace(a.Getenv(elevationEnv)) != ""
+		v := map[string]any{"credential": "CLOUDAFRICA_TOKEN", "endpoint": ep, "elevation": elevation}
 		rows := [][]string{{"Credential", "CLOUDAFRICA_TOKEN (overrides every profile)"}}
 		if ep != DefaultEndpoint {
 			rows = append(rows, []string{"Endpoint", ep})
 		}
+		set := "not set"
+		if elevation {
+			set = elevationEnv + " set"
+		}
+		rows = append(rows, []string{"Elevation", set})
 		return pr.Print(output.Result{Value: v, Rows: rows})
 	}
 	name, err := a.profileName()
@@ -525,4 +551,11 @@ func decodeJSON(resp *http.Response, v any) error {
 		return fmt.Errorf("HTTP %d with an empty body", resp.StatusCode)
 	}
 	return json.Unmarshal(data, v)
+}
+
+func capitalise(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }

@@ -58,8 +58,8 @@ func (a *App) apiCmd() *cobra.Command {
 					return &problemBody{err: err, body: out}
 				}
 				if loc := resp.Header.Get("Location"); loc != "" && resp.StatusCode == http.StatusAccepted && len(out) == 0 {
-					fmt.Fprintf(a.Stdout, "{\"location\":%q}\n", loc)
-					return nil
+					_, err := fmt.Fprintf(a.Stdout, "{\"location\":%q}\n", loc)
+					return err
 				}
 				_, err = a.Stdout.Write(out)
 				if err == nil && len(out) > 0 && out[len(out)-1] != '\n' {

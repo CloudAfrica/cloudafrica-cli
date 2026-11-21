@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -34,7 +35,13 @@ type harness struct {
 	cacheDir       string
 	loginTimeout   time.Duration
 	elevateTimeout time.Duration
+	// failStdout makes every write to stdout fail.
+	failStdout bool
 }
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("stdout closed") }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
@@ -65,9 +72,13 @@ func (h *harness) run(args ...string) int {
 	if lt == 0 {
 		lt = 5 * time.Second
 	}
+	var stdout io.Writer = h.stdout
+	if h.failStdout {
+		stdout = failWriter{}
+	}
 	h.app = &App{
 		Version:      "0.1.0",
-		Stdout:       h.stdout,
+		Stdout:       stdout,
 		Stderr:       h.stderr,
 		Stdin:        strings.NewReader(h.stdin),
 		Getenv:       func(k string) string { return h.env[k] },

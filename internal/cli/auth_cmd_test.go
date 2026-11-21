@@ -124,20 +124,29 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 	if strings.Contains(h.stderr.String(), "[y/N]") || len(h.fake.Authorizations) != 0 {
 		t.Errorf("prompted or re-authorized: %s", h.stderr)
 	}
-	// The token lacks protected:compute, and ca cannot pair a token: the
-	// remedy is the profile.
+	// The token lacks protected:compute: another token, or the profile.
 	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted protected:compute") ||
-		!strings.Contains(s, "Unset it, run `ca auth login`, then `ca auth elevate`") ||
-		strings.Contains(s, "use a token that has it") {
+		!strings.Contains(s, "use a token that has it, then `ca auth elevate`") ||
+		!strings.Contains(s, "Or unset it, run `ca auth login`, then `ca auth elevate`") ||
+		strings.Contains(s, "cannot pair") {
 		t.Errorf("env-token insufficient-scope hint: %s", s)
 	}
 	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
 		t.Fatalf("not paired: exit %d", code)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN is a user API token") ||
-		strings.Contains(s, "not granted") || strings.Contains(s, "ca auth") {
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN is not paired") ||
+		!strings.Contains(s, "CLOUDAFRICA_ELEVATION=$(ca auth elevate)") ||
+		strings.Contains(s, "not granted") || strings.Contains(s, "no longer paired") {
 		t.Errorf("env-token not-paired hint: %s", s)
+	}
+	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("lapsed: exit %d", code)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_ELEVATION is no longer paired") ||
+		!strings.Contains(s, "with this same CLOUDAFRICA_ELEVATION set") || strings.Contains(s, "is not paired") {
+		t.Errorf("env-token lapsed hint: %s", s)
 	}
 }
 
@@ -216,16 +225,16 @@ func TestScopeLoginCannotGrantIsNotOfferedLogin(t *testing.T) {
 	if strings.Contains(s, "[y/N]") || len(h.fake.Authorizations) != 0 {
 		t.Errorf("offered a sign-in: %s", s)
 	}
-	if !strings.Contains(s, "`ca` cannot perform this action: it needs protected:network") ||
-		strings.Contains(s, "Run `ca auth login`") || strings.Contains(s, "CLOUDAFRICA_TOKEN") {
+	if !strings.Contains(s, "A `ca auth login` sign-in cannot hold protected:network") ||
+		!strings.Contains(s, "then pair it with `ca auth elevate`") || strings.Contains(s, "Run `ca auth login`") {
 		t.Errorf("hint: %s", s)
 	}
 	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
 	if code := h.run("api", "DELETE", "/v1/vpcs/vpc-1"); code != ExitStepUp {
 		t.Fatalf("env token: exit %d", code)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "`ca` cannot perform this action: it needs protected:network") ||
-		strings.Contains(s, "use a token that has it") {
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted protected:network; use a token "+
+		"that has it, then `ca auth elevate`.") || strings.Contains(s, "ca auth login") {
 		t.Errorf("env-token hint: %s", s)
 	}
 }
