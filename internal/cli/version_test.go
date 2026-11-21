@@ -86,3 +86,28 @@ func TestVersionGitHubFailureIsSilentAndCached(t *testing.T) {
 		t.Errorf("stderr %q, requests %d", h.stderr, n.Load())
 	}
 }
+
+// The pairing secret goes only to the API endpoint, never to GitHub.
+func TestVersionCheckNeverCarriesTheElevationSecret(t *testing.T) {
+	var got atomic.Value
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		got.Store(r.Header.Get(elevationHeader))
+		_, _ = w.Write([]byte(`{"tag_name":"v0.2.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+	old := LatestReleaseURL
+	LatestReleaseURL = srv.URL
+	t.Cleanup(func() { LatestReleaseURL = old })
+
+	h := newHarness(t)
+	h.cacheDir = t.TempDir()
+	h.tty = true
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
+	h.mustRun("version")
+	if n.Load() != 1 || got.Load() != "" {
+		t.Errorf("%d checks, header %q", n.Load(), got.Load())
+	}
+}

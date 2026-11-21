@@ -140,8 +140,9 @@ func ExitCode(err error) int {
 }
 
 // hint is the remedy printed under an error; envToken is whether
-// CLOUDAFRICA_TOKEN supplied the credential.
-func hint(err error, envToken bool) string {
+// CLOUDAFRICA_TOKEN supplied the credential, elevation whether
+// CLOUDAFRICA_ELEVATION went with it.
+func hint(err error, envToken, elevation bool) string {
 	var he *hintedError
 	if errors.As(err, &he) {
 		return he.hint
@@ -149,9 +150,13 @@ func hint(err error, envToken bool) string {
 	var ae *cloudafrica.APIError
 	if slug, ok := stepUpSlug(err); ok {
 		if slug == "not-paired" {
+			if envToken && elevation {
+				return "CLOUDAFRICA_ELEVATION is no longer paired: the elevation window ended, or the portal session " +
+					"of the person who confirmed it did. Run `ca auth elevate` again; it pairs the same value."
+			}
 			if envToken {
-				return "CLOUDAFRICA_TOKEN is a user API token: it uses protected actions through its own pairing " +
-					"(POST /v1/elevation-requests with an X-CloudAfrica-Elevation header). Unset it to use your profile."
+				return "CLOUDAFRICA_TOKEN is not paired for protected actions. A person runs " +
+					"`CLOUDAFRICA_ELEVATION=$(ca auth elevate)`, confirms in the portal, and exports it for the script."
 			}
 			return "This is a protected action, and this sign-in is not paired for it. Run `ca auth elevate`, or in " +
 				"the portal open Connected apps and choose \"Allow protected actions\"."
@@ -168,21 +173,22 @@ func hint(err error, envToken bool) string {
 }
 
 // scopeHint is the remedy for a refusal naming scope ("" when unknown);
-// protected is whether the action also needs pairing afterwards, which `ca`
-// can do only for a profile's sign-in, never for CLOUDAFRICA_TOKEN.
+// protected is whether the action also needs pairing afterwards
+// (`ca auth elevate`, for a sign-in or for CLOUDAFRICA_TOKEN).
 func scopeHint(scope string, envToken, protected bool) string {
 	named := scope
 	if named == "" {
 		named = "a scope this action needs"
 	}
 	switch {
+	case protected && !loginGrants(scope) && envToken:
+		return "CLOUDAFRICA_TOKEN was not granted " + scope + "; use a token that has it, then `ca auth elevate`."
 	case protected && !loginGrants(scope):
-		return "`ca` cannot perform this action: it needs " + scope + ", which a `ca auth login` sign-in cannot " +
-			"hold, and `ca` cannot pair an API token. Call the API directly with a token that has it and its own " +
-			"X-CloudAfrica-Elevation pairing."
+		return "A `ca auth login` sign-in cannot hold " + scope + ". Put a user API token that has it in " +
+			"CLOUDAFRICA_TOKEN, then pair it with `ca auth elevate`."
 	case protected && envToken:
-		return "CLOUDAFRICA_TOKEN was not granted " + named + ", and `ca` cannot pair an API token. Unset it, " +
-			"run `ca auth login`, then `ca auth elevate`."
+		return "CLOUDAFRICA_TOKEN was not granted " + named + "; use a token that has it, then `ca auth elevate`. " +
+			"Or unset it, run `ca auth login`, then `ca auth elevate`."
 	case envToken && scope == "":
 		return "CLOUDAFRICA_TOKEN was not granted a scope this action needs; use a token that has it."
 	case envToken:

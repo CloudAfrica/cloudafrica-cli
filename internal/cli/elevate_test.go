@@ -59,11 +59,142 @@ func TestElevateTimesOutWithExit3(t *testing.T) {
 	}
 }
 
-func TestElevateWithEnvTokenIsUsageError(t *testing.T) {
+const testSecret = "cae_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+// An API token pairs a new secret, printed alone on stdout even when -o
+// would make it JSON, and later commands carry it on every request.
+func TestElevateEnvTokenPairsANewSecretAndPrintsItAlone(t *testing.T) {
 	h := newHarness(t)
-	h.env["CLOUDAFRICA_TOKEN"] = "cak_test"
-	if code := h.run("auth", "elevate"); code != ExitUsage || h.fake.ElevationCalls != 0 {
-		t.Errorf("exit %d, calls %d", code, h.fake.ElevationCalls)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.fake.PairOnPoll = 2
+	var opened []string
+	h.browser = func(u string) error { opened = append(opened, u); return nil }
+	h.mustRun("auth", "elevate", "-o", "json")
+	secret := strings.TrimSuffix(h.stdout.String(), "\n")
+	if !wellFormedElevation(secret) || strings.Count(h.stdout.String(), "\n") != 1 || len(secret) != 4+43 {
+		t.Fatalf("stdout = %q", h.stdout)
+	}
+	if len(opened) != 1 || !strings.Contains(h.stderr.String(), "ABCD-1234") ||
+		!strings.Contains(h.stderr.String(), "Paired: this API token") {
+		t.Errorf("opened %v, stderr %s", opened, h.stderr)
+	}
+	if got := h.fake.ElevationBody[0]["label"]; got != elevateTokenLabel {
+		t.Errorf("label = %v", got)
+	}
+	for _, line := range h.fake.ElevationHeaders {
+		if !strings.HasSuffix(line, " "+secret) {
+			t.Errorf("elevation request without the secret: %q", line)
+		}
+	}
+
+	h.env["CLOUDAFRICA_ELEVATION"] = secret
+	h.fake.ElevationHeaders = nil
+	h.mustRun("vm", "list")
+	h.mustRun("vm", "delete", "vm-1", "--yes")
+	if len(h.fake.ElevationHeaders) < 2 {
+		t.Fatalf("requests = %v", h.fake.ElevationHeaders)
+	}
+	for _, line := range h.fake.ElevationHeaders {
+		if !strings.HasSuffix(line, " "+secret) {
+			t.Errorf("request without the secret: %q", line)
+		}
+	}
+}
+
+// A set secret is paired again rather than replaced, so a script's value
+// survives a re-elevate after the window.
+func TestElevateEnvTokenReusesTheSetSecret(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
+	h.fake.PairOnPoll = 1
+	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
+	h.mustRun("auth", "elevate")
+	if h.stdout.String() != testSecret+"\n" || !strings.Contains(h.stderr.String(), "This API token is already allowed") {
+		t.Errorf("stdout %q, stderr %s", h.stdout, h.stderr)
+	}
+}
+
+// A token that is already paired by its secret prints it and opens nothing.
+func TestElevateEnvTokenAlreadyPaired(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
+	h.fake.PairToken("cak_protected", testSecret)
+	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
+	h.mustRun("auth", "elevate")
+	if h.stdout.String() != testSecret+"\n" || h.fake.ElevationCalls != 1 {
+		t.Errorf("stdout %q, calls %d", h.stdout, h.fake.ElevationCalls)
+	}
+}
+
+// A timeout prints nothing on stdout, so the documented assignment fails.
+func TestElevateEnvTokenTimeoutPrintsNoSecret(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.elevateTimeout = 100 * time.Millisecond
+	h.browser = func(string) error { return nil }
+	if code := h.run("auth", "elevate"); code != ExitTimeout || h.stdout.Len() != 0 {
+		t.Errorf("exit %d, stdout %q", code, h.stdout)
+	}
+}
+
+func TestElevationEnvRefusedBeforeAnyRequest(t *testing.T) {
+	for name, env := range map[string]map[string]string{
+		"malformed":     {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": "cae_short"},
+		"no prefix":     {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": strings.TrimPrefix(testSecret, "cae_") + "AAAA"},
+		"bad character": {"CLOUDAFRICA_TOKEN": "cak_protected", "CLOUDAFRICA_ELEVATION": testSecret + "="},
+		"without token": {"CLOUDAFRICA_ELEVATION": testSecret},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.seed("default", protected(), time.Now().Add(time.Hour))
+			for k, v := range env {
+				h.env[k] = v
+			}
+			for _, args := range [][]string{{"vm", "list"}, {"auth", "elevate"}} {
+				if code := h.run(args...); code != ExitUsage {
+					t.Errorf("%v: exit %d, stderr %s", args, code, h.stderr)
+				}
+			}
+			if n := len(h.fake.ElevationHeaders); n != 0 {
+				t.Errorf("%d requests sent", n)
+			}
+			if name == "without token" && !strings.Contains(h.stderr.String(), "unset CLOUDAFRICA_ELEVATION") {
+				t.Errorf("stderr %s", h.stderr)
+			}
+			// The commands that diagnose it still run.
+			h.mustRun("auth", "status")
+			h.mustRun("version")
+		})
+	}
+}
+
+// A blank value is unset, as a blank CLOUDAFRICA_TOKEN is.
+func TestElevationEnvBlankIsUnset(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["CLOUDAFRICA_ELEVATION"] = "  "
+	h.mustRun("vm", "list")
+}
+
+func TestAuthStatusShowsWhetherElevationIsSet(t *testing.T) {
+	h := newHarness(t)
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
+	h.mustRun("auth", "status", "-o", "json")
+	var v map[string]any
+	if err := json.Unmarshal(h.stdout.Bytes(), &v); err != nil || v["elevation"] != false {
+		t.Errorf("status %s (%v)", h.stdout, err)
+	}
+	h.env["CLOUDAFRICA_ELEVATION"] = testSecret
+	h.mustRun("auth", "status", "-o", "json")
+	if err := json.Unmarshal(h.stdout.Bytes(), &v); err != nil || v["elevation"] != true ||
+		strings.Contains(h.stdout.String(), testSecret) {
+		t.Errorf("status %s (%v)", h.stdout, err)
+	}
+	h.mustRun("auth", "status", "-o", "table")
+	if s := h.stdout.String(); !strings.Contains(s, "CLOUDAFRICA_ELEVATION set") || strings.Contains(s, testSecret) {
+		t.Errorf("table %s", s)
 	}
 }
 
