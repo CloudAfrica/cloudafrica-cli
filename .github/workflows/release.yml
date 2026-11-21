@@ -32,6 +32,12 @@ jobs:
           PACKAGES_GITHUB_TOKEN: ${{ secrets.PACKAGES_GITHUB_TOKEN }}
         run: |
           [ -n "$PACKAGES_GITHUB_TOKEN" ] || { echo "::error::PACKAGES_GITHUB_TOKEN is not set"; exit 1; }
+          # The info/refs handshake for a push is refused unless the token can write.
+          for r in homebrew-tap scoop-bucket; do
+            curl -fsS -o /dev/null -u "x-access-token:$PACKAGES_GITHUB_TOKEN" \
+              "https://github.com/CloudAfrica/$r.git/info/refs?service=git-receive-pack" ||
+              { echo "::error::PACKAGES_GITHUB_TOKEN cannot push to CloudAfrica/$r"; exit 1; }
+          done
           for r in cloudafrica-cli homebrew-tap scoop-bucket; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "https://api.github.com/repos/CloudAfrica/$r")
             [ "$code" = 200 ] || { echo "::error::CloudAfrica/$r is not public (HTTP $code)"; exit 1; }

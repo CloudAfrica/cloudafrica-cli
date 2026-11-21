@@ -102,6 +102,10 @@ main() {
         install -m 0755 "$tmp/ca" "$dir/ca"
         if [ -L "$dir/cloudafrica" ] && [ "$(readlink "$dir/cloudafrica")" = ca ]; then
             :
+        elif [ ! -L "$dir/cloudafrica" ] && [ -f "$dir/cloudafrica" ] && ours "$dir/cloudafrica"; then
+            # Installed while another ca held the name; that ca has gone.
+            rm -f "$dir/cloudafrica"
+            ln -s ca "$dir/cloudafrica"
         elif [ -e "$dir/cloudafrica" ] || [ -L "$dir/cloudafrica" ]; then
             echo "Left $dir/cloudafrica alone: it is not a link to ca" >&2
         else

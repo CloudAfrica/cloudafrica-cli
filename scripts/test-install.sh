@@ -24,6 +24,8 @@ out=""
 while [ $# -gt 1 ]; do
     case "$1" in
         -fsSLo) out="$2"; shift 2 ;;
+        # The latest-release lookup: print where releases/latest redirects.
+        -w) [ -n "${LATEST:-}" ] || exit 22; printf '%s' "$LATEST"; exit 0 ;;
         *) shift ;;
     esac
 done
@@ -50,7 +52,7 @@ serve() {
 }
 
 run_install() {
-    PATH="$work/fakebin:$PATH" SERVE="$work/serve" CA_VERSION="v$version" CA_INSTALL_DIR="$1" \
+    PATH="$work/fakebin:$PATH" SERVE="$work/serve" CA_VERSION="${CA_VERSION-v$version}" CA_INSTALL_DIR="$1" \
         sh "$root/install.sh" >"$work/out" 2>&1
 }
 
@@ -114,6 +116,27 @@ run_install "$d" || die "install beside a foreign cloudafrica failed: $(cat "$wo
 [ "$(cat "$d/cloudafrica")" = other ] && [ -x "$d/ca" ] || die "foreign cloudafrica not kept"
 grep -q "Left $d/cloudafrica alone" "$work/out" || die "no warning for a foreign cloudafrica"
 check "a foreign cloudafrica is kept with a warning"
+
+# Our cloudafrica binary, left by a foreign ca since removed, becomes the link.
+d="$work/foreign-gone"
+mkdir -p "$d"
+cp "$work/foreign/cloudafrica" "$d/cloudafrica"
+run_install "$d" || die "install over our own cloudafrica binary failed: $(cat "$work/out")"
+[ "$(readlink "$d/cloudafrica")" = ca ] || die "our cloudafrica binary was not relinked: $(ls -l "$d")"
+check "our cloudafrica binary is replaced by the link once ca is free"
+
+# Without CA_VERSION the tag comes from where releases/latest redirects.
+d="$work/latest"
+CA_VERSION="" LATEST="https://github.com/CloudAfrica/cloudafrica-cli/releases/tag/v$version" run_install "$d" ||
+    die "latest install failed: $(cat "$work/out")"
+"$d/ca" version | grep -q "^ca $version (" || die "latest install put the wrong version"
+check "without CA_VERSION the latest release is installed"
+d="$work/no-release"
+if CA_VERSION="" LATEST="https://github.com/CloudAfrica/cloudafrica-cli/releases" run_install "$d"; then
+    die "installed with no release"
+fi
+grep -q "no release found" "$work/out" || die "no-release said: $(cat "$work/out")"
+check "a repository with no release is refused"
 
 # A tampered archive is refused before anything is installed.
 serve
