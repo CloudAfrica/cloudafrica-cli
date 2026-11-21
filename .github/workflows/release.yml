@@ -24,11 +24,23 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - run: go test -race -count=1 ./...
+      # goreleaser publishes the GitHub release before it pushes the formula and
+      # manifest, so a final tag checks their preconditions first.
+      - name: Final release preconditions
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          PACKAGES_GITHUB_TOKEN: ${{ secrets.PACKAGES_GITHUB_TOKEN }}
+        run: |
+          [ -n "$PACKAGES_GITHUB_TOKEN" ] || { echo "::error::PACKAGES_GITHUB_TOKEN is not set"; exit 1; }
+          for r in cloudafrica-cli homebrew-tap scoop-bucket; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://api.github.com/repos/CloudAfrica/$r")
+            [ "$code" = 200 ] || { echo "::error::CloudAfrica/$r is not public (HTTP $code)"; exit 1; }
+          done
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: '~> v2'
+          version: 'v2.20.0'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

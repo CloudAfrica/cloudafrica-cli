@@ -19,6 +19,14 @@ need() {
     command -v "$1" >/dev/null 2>&1 || fail "needs $1"
 }
 
+# ours reports whether $1 is this CLI: `ca version` prints "ca <version> (".
+ours() {
+    case "$("$1" version </dev/null 2>/dev/null | head -n 1)" in
+        "ca "*" ("*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # The body is one function called on the last line, so a download cut short
 # by `curl | sh` runs nothing.
 main() {
@@ -81,18 +89,33 @@ main() {
     [ "$got" = "$want" ] || fail "checksum mismatch for $archive"
 
     tar -xzf "$tmp/$archive" -C "$tmp" ca
-    install -m 0755 "$tmp/ca" "$dir/ca" 2>/dev/null || {
-        cp "$tmp/ca" "$dir/ca"
-        chmod 0755 "$dir/ca"
-    }
-    ln -sf ca "$dir/cloudafrica"
+    if [ -e "$dir/ca" ] && ! ours "$dir/ca"; then
+        # The name clash the cloudafrica alias exists for: keep the other ca.
+        if [ -e "$dir/cloudafrica" ] && ! ours "$dir/cloudafrica"; then
+            fail "$dir/ca and $dir/cloudafrica are other programs; set CA_INSTALL_DIR to install elsewhere"
+        fi
+        rm -f "$dir/cloudafrica"
+        install -m 0755 "$tmp/ca" "$dir/cloudafrica"
+        echo "$dir/ca is another program, so this installed only $dir/cloudafrica" >&2
+        bin="$dir/cloudafrica"
+    else
+        install -m 0755 "$tmp/ca" "$dir/ca"
+        if [ -L "$dir/cloudafrica" ] && [ "$(readlink "$dir/cloudafrica")" = ca ]; then
+            :
+        elif [ -e "$dir/cloudafrica" ] || [ -L "$dir/cloudafrica" ]; then
+            echo "Left $dir/cloudafrica alone: it is not a link to ca" >&2
+        else
+            ln -s ca "$dir/cloudafrica"
+        fi
+        bin="$dir/ca"
+    fi
 
-    echo "Installed $dir/ca (and $dir/cloudafrica)"
+    echo "Installed $bin"
     case ":$PATH:" in
         *":$dir:"*) ;;
-        *) echo "Add $dir to your PATH to run ca." ;;
+        *) echo "Add $dir to your PATH to run $(basename "$bin")." ;;
     esac
-    "$dir/ca" version
+    "$bin" version
 }
 
 main "$@"
