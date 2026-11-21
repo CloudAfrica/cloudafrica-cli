@@ -13,8 +13,23 @@ builds:
       - '-s -w -X main.version={{ .Version }}'
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
+  # Scoop shims every binary in the zip, so Windows gets a second copy named
+  # cloudafrica.exe in place of the symlink the other platforms install.
+  - id: cloudafrica-windows
+    main: ./cmd/ca
+    binary: cloudafrica
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X main.version={{ .Version }}'
+    goos: [windows]
+    goarch: [amd64, arm64]
 archives:
   - formats: [tar.gz]
+    allow_different_binary_count: true
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -23,5 +38,43 @@ archives:
 checksum:
   name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
   algorithm: sha256
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: '${artifact}.sigstore.json'
+    args: ['sign-blob', '--bundle=${signature}', '${artifact}', '--yes']
+release:
+  prerelease: auto
+  extra_files:
+    - glob: ./install.sh
+# A prerelease (v0.1.0-rc.N) skips both: staff install an RC from the release page.
+brews:
+  - name: ca
+    repository:
+      owner: CloudAfrica
+      name: homebrew-tap
+      token: '{{ .Env.PACKAGES_GITHUB_TOKEN }}'
+    directory: Formula
+    skip_upload: auto
+    homepage: https://github.com/CloudAfrica/cloudafrica-cli
+    description: CloudAfrica command-line interface
+    license: Apache-2.0
+    commit_msg_template: 'ca {{ .Tag }}'
+    install: |
+      bin.install "ca"
+      bin.install_symlink "ca" => "cloudafrica"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/ca version")
+scoops:
+  - name: ca
+    repository:
+      owner: CloudAfrica
+      name: scoop-bucket
+      token: '{{ .Env.PACKAGES_GITHUB_TOKEN }}'
+    skip_upload: auto
+    homepage: https://github.com/CloudAfrica/cloudafrica-cli
+    description: CloudAfrica command-line interface
+    license: Apache-2.0
+    commit_msg_template: 'ca {{ .Tag }}'
 changelog:
   disable: true
