@@ -248,6 +248,10 @@ func TestGenerateRefuses(t *testing.T) {
 			},
 			want: `commands.yaml params /v1/widgets/{id}: no converter "epoc"`,
 		},
+		"stale noun": {
+			overlay: func(o string) string { return strings.Replace(o, "groups:\n", "nouns:\n  gone: g\ngroups:\n", 1) },
+			want:    "commands.yaml nouns: no path has a segment gone",
+		},
 		"stale group": {
 			overlay: func(o string) string { return strings.Replace(o, "groups:\n", "groups:\n  gone: Gone\n", 1) },
 			want:    `commands.yaml groups: "gone" is not a group`,

@@ -316,6 +316,11 @@ func (g *generator) run() *Output {
 			g.fail("commands.yaml resources %s: idPattern: %v", name, err)
 		}
 	}
+	for _, seg := range sortedKeys(g.ov.Nouns) {
+		if !g.anySegment(seg) {
+			g.fail("commands.yaml nouns: no path has a segment %s", seg)
+		}
+	}
 	for _, name := range sortedKeys(g.ov.Columns) {
 		if !usedColumns[name] {
 			g.fail("commands.yaml columns: %s is used by no command", name)
@@ -772,4 +777,13 @@ func Source(out *Output, pkg string) ([]byte, error) {
 		return nil, fmt.Errorf("formatting the generated table: %w", err)
 	}
 	return src, nil
+}
+
+func (g *generator) anySegment(seg string) bool {
+	for url := range g.d.Paths {
+		if slices.Contains(strings.Split(url, "/"), seg) {
+			return true
+		}
+	}
+	return false
 }
