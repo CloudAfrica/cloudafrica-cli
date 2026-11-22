@@ -110,13 +110,17 @@ type Server struct {
 	ClusterTokenBody string
 	// TokenIdemKeys is the Idempotency-Key of each token request.
 	TokenIdemKeys []string
+	// KubeconfigStatus, when set, is the status the kubeconfig routes answer:
+	// a problem from 400 up, else KubeconfigBody.
+	KubeconfigStatus int
+	KubeconfigBody   string
 }
 
 // ClusterToken is the token the fake mints for a cluster.
 func ClusterToken(id string) string { return "cluster-token-" + id }
 
-// Kubeconfig is the kubeconfig the fake serves for a cluster, shaped as
-// nebula's TenantKubeconfig renders it.
+// Kubeconfig is the kubeconfig the fake serves for a cluster: one exec user
+// running sh and curl, which rewriteKubeconfig replaces.
 func Kubeconfig(id, server string) string {
 	return `---
 apiVersion: v1
@@ -478,8 +482,17 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		if variant == "/managed-vpn" {
 			server = "https://10.9.0.4:6443"
 		}
-		w.Header().Set("Content-Type", "application/yaml")
-		_, _ = io.WriteString(w, Kubeconfig(id, server))
+		switch {
+		case s.KubeconfigStatus >= 400:
+			problem(w, s.KubeconfigStatus, "not-found", "Not found", nil)
+		case s.KubeconfigStatus != 0:
+			w.Header().Set("Content-Type", "application/yaml")
+			w.WriteHeader(s.KubeconfigStatus)
+			_, _ = io.WriteString(w, s.KubeconfigBody)
+		default:
+			w.Header().Set("Content-Type", "application/yaml")
+			_, _ = io.WriteString(w, Kubeconfig(id, server))
+		}
 	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && r.Method == http.MethodGet:
 		id := strings.TrimPrefix(p, "/v1/kubernetes/clusters/")
 		for _, c := range s.Clusters {

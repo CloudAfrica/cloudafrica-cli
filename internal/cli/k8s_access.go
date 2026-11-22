@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -17,14 +18,14 @@ import (
 // answers in, and the one the rewritten kubeconfig asks kubectl for.
 const execAPIVersion = "client.authentication.k8s.io/v1beta1"
 
-// errTokenNeedsPAT refuses a cluster token for a stored sign-in: the API
-// mints one only for a person's own API token, and answers anything else 404.
+// errTokenNeedsPAT refuses a cluster token without CLOUDAFRICA_TOKEN: the API
+// mints one only for a person's own API token, never for a stored sign-in.
 var errTokenNeedsPAT = errors.New("a cluster token needs CLOUDAFRICA_TOKEN set to your own API token with " +
 	"protected:compute, and CLOUDAFRICA_ELEVATION set to the secret paired with it " +
 	"(`CLOUDAFRICA_ELEVATION=$(ca auth elevate)`); a `ca auth login` sign-in cannot get one")
 
-const tokenNotFoundHint = "404 also means CLOUDAFRICA_TOKEN is not a person's own API token, or that person is not an " +
-	"owner or admin of the cluster's account."
+const tokenNotFoundHint = "404 also means CLOUDAFRICA_TOKEN is not a person's own API token, or that person has no " +
+	"access to the cluster's account."
 
 func execInstallHint(exe string) string {
 	return fmt.Sprintf("Needs the CloudAfrica CLI as `%s` on PATH (https://github.com/CloudAfrica/cloudafrica-cli). "+
@@ -50,10 +51,11 @@ func (a *App) k8sToken() *cobra.Command {
 			"paired with it); a `ca auth login` sign-in cannot get a cluster token.",
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Checked before the session, whose own error would say to sign in.
+			if strings.TrimSpace(a.Getenv("CLOUDAFRICA_TOKEN")) == "" {
+				return usageErr(errTokenNeedsPAT)
+			}
 			return a.withSession(cmd.Context(), func(s *session) error {
-				if !s.envToken {
-					return usageErr(errTokenNeedsPAT)
-				}
 				cred, err := mintClusterToken(cmd.Context(), s, args[0])
 				if err != nil {
 					return err

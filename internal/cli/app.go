@@ -304,6 +304,16 @@ func NewFromOS(version string, tty bool, open func(string) error) (*App, error) 
 		TTY:         tty,
 		OpenBrowser: open,
 		Store:       profile.Store{Dir: dir},
-		Exe:         strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"),
+		Exe:         exeName(os.Args[0]),
 	}, nil
+}
+
+// exeName is the command name the CLI was run as, without a Windows .exe;
+// kubectl runs it again by PATH. An unusable argv0 is "".
+func exeName(argv0 string) string {
+	name := strings.TrimSuffix(filepath.Base(argv0), ".exe")
+	if name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
 }
