@@ -164,14 +164,14 @@ func (a *App) k8sGet() *cobra.Command {
 	}
 }
 
-// errUpgradeUnavailable is a cluster read that carried no upgrade status:
-// the platform could not reach the Kubernetes service.
+// errUpgradeUnavailable is a cluster read that carried no upgrade status,
+// which the API omits while it cannot read it.
 var errUpgradeUnavailable = errors.New("upgrade status is unavailable; try again")
 
 // newestWorkerTarget is the version to upgrade the workers to: the last
-// (newest) entry of workerTargets, every one of which the platform has
-// already accepted. "" with a nil error means there is nothing to do, and
-// note says why.
+// (newest) entry of workerTargets. "" with a nil error means there is
+// nothing to do yet, and note says why; a state that leaves the workers with
+// no target and no stated way forward is an error.
 func newestWorkerTarget(c *cloudafrica.PublicKubernetesClusterDto) (target, note string, err error) {
 	u := c.Upgrade
 	if u == nil {
@@ -184,11 +184,19 @@ func newestWorkerTarget(c *cloudafrica.PublicKubernetesClusterDto) (target, note
 			}
 		}
 	}
-	if u.Workers != nil && u.Workers.State != nil && *u.Workers.State == cloudafrica.CURRENT {
-		return "", "workers are current", nil
+	status := "workers: " + upgradeStatus(u.WorkerKubernetesVersion, u.Workers) + "; there is no worker target"
+	state := cloudafrica.PublicKubernetesUpgradeStatusDtoState("")
+	if u.Workers != nil && u.Workers.State != nil {
+		state = *u.Workers.State
 	}
-	return "", "workers: " + upgradeStatus(nil, u.Workers) +
-		"; no worker upgrade is available yet; the platform upgrades the control plane first", nil
+	switch state {
+	case cloudafrica.CURRENT:
+		return "", "workers are current", nil
+	case cloudafrica.DEADLINE, cloudafrica.UPGRADEAVAILABLE:
+		return "", status + " yet: a worker upgrade never goes past the control plane's version", nil
+	default:
+		return "", "", fmt.Errorf("%s; `ca k8s get %s` shows the cluster", status, output.S(c.Id))
+	}
 }
 
 func (a *App) k8sUpgradeWorkers() *cobra.Command {
@@ -201,7 +209,8 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 		Short: "Upgrade a cluster's workers (a protected action: needs `ca auth elevate`)",
 		Long: "Upgrades every worker to a Kubernetes version and its Talos version, one node at a time. Each node " +
 			"drains, so a workload with one replica is down while its node restarts. Without --version it takes the " +
-			"newest of the cluster's worker targets (`ca k8s get`); when there is none it says why and exits 0.",
+			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says why: it exits 0 when the " +
+			"workers are current or wait on the control plane's version, and 1 otherwise.",
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
@@ -233,17 +242,20 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 				if err := cloudafrica.CheckResponse(r.HTTPResponse, r.Body); err != nil {
 					return err
 				}
-				fmt.Fprintf(a.Stderr, "Upgrading the workers of %s to %s\n", id, target)
 				opID, ok := "", false
 				if r.JSON202 != nil && r.JSON202.OperationId != nil && *r.JSON202.OperationId != "" {
 					opID, ok = *r.JSON202.OperationId, true
 				} else {
 					opID, ok = operationIDFromLocation(r.HTTPResponse.Header.Get("Location"))
 				}
+				if !ok && r.HTTPResponse.StatusCode != http.StatusAccepted && r.HTTPResponse.StatusCode != http.StatusOK {
+					return fmt.Errorf("HTTP %d with no operation id", r.HTTPResponse.StatusCode)
+				}
+				fmt.Fprintf(a.Stderr, "Upgrading the workers of %s to %s\n", id, target)
 				if !ok {
-					// The platform accepted it without an operation to follow.
-					if r.HTTPResponse.StatusCode != http.StatusAccepted && r.HTTPResponse.StatusCode != http.StatusOK {
-						return fmt.Errorf("HTTP %d with no operation id", r.HTTPResponse.StatusCode)
+					// Accepted with no operation to follow.
+					if wf.wait {
+						return fmt.Errorf("there is no operation to wait for; `ca k8s get %s` shows the upgrade", id)
 					}
 					fmt.Fprintf(a.Stderr, "There is no operation to follow; `ca k8s get %s` shows the upgrade.\n", id)
 					return nil

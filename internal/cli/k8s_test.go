@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,10 @@ func TestK8sGetPrintsTheDetailObject(t *testing.T) {
 		"workers":                 map[string]any{"state": "UPGRADE_AVAILABLE"},
 		"workerKubernetesVersion": "v1.32.4", "workerTalosVersion": "v1.9.5", "workerTargets": targets("v1.33.1"),
 	})
-	c["nodes"] = []any{map[string]any{"name": "w-1", "status": "running", "ready": true, "privateIp": "10.0.0.5"}}
+	c["nodes"] = []any{
+		map[string]any{"name": "w-1", "status": "running", "ready": true, "privateIp": "10.0.0.5"},
+		map[string]any{"name": "w-2", "status": "running", "ready": false, "privateIp": "10.0.0.6"},
+	}
 	h.fake.Clusters = []map[string]any{c}
 	h.mustRun("k8s", "get", "k-1", "-o", "json")
 	var got map[string]any
@@ -71,10 +75,27 @@ func TestK8sGetPrintsTheDetailObject(t *testing.T) {
 	}
 	h.mustRun("k8s", "get", "k-1", "-o", "table")
 	for _, want := range []string{"v1.33.1 DEADLINE (deadline 2026-12-31)", "v1.32.4 (Talos v1.9.5) UPGRADE_AVAILABLE",
-		"v1.33.1 (Talos v1.10.0)", "Node w-1", "ready"} {
+		"v1.33.1 (Talos v1.10.0)", "running  ready  10.0.0.5", "running  not ready  10.0.0.6"} {
 		if !strings.Contains(h.stdout.String(), want) {
 			t.Errorf("table lacks %q:\n%s", want, h.stdout)
 		}
+	}
+}
+
+func TestK8sGetWithoutUpgradeOrTargets(t *testing.T) {
+	h := signedIn(t)
+	h.fake.Clusters = []map[string]any{cluster("k-1", nil), cluster("k-2", map[string]any{
+		"workerTargets":      []any{},
+		"controlPlaneWindow": map[string]any{"start": "2027-01-01", "end": "2027-01-15", "kubernetes": "v1.34.0"},
+	})}
+	h.mustRun("k8s", "get", "k-1", "-o", "table")
+	if !strings.Contains(h.stdout.String(), "status unavailable") || strings.Contains(h.stdout.String(), "Worker targets") {
+		t.Errorf("k-1:\n%s", h.stdout)
+	}
+	h.mustRun("k8s", "get", "k-2", "-o", "table")
+	if !regexp.MustCompile(`(?m)^Worker targets +-$`).MatchString(h.stdout.String()) ||
+		!strings.Contains(h.stdout.String(), "2027-01-01 to 2027-01-15, v1.34.0") {
+		t.Errorf("k-2:\n%s", h.stdout)
 	}
 }
 
@@ -91,6 +112,16 @@ func TestUpgradeWorkersTakesTheNewestTarget(t *testing.T) {
 	}
 }
 
+func TestUpgradeWorkersSkipsATargetWithNoVersion(t *testing.T) {
+	h := elevated(t)
+	h.fake.Clusters = []map[string]any{cluster("k-1", map[string]any{
+		"workerTargets": append(targets("v1.32.5"), map[string]any{"talos": "v1.10.0"})})}
+	h.mustRun("k8s", "upgrade-workers", "k-1", "-q")
+	if len(h.fake.Bodies) != 1 || h.fake.Bodies[0]["targetKubernetes"] != "v1.32.5" {
+		t.Errorf("bodies %v", h.fake.Bodies)
+	}
+}
+
 func TestUpgradeWorkersWithNoTarget(t *testing.T) {
 	for name, c := range map[string]struct {
 		upgrade map[string]any
@@ -100,7 +131,17 @@ func TestUpgradeWorkersWithNoTarget(t *testing.T) {
 		"current": {map[string]any{"workers": map[string]any{"state": "CURRENT"}, "workerTargets": []any{}}, ExitOK,
 			"workers are current"},
 		"deadline, no target": {map[string]any{"workers": map[string]any{"state": "DEADLINE", "deadline": "2027-01-15"}},
-			ExitOK, "DEADLINE (deadline 2027-01-15); no worker upgrade is available yet"},
+			ExitOK, "workers: DEADLINE (deadline 2027-01-15); there is no worker target yet"},
+		"upgrade available, no target": {map[string]any{"workerKubernetesVersion": "v1.32.4",
+			"workers": map[string]any{"state": "UPGRADE_AVAILABLE"}}, ExitOK,
+			"workers: v1.32.4 UPGRADE_AVAILABLE; there is no worker target yet"},
+		"unknown": {map[string]any{"workers": map[string]any{"state": "UNKNOWN"}}, ExitAPI,
+			"workers: UNKNOWN; there is no worker target; `ca k8s get k-1`"},
+		"unsupported": {map[string]any{"workers": map[string]any{"state": "UNSUPPORTED"}}, ExitAPI,
+			"workers: UNSUPPORTED; there is no worker target; `ca k8s get k-1`"},
+		"no workers state": {map[string]any{"workers": map[string]any{}}, ExitAPI,
+			"workers: -; there is no worker target; `ca k8s get k-1`"},
+		"no workers":  {map[string]any{}, ExitAPI, "workers: -; there is no worker target; `ca k8s get k-1`"},
 		"unavailable": {nil, ExitAPI, "upgrade status is unavailable; try again"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -110,8 +151,8 @@ func TestUpgradeWorkersWithNoTarget(t *testing.T) {
 			if code != c.code || len(h.fake.Writes) != 0 || !strings.Contains(h.stderr.String(), c.stderr) {
 				t.Errorf("exit %d (want %d), writes %d, stderr %q", code, c.code, len(h.fake.Writes), h.stderr)
 			}
-			if h.stdout.Len() != 0 {
-				t.Errorf("stdout = %q", h.stdout)
+			if h.stdout.Len() != 0 || strings.Contains(h.stderr.String(), "platform") {
+				t.Errorf("stdout = %q, stderr %q", h.stdout, h.stderr)
 			}
 		})
 	}
@@ -146,11 +187,33 @@ func TestUpgradeWorkersNotPairedExits5(t *testing.T) {
 }
 
 func TestUpgradeWorkersWithNoOperationToFollow(t *testing.T) {
+	for _, c := range []struct {
+		wait bool
+		code int
+		want string
+	}{
+		{false, ExitOK, "There is no operation to follow; `ca k8s get k-1`"},
+		{true, ExitAPI, "there is no operation to wait for; `ca k8s get k-1`"},
+	} {
+		h := elevated(t)
+		h.fake.UpgradeNoOperation = true
+		args := []string{"k8s", "upgrade-workers", "k-1", "--version", "v1.33.1"}
+		if c.wait {
+			args = append(args, "--wait")
+		}
+		if code := h.run(args...); code != c.code || !strings.Contains(h.stderr.String(), c.want) ||
+			len(h.fake.Writes) != 1 {
+			t.Errorf("--wait=%v: exit %d (want %d), writes %d, stderr %q", c.wait, code, c.code, len(h.fake.Writes), h.stderr)
+		}
+	}
+}
+
+func TestUpgradeWorkersReadsTheOperationFromLocation(t *testing.T) {
 	h := elevated(t)
-	h.fake.UpgradeNoOperation = true
-	if code := h.run("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "--wait"); code != ExitOK ||
-		!strings.Contains(h.stderr.String(), "ca k8s get k-1") {
-		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	h.fake.OmitOperationID = true
+	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "op/upgrade-k-1" {
+		t.Errorf("stdout = %q", got)
 	}
 }
 
