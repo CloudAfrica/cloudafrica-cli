@@ -96,6 +96,8 @@ type Server struct {
 	VPCs             []map[string]any
 	Datacenters      []map[string]any
 	PlacementGroups  []map[string]any
+	// Canned answers "METHOD path" ahead of every other /v1 route.
+	Canned map[string]Canned
 	// Require maps a path prefix to the scope it needs; a request that holds
 	// it and matches no route answers 200 {}.
 	Require map[string]string
@@ -118,6 +120,12 @@ type Server struct {
 	// a problem from 400 up, else KubeconfigBody.
 	KubeconfigStatus int
 	KubeconfigBody   string
+}
+
+// Canned is a fixed answer: Status (default 200) and Body, which is JSON or "".
+type Canned struct {
+	Status int
+	Body   string
 }
 
 // ClusterToken is the token the fake mints for a cluster.
@@ -402,6 +410,18 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		insufficientScope(w, need)
 		return
 	}
+	if c, ok := s.Canned[r.Method+" "+p]; ok {
+		status := c.Status
+		if status == 0 {
+			status = 200
+		}
+		if c.Body != "" {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, c.Body)
+		return
+	}
 	switch {
 	case required:
 		writeJSON(w, 200, map[string]any{})
@@ -544,6 +564,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		op := map[string]any{"id": id, "kind": "vm.action", "state": state}
 		if strings.HasPrefix(id, "op/create-") && state == "complete" {
 			op["createdResource"] = map[string]any{"id": "vm-new"}
+		}
+		if state == "running" {
+			op["progressPct"], op["progressMessage"] = 40, "copying"
 		}
 		if state == "failed" {
 			op["error"] = map[string]any{"kind": "fault", "message": "it broke"}

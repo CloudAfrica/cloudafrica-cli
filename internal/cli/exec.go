@@ -332,7 +332,7 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 			return errors.New("the API accepted the request but returned no operation id")
 		}
 		return a.withSession(ctx, func(s *session) error {
-			return a.accepted(ctx, s, opID, waitFlags{noWait: r.noWait, timeout: r.timeout})
+			return a.accepted(ctx, s, opID, waitFlags{noWait: r.noWait, timeout: r.timeout, cancelled: op.Async == cmdspec.Self})
 		})
 	}
 	if len(bytes.TrimSpace(resp)) == 0 {
@@ -453,15 +453,20 @@ func confirmQuestion(op cmdspec.Op, targets []target) string {
 	if r, ok := genResources[op.Positional.Resource]; ok && op.Positional.Name != "" {
 		noun = r.Noun
 	}
+	owner := func(t target) string {
+		if r, ok := genResources[t.param.Resource]; ok {
+			return r.Noun + " " + describe(t)
+		}
+		return t.param.Flag + " " + describe(t)
+	}
 	if op.Positional.Name != "" {
+		if len(targets) > 1 {
+			return fmt.Sprintf("%s %s %s of %s?", verb, noun, describe(targets[0]), owner(targets[1]))
+		}
 		return fmt.Sprintf("%s %s %s?", verb, noun, describe(targets[0]))
 	}
 	if len(targets) > 0 {
-		owner := targets[0].param.Flag
-		if r, ok := genResources[targets[0].param.Resource]; ok {
-			owner = r.Noun
-		}
-		return fmt.Sprintf("%s the %s of %s %s?", verb, noun, owner, describe(targets[0]))
+		return fmt.Sprintf("%s the %s of %s?", verb, noun, owner(targets[0]))
 	}
 	return fmt.Sprintf("%s %s?", verb, noun)
 }

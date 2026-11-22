@@ -359,3 +359,15 @@ func TestListAllRefusesARepeatedCursor(t *testing.T) {
 		t.Errorf("cycle: err %v after %d calls", err, calls)
 	}
 }
+
+// Any protected: scope is worth pairing, not only protected:compute.
+func TestElevateAcceptsAnyProtectedScope(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:network", "protected:network"}}, time.Now().Add(time.Hour))
+	h.fake.PairOnPoll = 1
+	h.browser = func(string) error { return nil }
+	h.mustRun("auth", "elevate")
+	if h.fake.ElevationCalls != 1 {
+		t.Errorf("elevation calls = %d", h.fake.ElevationCalls)
+	}
+}

@@ -61,6 +61,8 @@ type OpOverlay struct {
 
 // FlagOverlay renames or converts a query or body field.
 type FlagOverlay struct {
+	// Hide leaves the field to --data, for a schema artefact such as a getter.
+	Hide    bool   `json:"hide"`
 	Name    string `json:"name"`
 	Scale   int64  `json:"scale"`
 	Convert string `json:"convert"`
@@ -584,6 +586,9 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		}
 		if fo, ok := oo.Flags[name]; ok {
 			usedFlags[name] = true
+			if fo.Hide {
+				return cmdspec.Field{}, false
+			}
 			if fo.Name != "" {
 				f.Flag = fo.Name
 			}

@@ -98,6 +98,7 @@ operations:
     flags:
       cpus: {name: vcpu, help: the new vCPU count}
       ramMib: {name: ram-gib, scale: 1024, help: the new RAM in GiB}
+      empty: {hide: true}
     atLeastOne: [vcpu, ram-gib]
     example: ca vm resize web-01 --vcpu 4 --ram-gib 8
   renameVm:

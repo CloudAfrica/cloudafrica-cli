@@ -21,6 +21,8 @@ const defaultWaitTimeout = 10 * time.Minute
 type waitFlags struct {
 	noWait  bool
 	timeout time.Duration
+	// cancelled makes a cancelled operation the outcome waited for (`operation cancel`).
+	cancelled bool
 }
 
 func (w *waitFlags) bind(cmd *cobra.Command, withNoWait bool) {
@@ -40,7 +42,7 @@ func (a *App) operationCmd() *cobra.Command {
 		Args:  exactArgs(1, "OPERATION_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.withSession(cmd.Context(), func(s *session) error {
-				return a.waitAndPrint(cmd.Context(), s, args[0], wf.timeout)
+				return a.waitAndPrint(cmd.Context(), s, args[0], wf)
 			})
 		},
 	}
@@ -111,7 +113,8 @@ func (a *App) printOperation(op *cloudafrica.Operation) error {
 // writing its progress to stderr on a terminal. A failed or cancelled
 // operation prints and returns its error; running out of time returns a
 // deadline error (exit 3).
-func (a *App) waitAndPrint(ctx context.Context, s *session, id string, timeout time.Duration) error {
+func (a *App) waitAndPrint(ctx context.Context, s *session, id string, wf waitFlags) error {
+	timeout := wf.timeout
 	if timeout <= 0 {
 		timeout = defaultWaitTimeout
 	}
@@ -123,6 +126,9 @@ func (a *App) waitAndPrint(ctx context.Context, s *session, id string, timeout t
 		if errors.As(err, &oe) && op != nil {
 			if perr := a.printOperation(op); perr != nil {
 				return perr
+			}
+			if wf.cancelled && oe.State == "cancelled" {
+				return nil
 			}
 			return err
 		}
@@ -196,7 +202,7 @@ func (a *App) accepted(ctx context.Context, s *session, opID string, wf waitFlag
 		return errors.New("the API accepted the request but returned no operation id")
 	}
 	if !wf.noWait {
-		return a.waitAndPrint(ctx, s, opID, wf.timeout)
+		return a.waitAndPrint(ctx, s, opID, wf)
 	}
 	pr, err := a.printer()
 	if err != nil {
