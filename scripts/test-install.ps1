@@ -57,6 +57,12 @@ function Serve {
 
 function Output { Get-Content -Raw $out }
 
+# Whether the output holds $Text. Whitespace is ignored: Windows PowerShell wraps a long warning at
+# the console width, even into a file.
+function Output-Has([string] $Text) {
+    return ((Output) -replace '\s', '').Contains(($Text -replace '\s', ''))
+}
+
 # Runs install.ps1 into $Dir (none: the default) and reports whether it returned or threw. An
 # install that does neither exited, which under `irm | iex` would close the user's shell.
 function Invoke-Install([string] $Dir, [string] $Version = "v$version", [string] $Latest = '') {
@@ -124,7 +130,7 @@ try {
     if (-not (Invoke-Install $d)) { Die "install beside a foreign ca failed: $(Output)" }
     if ((Get-FileHash "$d\ca.exe").Hash -ne $foreignHash) { Die 'foreign ca was modified' }
     if (-not (Reports-Version "$d\cloudafrica.exe")) { Die 'cloudafrica.exe is not the CLI' }
-    if ((Output) -notlike "*installed only $d\cloudafrica.exe*") { Die "no notice for a foreign ca: $(Output)" }
+    if (-not (Output-Has "installed only $d\cloudafrica.exe")) { Die "no notice for a foreign ca: $(Output)" }
     Check 'a foreign ca is kept and the CLI installs as cloudafrica'
     if (-not (Invoke-Install $d)) { Die "reinstall beside a foreign ca failed: $(Output)" }
     Check 'reinstall beside a foreign ca replaces our cloudafrica'
@@ -135,7 +141,7 @@ try {
     Copy-Item $foreign "$d\ca.exe"
     Set-Content "$d\cloudafrica.exe" 'other'
     if (Invoke-Install $d) { Die 'installed over foreign ca and cloudafrica' }
-    if ((Output) -notlike '*are other programs*') { Die "both-foreign refusal said: $(Output)" }
+    if (-not (Output-Has 'are other programs')) { Die "both-foreign refusal said: $(Output)" }
     if ((Get-FileHash "$d\ca.exe").Hash -ne $foreignHash -or (Get-Content "$d\cloudafrica.exe") -ne 'other') {
         Die 'a foreign binary was modified'
     }
@@ -149,7 +155,7 @@ try {
     if ((Get-Content "$d\cloudafrica.exe") -ne 'other' -or -not (Reports-Version "$d\ca.exe")) {
         Die 'foreign cloudafrica not kept'
     }
-    if ((Output) -notlike "*Left $d\cloudafrica.exe alone*") { Die "no warning for a foreign cloudafrica: $(Output)" }
+    if (-not (Output-Has "Left $d\cloudafrica.exe alone")) { Die "no warning for a foreign cloudafrica: $(Output)" }
     Check 'a foreign cloudafrica is kept with a warning'
 
     # Without CA_INSTALL_DIR the CLI goes under LOCALAPPDATA.
@@ -170,7 +176,7 @@ try {
     Check 'without CA_VERSION the latest release is installed'
     $d = Join-Path $work 'no-release'
     if (Invoke-Install $d '' 'https://github.com/CloudAfrica/cloudafrica-cli/releases') { Die 'installed with no release' }
-    if ((Output) -notlike '*no release found*') { Die "no-release said: $(Output)" }
+    if (-not (Output-Has 'no release found')) { Die "no-release said: $(Output)" }
     Check 'a repository with no release is refused'
 
     # A tampered archive is refused before anything is installed.
@@ -178,7 +184,7 @@ try {
     Add-Content -Path (Join-Path $work "serve\$archive") -Value 'x' -NoNewline
     $d = Join-Path $work 'tampered'
     if (Invoke-Install $d) { Die 'installed a tampered archive' }
-    if ((Output) -notlike '*checksum mismatch*') { Die "tampered archive said: $(Output)" }
+    if (-not (Output-Has 'checksum mismatch')) { Die "tampered archive said: $(Output)" }
     if (Test-Path "$d\ca.exe") { Die "tampered archive left $d\ca.exe" }
     Check 'a tampered archive is refused'
 
@@ -188,7 +194,7 @@ try {
         Set-Content (Join-Path $work "serve\$($sums.Name)")
     $d = Join-Path $work 'unlisted'
     if (Invoke-Install $d) { Die 'installed an archive missing from the checksums' }
-    if ((Output) -notlike '*is not listed in*') { Die "unlisted archive said: $(Output)" }
+    if (-not (Output-Has 'is not listed in')) { Die "unlisted archive said: $(Output)" }
     if (Test-Path "$d\ca.exe") { Die "unlisted archive left $d\ca.exe" }
     Check 'an archive missing from the checksum file is refused'
 
@@ -204,7 +210,7 @@ try {
     Set-Content (Join-Path $work "serve\$($sums.Name)") "$hash  $archive"
     $d = Join-Path $work 'broken-install'
     if (Invoke-Install $d) { Die 'reported success for a ca.exe that does not run' }
-    if ((Output) -notlike '*does not run*') { Die "a broken ca.exe said: $(Output)" }
+    if (-not (Output-Has 'does not run')) { Die "a broken ca.exe said: $(Output)" }
     Check 'an installed ca.exe that does not run fails the install'
 
     Write-Host "$script:pass passed"
