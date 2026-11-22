@@ -38,7 +38,7 @@ type App struct {
 	Store       profile.Store
 	// CacheDir holds non-secret caches; "" disables them and the update check.
 	CacheDir string
-	// Transport is the base RoundTripper for API and OAuth calls (nil: the default).
+	// Transport is the base RoundTripper for API, OAuth and GitHub release calls (nil: the default).
 	Transport http.RoundTripper
 	// LoginTimeout bounds the wait for the browser sign-in (0: the default).
 	LoginTimeout time.Duration
@@ -48,7 +48,8 @@ type App struct {
 	// Exe is the name the CLI was run as ("" means "ca"); a kubeconfig from
 	// `ca k8s kubeconfig` runs it again.
 	Exe string
-	// Executable finds the running binary for `ca update` (nil: os.Executable).
+	// Executable finds the running binary, for `ca update` and the update
+	// notice's command (nil: os.Executable).
 	Executable func() (string, error)
 
 	stdin *bufio.Reader // shared by every prompt, so none swallows another's answer

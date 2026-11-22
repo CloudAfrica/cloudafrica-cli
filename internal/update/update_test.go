@@ -84,6 +84,7 @@ type release struct {
 	tag       string
 	status    int
 	delay     time.Duration
+	stall     time.Duration // an archive download sends half, then waits this long
 	assets    map[string][]byte
 	downloads atomic.Int32
 }
@@ -102,6 +103,15 @@ func newRelease(t *testing.T, tag string) *release {
 		b, ok := r.assets[strings.TrimPrefix(req.URL.Path, "/download/"+r.tag+"/")]
 		if !ok {
 			http.NotFound(w, req)
+			return
+		}
+		if r.stall > 0 && !strings.HasSuffix(req.URL.Path, "SHA256SUMS") {
+			_, _ = w.Write(b[:len(b)/2])
+			w.(http.Flusher).Flush()
+			select {
+			case <-time.After(r.stall):
+			case <-req.Context().Done():
+			}
 			return
 		}
 		_, _ = w.Write(b)
@@ -303,9 +313,9 @@ func TestNoRelease(t *testing.T) {
 func TestOtherGitHubFailureIsNotNoRelease(t *testing.T) {
 	r := newRelease(t, "")
 	r.status = http.StatusInternalServerError
-	_, err := Run(t.Context(), r.options(filepath.Join(t.TempDir(), "ca"), "linux", "0.3.1"))
-	if err == nil || errors.Is(err, ErrNoRelease) {
-		t.Errorf("err = %v", err)
+	res, err := Run(t.Context(), r.options(filepath.Join(t.TempDir(), "ca"), "linux", "0.3.1"))
+	if err == nil || errors.Is(err, ErrNoRelease) || res.State == UpToDate {
+		t.Errorf("%+v, %v", res, err)
 	}
 }
 
@@ -316,6 +326,43 @@ func TestTimeoutIsDeadlineExceeded(t *testing.T) {
 	o.LatestTimeout = 20 * time.Millisecond
 	_, err := Run(t.Context(), o)
 	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestStalledDownloadTimesOutAndReplacesNothing(t *testing.T) {
+	goos, name := unixName()
+	r := newRelease(t, "v0.4.0")
+	r.publish(t, goos, map[string][]byte{name: fake["0.4.0"], "cloudafrica.exe": fake["0.4.0"]})
+	r.stall = 5 * time.Second
+	dir := t.TempDir()
+	exe := install(t, dir, name, "0.3.1")
+	o := r.options(exe, goos, "0.3.1")
+	o.DownloadTimeout = 100 * time.Millisecond
+	res, err := Run(t.Context(), o)
+	if !errors.Is(err, context.DeadlineExceeded) || res.State == UpToDate {
+		t.Errorf("%+v, %v", res, err)
+	}
+	if got, _ := os.ReadFile(exe); !bytes.Equal(got, fake["0.3.1"]) {
+		t.Error("the installed binary changed")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, tempPrefix+"*")); len(left) != 0 {
+		t.Errorf("temp left behind: %v", left)
+	}
+}
+
+// A directory that cannot hold a temp dir for a reason sudo does not fix is
+// an error, not a refusal that suggests sudo.
+func TestNonPermissionWriteFailureIsNotARefusal(t *testing.T) {
+	r := newRelease(t, "v0.4.0")
+	r.publish(t, "linux", map[string][]byte{"ca": fake["0.4.0"]})
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Run(t.Context(), r.options(filepath.Join(file, "ca"), "linux", "0.3.1"))
+	var refused *RefusedError
+	if err == nil || errors.As(err, &refused) || !strings.Contains(err.Error(), "creating a temporary directory") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -357,10 +404,10 @@ func TestBadDownloadsReplaceNothing(t *testing.T) {
 		}, "not listed in cloudafrica-cli_0.4.0_SHA256SUMS"},
 		{"broken binary", func(t *testing.T, r *release) {
 			r.publish(t, goos, members("broken"))
-		}, "the downloaded ca does not run; nothing was replaced"},
+		}, "the downloaded ca does not run (exit status 1); nothing was replaced"},
 		{"wrong version", func(t *testing.T, r *release) {
 			r.publish(t, goos, members("0.5.0"))
-		}, "the downloaded ca does not run; nothing was replaced"},
+		}, `the downloaded ca reports "ca 0.5.0 (fake)", not version 0.4.0; nothing was replaced`},
 		{"missing binary", func(t *testing.T, r *release) {
 			r.publish(t, goos, map[string][]byte{"other": fake["0.4.0"]})
 		}, "does not hold"},
@@ -551,6 +598,23 @@ func TestWindowsSwapReplacesOurSiblingOnly(t *testing.T) {
 				t.Errorf("sibling: %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// A sibling that will not run might be ours, so it is kept and reported.
+func TestWindowsSiblingThatWillNotRunIsReported(t *testing.T) {
+	r := newRelease(t, "v0.4.0")
+	r.publish(t, "windows", map[string][]byte{"ca.exe": fake["0.4.0"], "cloudafrica.exe": fake["0.4.0"]})
+	dir := t.TempDir()
+	exe := install(t, dir, "ca.exe", "0.3.1")
+	sib := install(t, dir, "cloudafrica.exe", "broken")
+	res, err := Run(t.Context(), r.options(exe, "windows", "0.3.1"))
+	if err != nil || res.State != Updated || res.SiblingErr == nil ||
+		!strings.Contains(res.SiblingErr.Error(), sib+" was not updated: running it to check it is ca") {
+		t.Fatalf("%+v, %v", res, err)
+	}
+	if got, _ := os.ReadFile(sib); !bytes.Equal(got, fake["broken"]) {
+		t.Error("the sibling changed")
 	}
 }
 

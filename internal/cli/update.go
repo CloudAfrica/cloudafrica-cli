@@ -93,10 +93,11 @@ func (a *App) executable() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("finding the running ca: %w", err)
 	}
-	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = resolved
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", exe, err)
 	}
-	return exe, nil
+	return resolved, nil
 }
 
 // releaseHTTP reaches GitHub: a.Transport for tests, and never the

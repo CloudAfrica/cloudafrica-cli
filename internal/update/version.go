@@ -59,6 +59,9 @@ func parseVersion(s string) (version, bool) {
 	var v version
 	if i := strings.IndexByte(s, '-'); i >= 0 {
 		s, v.pre = s[:i], s[i+1:]
+		if !prerelease(v.pre) {
+			return v, false
+		}
 	}
 	parts := strings.Split(s, ".")
 	if len(parts) != 3 {
@@ -72,4 +75,16 @@ func parseVersion(s string) (version, bool) {
 		v.n[i] = n
 	}
 	return v, true
+}
+
+// prerelease reports whether pre is a semver prerelease: dot-separated
+// [0-9A-Za-z-] identifiers. A tag ends up in a URL and a file name, so
+// nothing else gets through.
+func prerelease(pre string) bool {
+	for _, id := range strings.Split(pre, ".") {
+		if id == "" || strings.Trim(id, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") != "" {
+			return false
+		}
+	}
+	return true
 }

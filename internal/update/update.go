@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -39,8 +41,9 @@ type Options struct {
 type State int
 
 const (
-	// UpToDate: the running version is the latest release.
-	UpToDate State = iota
+	// UpToDate: the running version is the latest release. It starts at 1 so
+	// the zero State, which every failed Run returns, names no outcome.
+	UpToDate State = iota + 1
 	// Ahead: the running version is newer than the latest release (an rc).
 	Ahead
 	// Available: a newer release exists and nothing was changed (--check, or
@@ -105,6 +108,9 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	dir := filepath.Dir(o.Exe)
 	sweepStale(dir)
 	tmp, err := os.MkdirTemp(dir, tempPrefix)
+	if err != nil && !errors.Is(err, fs.ErrPermission) {
+		return res, fmt.Errorf("creating a temporary directory beside ca: %w", err)
+	}
 	if err != nil {
 		msg := fmt.Sprintf("cannot write to %s, where ca is installed", dir)
 		if o.GOOS != "windows" {
@@ -127,8 +133,11 @@ func Run(ctx context.Context, o Options) (Result, error) {
 		return res, err
 	}
 	line, err := probe(ctx, fresh, o.ProbeTimeout)
-	if err != nil || !strings.HasPrefix(line, "ca "+res.Latest+" (") {
-		return res, fmt.Errorf("the downloaded ca does not run; nothing was replaced")
+	if err != nil {
+		return res, fmt.Errorf("the downloaded ca does not run (%w); nothing was replaced", err)
+	}
+	if !strings.HasPrefix(line, "ca "+res.Latest+" (") {
+		return res, fmt.Errorf("the downloaded ca reports %q, not version %s; nothing was replaced", line, res.Latest)
 	}
 
 	if o.GOOS != "windows" {
@@ -196,7 +205,8 @@ func sibling(exe string) string {
 }
 
 // replaceSibling swaps the other Windows name when it is this CLI, as
-// install.ps1 decides it: a foreign ca.exe stays.
+// install.ps1 decides it: a foreign ca.exe stays. One that cannot be run to
+// tell is left too, with an error so the user hears of it.
 func replaceSibling(ctx context.Context, o Options, tmp string) error {
 	name := sibling(o.Exe)
 	if name == "" {
@@ -206,7 +216,11 @@ func replaceSibling(ctx context.Context, o Options, tmp string) error {
 	if !exists(dst) {
 		return nil
 	}
-	if line, err := probe(ctx, dst, o.ProbeTimeout); err != nil || !ours(line) {
+	line, err := probe(ctx, dst, o.ProbeTimeout)
+	if err != nil {
+		return fmt.Errorf("%s was not updated: running it to check it is ca: %w", dst, err)
+	}
+	if !ours(line) {
 		return nil
 	}
 	if err := replaceRunning(filepath.Join(tmp, name), dst, o.RetryFor); err != nil {

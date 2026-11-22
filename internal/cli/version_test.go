@@ -25,9 +25,9 @@ func releases(t *testing.T, status int, tag string) *atomic.Int32 {
 		_, _ = w.Write([]byte(`{"tag_name":"` + tag + `"}`))
 	}))
 	t.Cleanup(srv.Close)
-	old := update.LatestReleaseURL
-	update.LatestReleaseURL = srv.URL
-	t.Cleanup(func() { update.LatestReleaseURL = old })
+	oldLatest, oldBase := update.LatestReleaseURL, update.DownloadBase
+	update.LatestReleaseURL, update.DownloadBase = srv.URL, srv.URL // nothing reaches GitHub
+	t.Cleanup(func() { update.LatestReleaseURL, update.DownloadBase = oldLatest, oldBase })
 	return &n
 }
 
