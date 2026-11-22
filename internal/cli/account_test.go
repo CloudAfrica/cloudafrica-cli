@@ -95,6 +95,23 @@ func TestActivityModesDoNotMix(t *testing.T) {
 	}
 }
 
+// --limit above the route's documented cap, and --cursor with the history flags,
+// are refused before any request (the API answers 400 to both).
+func TestActivityLimitAndCursorAreChecked(t *testing.T) {
+	h := s3Harness(t)
+	for _, c := range []struct {
+		want string
+		args []string
+	}{
+		{"at most 50", []string{"activity", "list", "--limit", "100"}},
+		{"cannot be combined", []string{"activity", "list", "--limit", "5", "--cursor", "abc", "--subject-type", "vm", "--subject-id", "x"}},
+	} {
+		if code := h.run(c.args...); code != ExitUsage || len(h.fake.ReadURLs) != 0 || !strings.Contains(h.stderr.String(), c.want) {
+			t.Errorf("%v: exit %d, reads %d\n%s", c.args, code, len(h.fake.ReadURLs), h.stderr)
+		}
+	}
+}
+
 // Every list walks at the page size its route documents: the generator reads
 // "from 1 to N" off the limit parameter, so no list is asked for more than it takes.
 func TestPageLimitComesFromTheSpec(t *testing.T) {
@@ -168,9 +185,14 @@ func TestMemberCommands(t *testing.T) {
 	h.mustRun("member", "cancel-invitation", "u-1")
 	h.mustRun("member", "delete", "jo@example.com", "--yes")
 	h.mustRun("member", "create", "--email", "new@example.com", "--role", "viewer", "--first-name", "New", "--yes")
+	h.stdout.Reset()
+	h.mustRun("member", "create", "--email", "new@example.com", "--role", "viewer", "--yes", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "u-3" {
+		t.Errorf("member create -q = %q, want u-3", got)
+	}
 	want := []string{
 		"PUT /v1/members/u-1/role", "POST /v1/members/u-1/actions/resend-invitation",
-		"POST /v1/members/u-1/actions/cancel-invitation", "DELETE /v1/members/u-1", "POST /v1/members",
+		"POST /v1/members/u-1/actions/cancel-invitation", "DELETE /v1/members/u-1", "POST /v1/members", "POST /v1/members",
 	}
 	if !slices.Equal(h.fake.WriteURLs, want) {
 		t.Fatalf("writes %v", h.fake.WriteURLs)

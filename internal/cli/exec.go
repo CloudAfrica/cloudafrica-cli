@@ -166,7 +166,7 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		f.DurationVar(&r.timeout, "timeout", defaultWaitTimeout, "how long to wait for the operation")
 	}
 	if op.List && op.Paged {
-		f.IntVar(&r.limit, "limit", 0, "fetch one page of at most this many rows and print it as returned")
+		f.IntVar(&r.limit, "limit", 0, "fetch one page of at most this many rows (the route's cap applies) and print it as returned")
 		f.StringVar(&r.cursor, "cursor", "", "with --limit, the page to fetch (the previous page's nextCursor)")
 	}
 	return cmd
@@ -275,6 +275,12 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	}
 	if r.limit < 0 || r.limit == 0 && f.Changed("limit") {
 		return usageErr(errors.New("--limit must be at least 1"))
+	}
+	if op.PageLimit > 0 && r.limit > op.PageLimit {
+		return usageErr(fmt.Errorf("--limit is at most %d for %s", op.PageLimit, strings.Join(op.Path, " ")))
+	}
+	if err := cursorMode(op, f, r.cursor); err != nil {
+		return usageErr(err)
 	}
 	if op.Confirm && !r.yes && !a.TTY {
 		return usageErr(fmt.Errorf("refusing to %s without --yes when not on a terminal", strings.Join(op.Path, " ")))
@@ -712,7 +718,7 @@ func printRaw(pr output.Printer, columns string, body []byte) error {
 	cs, ok := genColumns[columns]
 	if !ok {
 		res := output.Result{Value: json.RawMessage(body)}
-		if id := field(decode(body), "id"); id != "" {
+		if id := cmp.Or(field(decode(body), "id"), field(decode(body), "userId")); id != "" {
 			res.IDs = []string{id}
 		}
 		if pr.Format == output.Table && !pr.Quiet {
@@ -930,6 +936,23 @@ func exclusiveGiven(op cmdspec.Op, f *pflag.FlagSet) error {
 			}
 			if first == "" {
 				first = name
+			}
+		}
+	}
+	return nil
+}
+
+// cursorMode refuses a --cursor given with a flag from a later exclusive group:
+// the cursor belongs to the first group, the plain feed, and the API answers 400
+// when it is mixed with the other mode.
+func cursorMode(op cmdspec.Op, f *pflag.FlagSet, cursor string) error {
+	if cursor == "" || len(op.Exclusive) < 2 {
+		return nil
+	}
+	for _, grp := range op.Exclusive[1:] {
+		for _, name := range grp {
+			if f.Changed(name) {
+				return fmt.Errorf("--cursor and --%s cannot be combined", name)
 			}
 		}
 	}
