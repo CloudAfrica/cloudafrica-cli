@@ -35,3 +35,13 @@ Author misses the PR review caught. Check these before opening a PR.
 - **A dependency bump checks what the dependency reports.** cloudafrica-go v0.2.0 kept `Version`
   at 0.1.0, so `ca` 0.2.0 printed the wrong SDK; `TestSDKVersionMatchesGoMod` now pins it, and run
   `ca version` on the release before calling it done.
+- **Test install.ps1 on both Windows shells.** `pwsh` and Windows PowerShell 5.1 differ (the
+  redirect target is `ResponseUri` on 5.1, `RequestMessage.RequestUri` on 7); the `install-windows`
+  job runs `scripts/test-install.ps1` under each, and a fake must answer in the edition's shape.
+- **Never `Select-Object -First 1` a native command whose file you then replace.** It stops the
+  pipeline without waiting, and the process still holds the exe ("being used by another process").
+- **Windows PowerShell wraps long warnings even into a file** — match message text whitespace-free.
+- **Under `irm | iex` the installer inherits the caller's scope:** throw rather than exit (an exit
+  closes the shell, pinned by the test's sentinel), and `Set-StrictMode -Off` inside the function.
+- **Validate a downloaded binary before it replaces anything**; a broken one installed over ours
+  then reads as a foreign program and blocks the next install.
