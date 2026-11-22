@@ -22,3 +22,6 @@ Author misses the PR review caught. Check these before opening a PR.
 - **A substring assertion must not match its negation.** `"ready"` is in `"not ready"`; assert the
   whole row, and include the negative case.
 - **Copy no helper by hand.** k8s inlined vm's 202 handling and drifted; reuse or factor it.
+- **A dependency bump checks what the dependency reports.** cloudafrica-go v0.2.0 kept `Version`
+  at 0.1.0, so `ca` 0.2.0 printed the wrong SDK; `TestSDKVersionMatchesGoMod` now pins it, and run
+  `ca version` on the release before calling it done.
