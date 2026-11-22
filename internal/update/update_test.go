@@ -687,11 +687,15 @@ func TestWindowsSweepsEarlierAsides(t *testing.T) {
 	dir := t.TempDir()
 	exe := install(t, dir, "ca.exe", "0.3.1")
 	old := install(t, dir, "ca.exe"+asideSuffix+"1", "0.3.1")
+	inFlight := install(t, dir, fmt.Sprintf("cloudafrica.exe%s%d", asideSuffix, time.Now().UnixNano()), "0.3.1")
 	if _, err := Run(t.Context(), r.options(exe, "windows", "0.3.1")); err != nil {
 		t.Fatal(err)
 	}
 	if exists(old) {
 		t.Error("earlier aside kept")
+	}
+	if !exists(inFlight) {
+		t.Error("a concurrent update's rollback copy was deleted")
 	}
 }
 

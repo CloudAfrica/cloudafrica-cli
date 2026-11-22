@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -322,12 +323,18 @@ func retry(d time.Duration, f func() error) error {
 	}
 }
 
-// sweepAsides deletes earlier Windows asides; one still running stays.
+// sweepAsides deletes Windows asides set aside over an hour ago; one still
+// running stays. Age comes from the name, since a rename keeps the original's
+// mtime, and a younger aside may be the rollback copy of an update in flight.
 func sweepAsides(dir string) {
 	for _, name := range []string{"ca.exe", "cloudafrica.exe"} {
-		old, _ := filepath.Glob(filepath.Join(dir, name+asideSuffix+"*"))
+		prefix := filepath.Join(dir, name+asideSuffix)
+		old, _ := filepath.Glob(prefix + "*")
 		for _, p := range old {
-			_ = os.Remove(p)
+			nanos, err := strconv.ParseInt(strings.TrimPrefix(p, prefix), 10, 64)
+			if err == nil && time.Since(time.Unix(0, nanos)) > time.Hour {
+				_ = os.Remove(p)
+			}
 		}
 	}
 }
