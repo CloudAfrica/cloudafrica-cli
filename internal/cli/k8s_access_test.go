@@ -242,9 +242,9 @@ func TestRewriteKubeconfigUsesTheRunName(t *testing.T) {
 }
 
 func TestRewriteKubeconfigRefusesOneWithNoExecUser(t *testing.T) {
-	in := "apiVersion: v1\nkind: Config\nusers:\n- name: u\n  user:\n    token: abc\n"
-	if _, err := rewriteKubeconfig([]byte(in), "ca", "k-1", DefaultEndpoint); err == nil {
-		t.Fatal("no error")
+	in := "apiVersion: v1\nkind: Config\nusers:\n- name: u\n  user: {}\n"
+	if _, err := rewriteKubeconfig([]byte(in), "ca", "k-1", DefaultEndpoint); err == nil || !strings.Contains(err.Error(), "no exec user") {
+		t.Fatalf("err %v", err)
 	}
 }
 
@@ -259,7 +259,7 @@ func TestK8sKubeconfigFailedFetchWritesNothing(t *testing.T) {
 		"not a 200":    {203, fakeapi.Kubeconfig("k-1", "https://x:6443"), "HTTP 203 with no kubeconfig"},
 		"empty":        {200, "", "HTTP 200 with no kubeconfig"},
 		"not yaml":     {200, "users: [", "reading the kubeconfig"},
-		"no exec user": {200, "users:\n- name: u\n  user:\n    token: abc\n", "no exec user"},
+		"no exec user": {200, "users:\n- name: u\n  user: {}\n", "no exec user"},
 	} {
 		for _, vpn := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s vpn=%v", name, vpn), func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestK8sKubeconfigFailsWhenItCannotBeWritten(t *testing.T) {
 	}
 }
 
-// Every exec user is rewritten; a user with a static credential is left as is.
+// Every exec user is rewritten.
 func TestRewriteKubeconfigRewritesEveryExecUser(t *testing.T) {
 	in := `clusters:
 - name: prod
@@ -299,9 +299,6 @@ users:
   user:
     exec:
       command: sh
-- name: static
-  user:
-    token: abc
 - name: b
   user:
     exec:
@@ -312,20 +309,40 @@ users:
 		t.Fatal(err)
 	}
 	d := parseKubeconfigUsers(t, out)
-	if len(d.Users) != 3 {
+	if len(d.Users) != 2 {
 		t.Fatalf("users %s", out)
 	}
 	for _, u := range d.Users {
-		switch u.Name {
-		case "static":
-			if u.User.Token != "abc" || u.User.Exec.Command != "" {
-				t.Errorf("static user = %+v", u.User)
-			}
-		default:
-			if u.User.Exec.Command != "ca" || strings.Join(u.User.Exec.Args, " ") != "k8s token k-1" {
-				t.Errorf("user %s = %+v", u.Name, u.User.Exec)
-			}
+		if u.User.Exec.Command != "ca" || strings.Join(u.User.Exec.Args, " ") != "k8s token k-1" {
+			t.Errorf("user %s = %+v", u.Name, u.User.Exec)
 		}
+	}
+}
+
+// The output never carries a credential: a user holding one, alone or
+// next to exec, is refused.
+// A field that holds no credential, as a serialiser may emit, is kept.
+func TestRewriteKubeconfigKeepsANonCredentialField(t *testing.T) {
+	in := "users:\n- name: a\n  user:\n    exec:\n      command: sh\n    extensions: []\n"
+	if _, err := rewriteKubeconfig([]byte(in), "ca", "k-1", DefaultEndpoint); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRewriteKubeconfigRefusesAUserWithACredential(t *testing.T) {
+	for name, user := range map[string]string{
+		"static user":   "    token: abc\n",
+		"token by exec": "    exec:\n      command: sh\n    token: abc\n",
+		"client key":    "    exec:\n      command: sh\n    client-key-data: a2V5\n",
+		"token file":    "    exec:\n      command: sh\n    tokenFile: /t\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := "users:\n- name: a\n  user:\n    exec:\n      command: sh\n- name: b\n  user:\n" + user
+			out, err := rewriteKubeconfig([]byte(in), "ca", "k-1", DefaultEndpoint)
+			if err == nil || !strings.Contains(err.Error(), "user b carries") || out != nil {
+				t.Errorf("err %v out %s", err, out)
+			}
+		})
 	}
 }
 

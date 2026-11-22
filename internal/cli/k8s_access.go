@@ -152,10 +152,16 @@ func (a *App) k8sKubeconfig() *cobra.Command {
 	return cmd
 }
 
+// credentialFields are the kubeconfig user fields that hold or point at a
+// credential other than exec.
+var credentialFields = []string{"token", "tokenFile", "client-certificate", "client-certificate-data", "client-key",
+	"client-key-data", "username", "password", "auth-provider"}
+
 // rewriteKubeconfig replaces the exec command of every user in kubeconfig
-// with `<exe> k8s token <id>`, run against endpoint. A kubeconfig with no
-// exec user is refused: there would be nothing to rewrite, and kubectl
-// would sign in some other way than this command says.
+// with `<exe> k8s token <id>`, run against endpoint. A user holding one of
+// credentialFields is refused, so the output never carries a credential, and so
+// is a kubeconfig with no exec user: kubectl would sign in some other way
+// than this command says.
 func rewriteKubeconfig(kubeconfig []byte, exe, id, endpoint string) ([]byte, error) {
 	var doc map[string]any
 	if err := yaml.Unmarshal(kubeconfig, &doc); err != nil {
@@ -166,7 +172,17 @@ func rewriteKubeconfig(kubeconfig []byte, exe, id, endpoint string) ([]byte, err
 	for _, u := range users {
 		named, _ := u.(map[string]any)
 		user, _ := named["user"].(map[string]any)
-		if user == nil || user["exec"] == nil {
+		var held []string
+		for _, k := range credentialFields {
+			if _, ok := user[k]; ok {
+				held = append(held, k)
+			}
+		}
+		if len(held) > 0 {
+			return nil, fmt.Errorf("the kubeconfig's user %v carries %s, which `ca k8s token` does not replace",
+				named["name"], strings.Join(held, ", "))
+		}
+		if user["exec"] == nil {
 			continue
 		}
 		user["exec"] = map[string]any{
