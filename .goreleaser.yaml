@@ -47,6 +47,7 @@ release:
   prerelease: auto
   extra_files:
     - glob: ./install.sh
+    - glob: ./install.ps1
 # A prerelease (v0.1.0-rc.N) skips both: staff install an RC from the release page.
 brews:
   - name: ca

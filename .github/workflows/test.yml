@@ -30,3 +30,25 @@ jobs:
           version: 'v2.20.0'
           args: release --snapshot --clean --skip=sign
       - run: bash scripts/test-install.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-dist
+          path: |
+            dist/cloudafrica-cli_*_windows_*.zip
+            dist/cloudafrica-cli_*_SHA256SUMS
+          retention-days: 1
+
+  install-windows:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-dist
+          path: dist
+      - name: install.ps1 on PowerShell 7
+        run: pwsh -NoProfile -File scripts/test-install.ps1
+      - name: install.ps1 on Windows PowerShell 5.1
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install.ps1
