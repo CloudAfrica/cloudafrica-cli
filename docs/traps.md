@@ -6,9 +6,19 @@ Author misses the PR review caught. Check these before opening a PR.
   each item against the diff; the README for token elevation shipped missing three of §8b's items.
 - **The write of a command's deliverable checks its error.** If stdout carries the result a script
   captures (a secret, a Location), a failed `fmt.Fprint*` must return an error, or the command exits
-  0 with nothing captured.
+  0 with nothing captured. Pin it with an `h.failStdout` test per command (missed again on #8).
 - **Say what `ca` does, not what the gateway does.** A comment or help line about server behaviour
   is a claim about another repo; state ca's own rule, or cite the gateway source.
+- **A command's own precondition runs before anything that fails with other advice.** `ca k8s token`
+  checked for CLOUDAFRICA_TOKEN inside `withSession`, so a shell with no token got "run `ca auth
+  login`" from the session first. Run the command in an empty environment before trusting a guard.
+- **When a remedy is wrong, enumerate every error path of the command.** The pre-check fixed the
+  missing token; a 401 and an insufficient-scope refusal still printed the generic sign-in hint.
+- **A rewrite asserts what it leaves alone and what it must not carry.** `rewriteKubeconfig` was
+  tested only on the fields it set; nothing checked the CA data and contexts survived, and a static
+  token beside `exec` survived too, against the README's "holds no credential" (Copilot, #8).
+- **Every failure branch of a fetch gets a fake knob and a test.** Non-200, empty body and bad
+  YAML on `ca k8s kubeconfig` had none, nor had the argv0-derived exe name.
 - **Test every branch a flag-dependent path reaches.** A reused-secret path that is paired on the
   first response does not cover the browser/poll branch; set the poll count so both run.
 - **Pin a length or range boundary with the off-by-one value.** A test value at the minimum passes
