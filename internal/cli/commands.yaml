@@ -53,9 +53,9 @@ params:
   /v1/vpcs/{id}: {resource: vpc}
   /v1/vpcs/{id}/vips/{vipId}: {resource: vip, within: vpcId}
   /v1/placement-groups/{id}: {resource: placement-group}
-  /v1/buckets/{id}: {resource: bucket}
-  /v1/bucket-keys/{keyId}: {resource: bucket-key}
-  /v1/bucket-keys/{keyId}/buckets/{bucketId}: {resource: bucket}
+  /v1/buckets/{id}: {resource: bucket, help: "the bucket name or id"}
+  /v1/bucket-keys/{keyId}: {resource: bucket-key, help: "the key name or id"}
+  /v1/bucket-keys/{keyId}/buckets/{bucketId}: {resource: bucket, help: "the bucket name or id"}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
 
 handwritten:
@@ -163,7 +163,7 @@ operations:
       ca bucket create --display-name audit --object-lock --versioning enabled
   deleteBucket:
     flags:
-      confirmBucketName: {help: "the bucket's name, spelled exactly as `ca bucket list` shows it"}
+      confirmBucketName: {help: "the bucket's name, spelled exactly as ca bucket list shows it"}
     example: ca bucket delete logs-7f3a --confirm-bucket-name logs-7f3a
   getBucketUsage:
     path: bucket usage
@@ -177,8 +177,10 @@ operations:
     positional: id
     example: ca bucket versioning set logs-7f3a --mode enabled
   createBucketKey:
+    flags:
+      bucketResourceId: {help: "the id of the bucket to attach the key to (ca bucket get NAME -q prints it), not its name; omit for an account-level key"}
     example: |
-      ca bucket-key create --name ci --access-type read --bucket-resource-id logs-7f3a
+      ca bucket-key create --name ci --access-type read --bucket-resource-id "$(ca bucket get logs-7f3a -q)"
   grantBucketKeyBucketAccess:
     path: bucket-key grant
     positional: keyId
@@ -345,7 +347,7 @@ columns:
       - {header: NAME, path: name}
       - {header: DISPLAY NAME, path: displayName}
       - {header: STATUS, path: status}
-      - {header: QUOTA, path: quotaBytes, format: bytes}
+      - {header: BILLED, path: quotaBytes, format: bytes}
       - {header: ON DISK, path: sizeActualBytes, format: bytes}
       - {header: OBJECTS, path: objectCount}
       - {header: CREATED, path: createdAt, format: time}
@@ -358,7 +360,7 @@ columns:
       - {header: MASTER, path: master, format: bool}
       - {header: BUCKET, path: bucketName}
   PublicBucketKeyCreatedDto:
-    id: key.id
+    id: secretKey
     columns:
       - {header: ID, path: key.id}
       - {header: NAME, path: key.name}
@@ -367,7 +369,7 @@ columns:
       - {header: BUCKET, path: key.bucketName}
       - {header: SECRET KEY, path: secretKey}
   PublicRevealedKeySecretDto:
-    id: keyId
+    id: secretKey
     columns:
       - {header: KEY ID, path: keyId}
       - {header: AVAILABLE, path: available, format: bool}

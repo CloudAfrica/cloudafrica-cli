@@ -366,7 +366,14 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	if !json.Valid(resp) {
 		return fmt.Errorf("HTTP %d: the response is not JSON", status)
 	}
-	return printRaw(pr, op.Columns, resp)
+	if err := printRaw(pr, op.Columns, resp); err != nil {
+		return err
+	}
+	name, _ := body["name"].(string)
+	if len(targets) > 0 {
+		name = targets[0].given
+	}
+	return missingSecret(op.OperationID, name, resp)
 }
 
 func orList(flags []string) string {
