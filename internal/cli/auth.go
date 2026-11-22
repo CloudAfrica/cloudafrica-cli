@@ -21,7 +21,8 @@ import (
 )
 
 // defaultScopes is what every sign-in requests: the read: and write: scopes
-// of the API operations the CLI covers (generated), and the protected:
+// of every API operation the CLI covers or has pending for a later slice
+// (generated), so a sign-in made now also covers commands added later; and the protected:
 // scopes of its commonest protected actions. Holding a protected: scope is
 // not enough for a protected action: the sign-in must also be paired, which
 // is `ca auth elevate`.

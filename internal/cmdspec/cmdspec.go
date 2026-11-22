@@ -71,7 +71,6 @@ type Field struct {
 	Format   string
 	Enum     []string
 	Required bool
-	Convert  string
 	// Scale multiplies an integer flag before it is sent (GiB → MiB is 1024).
 	Scale int64
 	Help  string

@@ -59,14 +59,13 @@ type OpOverlay struct {
 	Example    string                 `json:"example"`
 }
 
-// FlagOverlay renames or converts a query or body field.
+// FlagOverlay renames, scales or hides a query or body field.
 type FlagOverlay struct {
 	// Hide leaves the field to --data, for a schema artefact such as a getter.
-	Hide    bool   `json:"hide"`
-	Name    string `json:"name"`
-	Scale   int64  `json:"scale"`
-	Convert string `json:"convert"`
-	Help    string `json:"help"`
+	Hide  bool   `json:"hide"`
+	Name  string `json:"name"`
+	Scale int64  `json:"scale"`
+	Help  string `json:"help"`
 }
 
 // Report counts what the table covers.
@@ -303,6 +302,23 @@ func (g *generator) run() *Output {
 	for _, name := range sortedKeys(g.ov.Columns) {
 		if _, ok := g.d.Components.Schemas[name]; !ok {
 			g.fail("commands.yaml columns: schema %s is not in openapi.json", name)
+		}
+	}
+	for _, name := range sortedKeys(g.ov.Resources) {
+		r := g.ov.Resources[name]
+		if r.Noun == "" || r.Match == "" {
+			g.fail("commands.yaml resources %s: noun and match are required", name)
+		}
+		if _, ok := g.d.Paths[r.List]; !ok {
+			g.fail("commands.yaml resources %s: list %s is not in openapi.json", name, r.List)
+		}
+		if _, err := regexp.Compile(r.IDPattern); err != nil {
+			g.fail("commands.yaml resources %s: idPattern: %v", name, err)
+		}
+	}
+	for _, name := range sortedKeys(g.ov.Columns) {
+		if !usedColumns[name] {
+			g.fail("commands.yaml columns: %s is used by no command", name)
 		}
 	}
 	for _, p := range sortedKeys(g.ov.Params) {
@@ -592,7 +608,7 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 			if fo.Name != "" {
 				f.Flag = fo.Name
 			}
-			f.Scale, f.Convert = fo.Scale, fo.Convert
+			f.Scale = fo.Scale
 			if fo.Help != "" {
 				f.Help = fo.Help
 			}

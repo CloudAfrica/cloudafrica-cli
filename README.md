@@ -49,7 +49,7 @@ cosign signature. To go back to an earlier release, rerun the install script wit
 ```sh
 ca auth login     # opens the browser
 ca auth login --scope write:billing   # also request a scope login does not ask for by default
-ca auth elevate   # allow protected actions (deletes, k8s upgrade-workers) for this sign-in
+ca auth elevate   # allow protected actions (such as vm delete, k8s upgrade-workers) for this sign-in
 ca auth status
 ca auth list
 ca auth logout
@@ -70,7 +70,7 @@ can only be used against the endpoint it signed in to.
 
 ## Scripts
 
-A script uses `CLOUDAFRICA_TOKEN`. For protected actions (deletes, `k8s upgrade-workers`) the token must hold the
+A script uses `CLOUDAFRICA_TOKEN`. For protected actions (such as `vm delete` and `k8s upgrade-workers`) the token must hold the
 protected scope, and a person pairs it before the run:
 
 ```sh
@@ -134,7 +134,8 @@ Every command has `--help`. The conventions:
 - **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
   `--cursor <next>`.
 - **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only.
-  JSON and YAML are the API's response as returned.
+  JSON and YAML are the API's response as returned, except that a list followed across pages prints its
+  rows as one array (`--limit` prints the page as returned).
 
 ## Kubernetes
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
+	"github.com/CloudAfrica/cloudafrica-cli/internal/gen"
 	"github.com/CloudAfrica/cloudafrica-cli/internal/profile"
 )
 
@@ -498,5 +499,28 @@ func TestLogoutRevokesAndDeletes(t *testing.T) {
 	}
 	if _, err := h.store.Load("default"); err == nil {
 		t.Error("profile still present")
+	}
+}
+
+func TestHandwrittenCommandsExist(t *testing.T) {
+	b, err := os.ReadFile("commands.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ov, err := gen.ParseOverlay(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ov.Handwritten) == 0 {
+		t.Fatal("commands.yaml lists no hand-written commands")
+	}
+	h := newHarness(t)
+	h.run("--help")
+	root := h.app.Root()
+	for id, path := range ov.Handwritten {
+		args := strings.Fields(path)
+		if c, rest, err := root.Find(args); err != nil || len(rest) != 0 || c.Name() != args[len(args)-1] {
+			t.Errorf("%s: no command %q", id, path)
+		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -194,7 +195,9 @@ func TestGenerateRefuses(t *testing.T) {
 		want    string
 	}{
 		"uncovered operation with no column set": {
-			overlay: func(o string) string { return strings.Replace(o, "  - {operation: getSecret, reason: not for the CLI}\n", "", 1) },
+			overlay: func(o string) string {
+				return strings.Replace(o, "  - {operation: getSecret, reason: not for the CLI}\n", "", 1)
+			},
 			// getSecret now generates; Widget has columns, so it is fine — use a schema without one.
 			doc: func(d map[string]any) {
 				d["paths"].(map[string]any)["/v1/secret"].(map[string]any)["get"].(map[string]any)["responses"] =
@@ -226,8 +229,10 @@ func TestGenerateRefuses(t *testing.T) {
 			want:    "commands.yaml: no path starts with /v1/gone",
 		},
 		"stale columns": {
-			overlay: func(o string) string { return strings.Replace(o, "columns:\n  Widget:", "columns:\n  Gone:\n    columns: [{header: X, path: x}]\n  Widget:", 1) },
-			want:    "commands.yaml columns: schema Gone is not in openapi.json",
+			overlay: func(o string) string {
+				return strings.Replace(o, "columns:\n  Widget:", "columns:\n  Gone:\n    columns: [{header: X, path: x}]\n  Widget:", 1)
+			},
+			want: "commands.yaml columns: schema Gone is not in openapi.json",
 		},
 		"stale param": {
 			overlay: func(o string) string { return strings.Replace(o, "params:\n", "params:\n  /v1/gone/{id}: {}\n", 1) },
@@ -264,8 +269,10 @@ func TestGenerateRefuses(t *testing.T) {
 			want:    `getWidget: positional "nope" is not a path parameter`,
 		},
 		"bad atLeastOne": {
-			overlay: func(o string) string { return strings.Replace(o, "      ramMib:", "    atLeastOne: [nope]\n    flags:\n      ramMib:", 1) },
-			want:    "createWidget: atLeastOne: no flag --nope",
+			overlay: func(o string) string {
+				return strings.Replace(o, "      ramMib:", "    atLeastOne: [nope]\n    flags:\n      ramMib:", 1)
+			},
+			want: "createWidget: atLeastOne: no flag --nope",
 		},
 		"202 without Location": {
 			doc: func(d map[string]any) {
@@ -297,6 +304,28 @@ func TestGenerateRefuses(t *testing.T) {
 		"unknown overlay key": {
 			overlay: func(o string) string { return o + "bogus: 1\n" },
 			want:    `unknown field "bogus"`,
+		},
+		"column set no command uses": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "columns:\n  Widget:", "columns:\n  CreateWidget:\n    columns: [{header: X, path: x}]\n  Widget:", 1)
+			},
+			want: "commands.yaml columns: CreateWidget is used by no command",
+		},
+		"resource with a bad idPattern": {
+			overlay: func(o string) string { return strings.Replace(o, "match: name}", "match: name, idPattern: \"(\"}", 1) },
+			want:    "commands.yaml resources widget: idPattern:",
+		},
+		"resource listing a missing path": {
+			overlay: func(o string) string { return strings.Replace(o, "list: /v1/widgets,", "list: /v1/gone,", 1) },
+			want:    "commands.yaml resources widget: list /v1/gone is not in openapi.json",
+		},
+		"resource with no noun": {
+			overlay: func(o string) string { return strings.Replace(o, "{noun: widget, ", "{", 1) },
+			want:    "commands.yaml resources widget: noun and match are required",
+		},
+		"resource with no match": {
+			overlay: func(o string) string { return strings.Replace(o, ", match: name}", "}", 1) },
+			want:    "commands.yaml resources widget: noun and match are required",
 		},
 		"new operation, uncovered": {
 			doc: func(d map[string]any) {
@@ -385,5 +414,30 @@ func TestSingularAndKebab(t *testing.T) {
 		if got := Kebab(in); got != want {
 			t.Errorf("Kebab(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestScopesCoverHandwrittenAndPendingButNotExcluded(t *testing.T) {
+	d := fixtureDoc()
+	paths := d["paths"].(map[string]any)
+	paths["/v1/widgets/{id}/gears/{gearId}"].(map[string]any)["put"].(map[string]any)["security"] =
+		[]any{map[string]any{"oauth": []string{"write:gear"}}}
+	paths["/v1/secret"].(map[string]any)["get"].(map[string]any)["security"] =
+		[]any{map[string]any{"oauth": []string{"read:secret"}}}
+	out, rep, err := generate(t, d, fixtureOverlay+"handwritten:\n  setWidgetGear: widget gear set\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Handwritten != 1 || rep.Generated != 7 {
+		t.Errorf("report = %s", rep)
+	}
+	for _, op := range out.Ops {
+		if op.OperationID == "setWidgetGear" {
+			t.Error("a hand-written operation was also generated")
+		}
+	}
+	has := func(s string) bool { return slices.Contains(out.Scopes, s) }
+	if !has("write:gear") || !has("read:later") || !has("read:w") || has("read:secret") {
+		t.Errorf("scopes = %v", out.Scopes)
 	}
 }

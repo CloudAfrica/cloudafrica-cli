@@ -45,7 +45,11 @@ func (a *App) addGenerated(root *cobra.Command) {
 		parent.AddCommand(group(g.Path[len(g.Path)-1], g.Short))
 	}
 	for _, op := range genOps {
-		ensureGroup(root, op.Path[:len(op.Path)-1]).AddCommand(a.genCommand(op))
+		parent := ensureGroup(root, op.Path[:len(op.Path)-1])
+		if child(parent, op.Path[len(op.Path)-1]) != nil {
+			panic(fmt.Sprintf("generated command %q clashes with a hand-written one", strings.Join(op.Path, " ")))
+		}
+		parent.AddCommand(a.genCommand(op))
 	}
 }
 
@@ -344,6 +348,9 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		}
 		return nil
 	}
+	if !json.Valid(resp) {
+		return fmt.Errorf("HTTP %d: the response is not JSON", status)
+	}
 	return printRaw(pr, op.Columns, resp)
 }
 
@@ -428,6 +435,12 @@ func (a *App) bodyFrom(op cmdspec.Op, f *pflag.FlagSet, data string) (map[string
 		dec.UseNumber()
 		if err := dec.Decode(&body); err != nil {
 			return nil, fmt.Errorf("--data is not a JSON object: %w", err)
+		}
+		if body == nil {
+			return nil, errors.New("--data is not a JSON object")
+		}
+		if err := dec.Decode(&struct{}{}); err != io.EOF {
+			return nil, errors.New("--data has content after its JSON object")
 		}
 	}
 	for _, fl := range op.Body {
@@ -549,13 +562,17 @@ func decodePage(body []byte, rowsField string) (page, error) {
 		return page{}, fmt.Errorf("decoding the list: %w", err)
 	}
 	var p page
-	if raw, ok := m[rowsField]; ok && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &p.rows); err != nil {
-			return page{}, fmt.Errorf("decoding the list's %s: %w", rowsField, err)
-		}
+	raw, ok := m[rowsField]
+	if !ok {
+		return page{}, fmt.Errorf("the list has no %q field", rowsField)
+	}
+	if err := json.Unmarshal(raw, &p.rows); err != nil {
+		return page{}, fmt.Errorf("decoding the list's %s: %w", rowsField, err)
 	}
 	if raw, ok := m["nextCursor"]; ok {
-		_ = json.Unmarshal(raw, &p.next)
+		if err := json.Unmarshal(raw, &p.next); err != nil {
+			return page{}, fmt.Errorf("the list's nextCursor is not a string: %w", err)
+		}
 	}
 	return p, nil
 }
@@ -790,6 +807,10 @@ func (a *App) resolveName(ctx context.Context, s *session, resource, value strin
 		idField = "id"
 	}
 	rows, err := listPages(ctx, s, r.List, nil, true, "data")
+	if refusedScope(err) != "" {
+		// The credential cannot list them, so it can act only by id.
+		return value, false, nil
+	}
 	if err != nil {
 		return "", false, err
 	}

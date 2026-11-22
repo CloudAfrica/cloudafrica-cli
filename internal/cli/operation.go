@@ -169,12 +169,16 @@ func (a *App) pollOperation(ctx context.Context, s *session, id string) (*clouda
 		switch state {
 		case "complete":
 			return op, nil
+		case "pending", "running":
 		case "failed", "cancelled":
-			oe := &cloudafrica.OperationError{ID: id, State: state, Kind: output.S(op.Kind)}
+			oe := &cloudafrica.OperationError{ID: id, State: state}
 			if op.Error != nil {
+				oe.Kind = output.S(op.Error.Kind)
 				oe.Message = output.S(op.Error.Message)
 			}
 			return op, oe
+		default:
+			return op, fmt.Errorf("operation %s has unexpected state %q", id, state)
 		}
 		select {
 		case <-ctx.Done():

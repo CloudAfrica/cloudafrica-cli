@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -244,5 +245,102 @@ func TestColumnsFormatAndJSONIsVerbatim(t *testing.T) {
 	h.mustRun("vm", "backup", "list", "--vm", "vm-1", "-o", "json")
 	if !strings.Contains(h.stdout.String(), `"future": 1`) && !strings.Contains(h.stdout.String(), `"future":1`) {
 		t.Errorf("json dropped an unknown field: %s", h.stdout)
+	}
+}
+
+func TestIDsWorkWithoutTheScopeToListThem(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute"}}, time.Now().Add(time.Hour))
+	h.mustRun(append(slices.Clone(createArgs), "--ssh-key", "k1", "-q")...)
+	if b := h.fake.Bodies[0]; b["vpcResourceId"] != "vpc-1" || fmt.Sprint(b["sshKeyIds"]) != "[k1]" {
+		t.Errorf("body = %v", b)
+	}
+}
+
+func TestDataMustBeOneObject(t *testing.T) {
+	for name, data := range map[string]string{
+		"null":             `null`,
+		"trailing object":  `{"protocol":"tcp","source":"x"} {"fromPort":99}`,
+		"trailing garbage": `{"protocol":"tcp","source":"x"} x`,
+	} {
+		h := signedIn(t)
+		code := h.run("vm", "firewall-rule", "create", "--vm", "vm-1", "-d", data, "--protocol", "tcp", "--source", "x")
+		if code != ExitUsage || len(h.fake.Writes) != 0 {
+			t.Errorf("%s: exit %d, writes %d, stderr %q", name, code, len(h.fake.Writes), h.stderr)
+		}
+	}
+}
+
+func TestNonJSONSuccessIsAnError(t *testing.T) {
+	h := signedIn(t)
+	canned(h, map[string]fakeapi.Canned{"GET /v1/vms/vm-1": {Status: 200, Body: `<html>captive portal</html>`}})
+	if code := h.run("vm", "get", "vm-1", "-o", "table"); code == ExitOK || h.stdout.Len() != 0 ||
+		!strings.Contains(h.stderr.String(), "not JSON") {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, h.stdout, h.stderr)
+	}
+}
+
+func TestMalformedListPagesAreErrors(t *testing.T) {
+	for name, body := range map[string]string{
+		"rows under another key":    `{"items":[{"id":"vm-1"}]}`,
+		"nextCursor not a string":   `{"data":[{"id":"vm-1"}],"nextCursor":7}`,
+		"server repeats its cursor": `{"data":[{"id":"vm-1"}],"nextCursor":"x"}`,
+	} {
+		h := signedIn(t)
+		canned(h, map[string]fakeapi.Canned{"GET /v1/vms": {Status: 200, Body: body}})
+		done := make(chan int, 1)
+		go func() { done <- h.run("vm", "list", "-o", "json") }()
+		select {
+		case code := <-done:
+			if code == ExitOK {
+				t.Errorf("%s: exit 0, stdout %q", name, h.stdout)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: vm list did not finish", name)
+		}
+	}
+	h := signedIn(t)
+	canned(h, map[string]fakeapi.Canned{"GET /v1/vms": {Status: 200, Body: `{"data":[],"nextCursor":null}`}})
+	h.mustRun("vm", "list", "-o", "json")
+	if got := strings.TrimSpace(h.stdout.String()); got != "[]" {
+		t.Errorf("empty list printed %q", got)
+	}
+}
+
+func TestUnexpectedOperationStateEndsTheWait(t *testing.T) {
+	h := signedIn(t)
+	h.fake.OpStates["op/start-vm-1"] = []string{"running", "expired"}
+	if code := h.run("vm", "start", "vm-1", "--timeout", "1m"); code != ExitAPI ||
+		!strings.Contains(h.stderr.String(), `unexpected state "expired"`) {
+		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	}
+	h = signedIn(t)
+	h.fake.OpStates["op/start-vm-1"] = []string{"failed"}
+	if code := h.run("vm", "start", "vm-1"); code != ExitAPI || !strings.Contains(h.stderr.String(), "fault") {
+		t.Errorf("a failure names the error's kind: exit %d, stderr %q", code, h.stderr)
+	}
+}
+
+func TestBooleanFlags(t *testing.T) {
+	const url = "PUT /v1/vms/vm-1/backups/1700000000/protection"
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--protected=false"}, "map[protected:false]"},
+		{[]string{"--protected"}, "map[protected:true]"},
+		{nil, "map[]"},
+	} {
+		h := signedIn(t)
+		canned(h, map[string]fakeapi.Canned{url: {Status: 204}})
+		h.mustRun(append([]string{"vm", "backup", "set-protection", "1700000000", "--vm", "vm-1", "--yes"}, c.args...)...)
+		if got := fmt.Sprint(h.fake.Bodies[0]); got != c.want {
+			t.Errorf("%v: body %s, want %s", c.args, got, c.want)
+		}
+	}
+	h := signedIn(t)
+	if code := h.run("vm", "backup", "restore-to-new-vm", "1700000000", "--vm", "vm-1", "--name", "n",
+		"--datacenter-slug", "jb1", "--yes"); code != ExitUsage || len(h.fake.Writes) != 0 {
+		t.Errorf("without --terms-accepted: exit %d, writes %d", code, len(h.fake.Writes))
 	}
 }
