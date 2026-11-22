@@ -5,9 +5,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
 )
 
 // releases serves the GitHub latest-release document and counts requests.
@@ -109,5 +112,21 @@ func TestVersionCheckNeverCarriesTheElevationSecret(t *testing.T) {
 	h.mustRun("version")
 	if n.Load() != 1 || got.Load() != "" {
 		t.Errorf("%d checks, header %q", n.Load(), got.Load())
+	}
+}
+
+// ca version prints cloudafrica.Version; it must be the SDK version go.mod
+// builds against.
+func TestSDKVersionMatchesGoMod(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^\s*github\.com/CloudAfrica/cloudafrica-go v(\S+)`).FindSubmatch(b)
+	if m == nil {
+		t.Fatal("go.mod does not require cloudafrica-go")
+	}
+	if string(m[1]) != cloudafrica.Version {
+		t.Errorf("go.mod requires cloudafrica-go v%s but its Version is %s", m[1], cloudafrica.Version)
 	}
 }

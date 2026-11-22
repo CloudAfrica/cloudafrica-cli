@@ -3,7 +3,7 @@ module github.com/CloudAfrica/cloudafrica-cli
 go 1.26.0
 
 require (
-	github.com/CloudAfrica/cloudafrica-go v0.2.0
+	github.com/CloudAfrica/cloudafrica-go v0.2.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
