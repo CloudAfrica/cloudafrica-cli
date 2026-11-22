@@ -134,6 +134,8 @@ function Install-CloudAfricaCli {
     if (($env:Path -split ';' | ForEach-Object { $_.TrimEnd('\') }) -notcontains $dir.TrimEnd('\'))
         { $env:Path = "$env:Path;$dir" }
     & $bin version
+    if ($LASTEXITCODE -ne 0)
+        { throw "install.ps1: $bin version exited $LASTEXITCODE; the installed binary does not run" }
 }
 
 Install-CloudAfricaCli

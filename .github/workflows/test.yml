@@ -48,4 +48,7 @@ jobs:
         with:
           name: windows-dist
           path: dist
-      - run: pwsh -NoProfile -File scripts/test-install.ps1
+      - name: install.ps1 on PowerShell 7
+        run: pwsh -NoProfile -File scripts/test-install.ps1
+      - name: install.ps1 on Windows PowerShell 5.1
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install.ps1
