@@ -567,3 +567,42 @@ func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
 		t.Errorf("writes %v", h.fake.WriteURLs)
 	}
 }
+
+// A 503 to a reservation is sent once, not retried, and says how to check
+// whether the address was reserved anyway.
+func TestUnrepeatableWriteIsNotRetriedOn503(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"POST /v1/vpcs/vpc-1/reserved-ips": {Status: 503, Body: `{"title":"busy"}`},
+	})
+	if code := h.run("vpc", "reserved-ip", "create", "--vpc", "web"); code != ExitAPI {
+		t.Errorf("exit %d", code)
+	}
+	if len(h.fake.WriteURLs) != 1 {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+	s := h.stderr.String()
+	for _, want := range []string{"not retried", "ca vpc reserved-ip list --vpc web"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("stderr lacks %q: %s", want, s)
+		}
+	}
+}
+
+// Every operation whose contract warns that a retry after a 5xx can repeat it
+// is unrepeatable, and every unrepeatable entry names a generated operation.
+func TestUnrepeatableCoversEveryOperationThatWarns(t *testing.T) {
+	ops := map[string]bool{}
+	for _, op := range genOps {
+		ops[op.OperationID] = true
+		if strings.Contains(op.Long, "5xx") && unrepeatable[op.OperationID] == "" {
+			t.Errorf("%s warns about a retry after a 5xx but is not in unrepeatable", op.OperationID)
+		}
+	}
+	for id := range unrepeatable {
+		if !ops[id] {
+			t.Errorf("unrepeatable names %s, which is not a generated operation", id)
+		}
+	}
+}

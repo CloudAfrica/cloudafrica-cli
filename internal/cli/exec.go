@@ -320,11 +320,18 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		resp   []byte
 		loc    string
 	)
+	sendCtx := ctx
+	if unrepeatable[op.OperationID] != "" {
+		sendCtx = singleShot(ctx)
+	}
 	err = a.withSession(ctx, func(s *session) error {
 		var err error
-		status, resp, loc, err = send(ctx, s, op.Method, path, query, payload)
+		status, resp, loc, err = send(sendCtx, s, op.Method, path, query, payload)
 		if err != nil && cloudafrica.IsSlug(err, "conflict") && conflictHints[op.OperationID] != "" && len(targets) > 0 {
 			return &hintedError{err: err, hint: fmt.Sprintf(conflictHints[op.OperationID], targets[0].given)}
+		}
+		if errors.Is(err, errNotRetried) && len(targets) > 0 {
+			return &hintedError{err: errNotRetried, hint: fmt.Sprintf(unrepeatable[op.OperationID], targets[0].given)}
 		}
 		return err
 	})
