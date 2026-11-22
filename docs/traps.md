@@ -88,3 +88,13 @@ Author misses the PR review caught. Check these before opening a PR.
 - **An "at least one of" check counts every way a field can be given,** `--data` included (#11).
 - **A PR body's rule is a claim about the code.** "An unlisted operation fails generation" was
   false; check it against the code path before writing it (Copilot, #11).
+- **Read page-size and mode rules off the spec's own text, per route.** A global page size sent
+  `limit=200` to `/v1/activity`, which takes 1 to 50; the same route's two modes cannot mix, and
+  `--limit` and `--cursor` bypassed both checks until probed one flag away (#14).
+- **A fixture fills every field a column reads.** A blank time or address column keeps a wrong path
+  green; assert full rows, and revert a path to see the test go red (#14).
+- **A multi-flag mode needs all its flags, non-blank.** `--subject-type` alone reached the API (Copilot, #14).
+- **A summary view must not hide the thing the command is for.** `support ticket get` showed a
+  message count and no message text (Copilot, #14).
+- **Run each deliverable command with `-q` on the response it really gets.** `member create -q`
+  printed nothing because the response keys on `userId` (#14).
