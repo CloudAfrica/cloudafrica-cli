@@ -39,6 +39,9 @@ type ParamOverlay struct {
 	Resource string `json:"resource"`
 	Convert  string `json:"convert"`
 	Help     string `json:"help"`
+	// Within names the field of a resolved row that must hold the id of the
+	// path parameter just before this one (a VIP's vpcId under /v1/vpcs/{id}).
+	Within string `json:"within"`
 }
 
 // Rule matches operations by id or by path prefix.
@@ -338,6 +341,9 @@ func (g *generator) run() *Output {
 		if c := g.ov.Params[p].Convert; c != "" && c != "epoch" {
 			g.fail("commands.yaml params %s: no converter %q", p, c)
 		}
+		if g.ov.Params[p].Within != "" && g.ov.Params[p].Resource == "" {
+			g.fail("commands.yaml params %s: within needs a resource", p)
+		}
 	}
 
 	for s := range scopes {
@@ -552,6 +558,7 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		}
 		flagNames[flag] = what
 	}
+	prevParam := ""
 	for i, s := range segs {
 		if !isParam(s) {
 			continue
@@ -561,6 +568,13 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		po := g.ov.Params[prefix]
 		pd := params["path:"+name]
 		p := cmdspec.Param{Name: name, Resource: po.Resource, Convert: po.Convert, Help: firstLine(pd.Description)}
+		if po.Within != "" {
+			if prevParam == "" {
+				g.fail("%s: parameter %s is within %s but follows no path parameter", op.OperationID, name, po.Within)
+			}
+			p.Within, p.WithinParam = po.Within, prevParam
+		}
+		prevParam = name
 		if po.Help != "" {
 			p.Help = po.Help
 		}

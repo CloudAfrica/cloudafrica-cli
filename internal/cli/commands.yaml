@@ -46,7 +46,7 @@ params:
   /v1/vms/{id}/backups/{startedAt}: {convert: epoch, help: "the backup's start time: RFC 3339 or epoch seconds"}
   /v1/ssh-keys/{id}: {resource: ssh-key}
   /v1/vpcs/{id}: {resource: vpc}
-  /v1/vpcs/{id}/vips/{vipId}: {resource: vip}
+  /v1/vpcs/{id}/vips/{vipId}: {resource: vip, within: vpcId}
   /v1/placement-groups/{id}: {resource: placement-group}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
 

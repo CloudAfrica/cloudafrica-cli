@@ -400,15 +400,16 @@ func TestVipFirewallRuleListReadsRules(t *testing.T) {
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/vips": {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
 		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[
-			{"id":"r1","direction":"ingress","action":"accept","protocol":"tcp","fromPort":443,"toPort":443}],
+			{"id":"r1","direction":"ingress","action":"accept","protocol":"tcp","source":"0.0.0.0/0",
+			"fromPort":80,"toPort":443,"status":"applied","description":"web"}],
 			"writable":false,"readOnlyReason":"managed"}`},
 	})
 	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "table")
 	out := h.stdout.String()
-	for _, want := range []string{"DIRECTION", "INGRESS", "ACCEPT", "TCP", "443"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("table lacks %q:\n%s", want, out)
-		}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "DIRECTION") ||
+		strings.Join(strings.Fields(lines[1]), " ") != "r1 INGRESS ACCEPT TCP 0.0.0.0/0 80 443 applied web" {
+		t.Errorf("table:\n%s", out)
 	}
 	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "r1" {
@@ -448,7 +449,8 @@ func TestNetworkingListColumns(t *testing.T) {
 			{"address":"10.0.0.5","kind":"private","ownerName":"lb1","ownerKind":"vip","vpcName":"web","primary":false},
 			{"address":"203.0.113.9","kind":"public","primary":null}]}`},
 		"GET /v1/vips": {Body: `{"data":[
-			{"id":"vip-1","name":"lb1","vpcName":"web","servedBy":[{"vmId":"a"},{"vmId":"b"}]},
+			{"id":"vip-1","name":"lb1","vpcName":"web","publicAddress":"203.0.113.20","privateAddress":"10.0.0.20",
+			"servedBy":[{"vmId":"a"},{"vmId":"b"}]},
 			{"id":"vip-2","name":"lb2","vpcName":"web","servedBy":null}]}`},
 		"GET /v1/vpcs/vpc-1/reserved-ips": {Body: `{"data":[
 			{"id":"rip-1","address":"203.0.113.7","vmId":"vm-1"},{"id":"rip-2","address":"203.0.113.8","vmId":null}]}`},
@@ -479,7 +481,7 @@ func TestNetworkingListColumns(t *testing.T) {
 		t.Errorf("ip-address rows %s", got)
 	}
 	vips := rows("vip", "list")
-	if got := fmt.Sprint(vips); got != "[[vip-1 lb1 web 2] [vip-2 lb2 web]]" {
+	if got := fmt.Sprint(vips); got != "[[vip-1 lb1 web 203.0.113.20 10.0.0.20 2] [vip-2 lb2 web]]" {
 		t.Errorf("vip rows %s", got)
 	}
 	reserved := rows("vpc", "reserved-ip", "list", "--vpc", "web")
@@ -488,8 +490,8 @@ func TestNetworkingListColumns(t *testing.T) {
 	}
 }
 
-// The gateway always sends "rules", so an empty list is an empty table and a
-// body without the field is an API error rather than an empty answer.
+// An empty "rules" is an empty table; a body without "rules" is an API error,
+// not an empty list.
 func TestVipFirewallRuleListEmptyAndMissingRules(t *testing.T) {
 	h := signedIn(t)
 	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
@@ -516,10 +518,9 @@ func TestVipFirewallRuleListEmptyAndMissingRules(t *testing.T) {
 	}
 }
 
-// The VIP lookup is account-wide and takes no account of --vpc: a name two
-// VPCs share is refused as ambiguous, and an unknown name is a usage error;
-// neither writes.
-func TestVpcVipNameAmbiguousOrUnknownRefuses(t *testing.T) {
+// A VIP resolves within its --vpc: a name another VPC shares picks this VPC's,
+// a name or id only another VPC holds is refused, and refusals send nothing.
+func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
 	h := newHarness(t)
 	g := protected()
 	g.Elevated = true
@@ -527,18 +528,42 @@ func TestVpcVipNameAmbiguousOrUnknownRefuses(t *testing.T) {
 	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}, {"id": "vpc-2", "name": "db"}}
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/vips": {Body: `{"data":[
-			{"id":"vip-1","name":"lb1","vpcId":"vpc-1"},{"id":"vip-2","name":"lb1","vpcId":"vpc-2"}]}`},
+			{"id":"vip-1","name":"lb1","vpcId":"vpc-1"},{"id":"vip-2","name":"lb1","vpcId":"vpc-2"},
+			{"id":"vip-3","name":"only-db","vpcId":"vpc-2"},
+			{"id":"vip-4","name":"twin","vpcId":"vpc-1"},{"id":"vip-5","name":"twin","vpcId":"vpc-1"}]}`},
+		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
 	})
-	if code := h.run("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
-		t.Errorf("ambiguous: exit %d", code)
+	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
+		t.Fatalf("writes %v", h.fake.WriteURLs)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, `have name "lb1"`) {
-		t.Errorf("ambiguous stderr = %s", s)
+	for _, c := range []struct{ vip, want string }{
+		{"only-db", `no VIP with id or name "only-db" in --vpc web`},
+		{"vip-3", "VIP vip-3 is not in --vpc web"},
+		{"twin", `2 VIPs in --vpc web have name "twin"`},
+		{"nope", `no VIP with id or name "nope" in --vpc web`},
+	} {
+		h.stderr.Reset()
+		if code := h.run("vpc", "vip", "delete", c.vip, "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
+			t.Errorf("%s: exit %d", c.vip, code)
+		}
+		if s := h.stderr.String(); !strings.Contains(s, c.want) {
+			t.Errorf("%s: stderr = %s", c.vip, s)
+		}
 	}
-	if code := h.run("vpc", "vip", "delete", "nope", "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
-		t.Errorf("unknown: exit %d", code)
+	if code := h.run("vpc", "vip", "firewall-rule", "list", "--vip", "only-db", "--vpc", "web"); code != ExitUsage {
+		t.Errorf("firewall-rule list on another VPC's VIP: exit %d", code)
 	}
-	if len(h.fake.WriteURLs) != 0 {
+	if len(h.fake.WriteURLs) != 1 {
+		t.Errorf("a refused VIP was written: %v", h.fake.WriteURLs)
+	}
+	// Unable to list VIPs, a VPC-scoped command cannot check the VIP is in the
+	// VPC, so it stops rather than sending the value as an id.
+	h.fake.Canned["GET /v1/vips"] = fakeapi.Canned{Status: 500, Body: `{"title":"down"}`}
+	if code := h.run("vpc", "vip", "delete", "vip-3", "--vpc", "web", "--yes", "--no-wait"); code == ExitOK {
+		t.Errorf("an unlistable VIP was used as an id")
+	}
+	if len(h.fake.WriteURLs) != 1 {
 		t.Errorf("writes %v", h.fake.WriteURLs)
 	}
 }

@@ -271,15 +271,23 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	// 2. Resolve names (reads only), then confirm once, outside any retried closure.
 	if slices.ContainsFunc(targets, func(t target) bool { return t.param.Resource != "" }) {
 		err := a.withSession(ctx, func(s *session) error {
-			for i := range targets {
-				if targets[i].param.Resource == "" {
-					continue
+			// A parameter within another resolves after it, so it can be checked against its id.
+			for _, within := range []bool{false, true} {
+				for i := range targets {
+					p := targets[i].param
+					if p.Resource == "" || (p.Within != "") != within {
+						continue
+					}
+					var parent *target
+					if within {
+						parent = &targets[slices.IndexFunc(targets, func(t target) bool { return t.param.Name == p.WithinParam })]
+					}
+					id, byName, err := a.resolveParam(ctx, s, p, targets[i].given, parent)
+					if err != nil {
+						return err
+					}
+					targets[i].id, targets[i].byName = id, byName
 				}
-				id, byName, err := a.resolveName(ctx, s, targets[i].param.Resource, targets[i].given)
-				if err != nil {
-					return err
-				}
-				targets[i].id, targets[i].byName = id, byName
 			}
 			return nil
 		})
@@ -795,11 +803,18 @@ func humanBytes(n int64) string {
 
 // resolveName turns a resource's id or name into its id. byName reports a name match.
 func (a *App) resolveName(ctx context.Context, s *session, resource, value string) (id string, byName bool, err error) {
-	r, ok := genResources[resource]
+	return a.resolveParam(ctx, s, cmdspec.Param{Resource: resource}, value, nil)
+}
+
+// resolveParam is resolveName for a path parameter. With a parent (p.Within set),
+// only a row whose p.Within field holds the parent's id is accepted: an id
+// elsewhere is refused, and a name matches only there.
+func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, value string, parent *target) (id string, byName bool, err error) {
+	r, ok := genResources[p.Resource]
 	if !ok {
 		return value, false, nil
 	}
-	if r.IDPattern != "" && regexp.MustCompile(r.IDPattern).MatchString(value) {
+	if parent == nil && r.IDPattern != "" && regexp.MustCompile(r.IDPattern).MatchString(value) {
 		return value, false, nil
 	}
 	idField := r.ID
@@ -809,31 +824,39 @@ func (a *App) resolveName(ctx context.Context, s *session, resource, value strin
 	rows, err := listPages(ctx, s, r.List, nil, true, "data")
 	if err != nil {
 		var e *cloudafrica.APIError
-		if ctx.Err() != nil || errors.As(err, &e) && e.Status == http.StatusUnauthorized {
+		if parent != nil || ctx.Err() != nil || errors.As(err, &e) && e.Status == http.StatusUnauthorized {
 			return "", false, err
 		}
 		// The value may well be an id, and the API answers for a wrong one.
 		fmt.Fprintf(a.Stderr, "Cannot list %ss to look up %q (%v); using it as an id.\n", r.Noun, value, err)
 		return value, false, nil
 	}
+	inParent := func(v any) bool { return parent == nil || field(v, p.Within) == parent.id }
+	where := ""
+	if parent != nil {
+		where = fmt.Sprintf(" in --%s %s", parent.param.Flag, parent.given)
+	}
 	var matches []any
 	for _, raw := range rows {
 		v := decode(raw)
 		if field(v, idField) == value {
+			if !inParent(v) {
+				return "", false, usageErr(fmt.Errorf("%s %s is not%s", r.Noun, value, where))
+			}
 			return value, false, nil
 		}
-		if field(v, r.Match) == value {
+		if field(v, r.Match) == value && inParent(v) {
 			matches = append(matches, v)
 		}
 	}
 	switch len(matches) {
 	case 0:
-		return "", false, usageErr(fmt.Errorf("no %s with id or %s %q", r.Noun, r.Match, value))
+		return "", false, usageErr(fmt.Errorf("no %s with id or %s %q%s", r.Noun, r.Match, value, where))
 	case 1:
 		return field(matches[0], idField), true, nil
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d %ss have %s %q; give the id instead:", len(matches), r.Noun, r.Match, value)
+	fmt.Fprintf(&b, "%d %ss%s have %s %q; give the id instead:", len(matches), r.Noun, where, r.Match, value)
 	for _, m := range matches {
 		fmt.Fprintf(&b, "\n  %s  %s", field(m, idField), field(m, r.Match))
 	}
