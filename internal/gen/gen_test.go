@@ -242,6 +242,12 @@ func TestGenerateRefuses(t *testing.T) {
 			overlay: func(o string) string { return strings.Replace(o, "{resource: widget}", "{resource: nope}", 1) },
 			want:    `no resource "nope"`,
 		},
+		"param naming no converter": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "{resource: widget}", "{resource: widget, convert: epoc}", 1)
+			},
+			want: `commands.yaml params /v1/widgets/{id}: no converter "epoc"`,
+		},
 		"stale group": {
 			overlay: func(o string) string { return strings.Replace(o, "groups:\n", "groups:\n  gone: Gone\n", 1) },
 			want:    `commands.yaml groups: "gone" is not a group`,

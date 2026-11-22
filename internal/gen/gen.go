@@ -330,6 +330,9 @@ func (g *generator) run() *Output {
 				g.fail("commands.yaml params %s: no resource %q", p, r)
 			}
 		}
+		if c := g.ov.Params[p].Convert; c != "" && c != "epoch" {
+			g.fail("commands.yaml params %s: no converter %q", p, c)
+		}
 	}
 
 	for s := range scopes {
