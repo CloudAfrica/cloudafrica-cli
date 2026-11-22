@@ -279,6 +279,20 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 		t.Errorf("an available key with no secret: exit %d, stdout %q", code, h.stdout)
 	}
 	contains(t, h.stderr.String(), "no secret key", "ca bucket-key reveal-secret ci")
+	for _, status := range []int{200, 201, 204} {
+		canned(h, map[string]fakeapi.Canned{
+			"GET /v1/bucket-keys":                            {Body: keyList},
+			"POST /v1/bucket-keys/k-1/actions/reveal-secret": {Status: status},
+		})
+		if code := h.run("bucket-key", "reveal-secret", "ci", "--yes"); code == 0 {
+			t.Errorf("an empty %d exited 0", status)
+		}
+		contains(t, h.stderr.String(), "ca bucket-key reveal-secret ci")
+	}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/bucket-keys":        {Body: keyList},
+		"DELETE /v1/bucket-keys/k-1": {Status: 204},
+	})
 	h.mustRun("bucket-key", "delete", "ci", "--yes")
 	if last := h.fake.WriteURLs[len(h.fake.WriteURLs)-1]; last != "DELETE /v1/bucket-keys/k-1" {
 		t.Errorf("writes %v", h.fake.WriteURLs)
