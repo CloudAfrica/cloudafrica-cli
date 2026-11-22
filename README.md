@@ -30,7 +30,7 @@ cosign verify-blob cloudafrica-cli_<version>_SHA256SUMS \
 
 ```sh
 ca auth login     # opens the browser
-ca auth elevate   # allow protected actions (vm delete) for this sign-in
+ca auth elevate   # allow protected actions (vm delete, k8s upgrade-workers) for this sign-in
 ca auth status
 ca auth list
 ca auth logout
@@ -50,7 +50,7 @@ can only be used against the endpoint it signed in to.
 
 ## Scripts
 
-A script uses `CLOUDAFRICA_TOKEN`. For protected actions (`vm delete`) the token must hold the
+A script uses `CLOUDAFRICA_TOKEN`. For protected actions (`vm delete`, `k8s upgrade-workers`) the token must hold the
 protected scope, and a person pairs it before the run:
 
 ```sh
@@ -97,6 +97,22 @@ ca api GET /v1/account   # any /v1 call
 ```
 
 Output is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only.
+
+## Kubernetes
+
+```sh
+ca k8s list               # UPGRADE: the workers' upgrade state
+ca k8s get <id>           # versions, upgrade state and deadlines, worker targets, nodes
+ca k8s upgrade-workers <id> [--version v1.33.1] [--wait] [--timeout 30m]
+```
+
+`ca kubernetes` is the same command. `upgrade-workers` is a protected action. Each worker drains and
+restarts in turn, so a workload with one replica is down while its node restarts. Without `--version`
+it takes the newest worker target. If there is none, it says so on stderr and exits 0 when the workers
+are CURRENT, DEADLINE or UPGRADE_AVAILABLE (worker targets never go past the control plane's version),
+so a scheduled run stays quiet until a target is offered. Any other state with no target exits 1, and
+so does `--wait` unless the workers are CURRENT. Running it again after an upgrade finishes starts the
+next one, if there is a newer target.
 
 ## Exit codes
 

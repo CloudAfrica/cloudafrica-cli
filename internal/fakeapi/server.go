@@ -95,6 +95,14 @@ type Server struct {
 	SSHKeys          []map[string]any
 	VPCs             []map[string]any
 	Datacenters      []map[string]any
+	// Clusters are the Kubernetes clusters; a "nodes" entry is served only
+	// by get, as the detail's nodes.
+	Clusters []map[string]any
+	// UpgradeConflict, when set, is the detail of a 409 to upgrade-workers.
+	UpgradeConflict string
+	// UpgradeNoOperation makes upgrade-workers answer 202 with only the
+	// cluster's Location, as when no operation started.
+	UpgradeNoOperation bool
 }
 
 // New starts a fake server.
@@ -378,6 +386,48 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		problem(w, 404, "not-found", "Not found", nil)
+	case p == "/v1/kubernetes/clusters" && r.Method == http.MethodGet:
+		rows := []map[string]any{}
+		for _, c := range s.Clusters {
+			row := map[string]any{}
+			for k, v := range c {
+				if k != "nodes" {
+					row[k] = v
+				}
+			}
+			rows = append(rows, row)
+		}
+		page(w, r, rows)
+	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && strings.HasSuffix(p, "/actions/upgrade-workers"):
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/v1/kubernetes/clusters/"), "/actions/upgrade-workers")
+		switch {
+		case !g.Has("protected:compute"):
+			insufficientScope(w, "protected:compute")
+		case !g.Elevated:
+			problem(w, 403, "not-paired", "Client not paired", nil)
+		case s.UpgradeConflict != "":
+			problem(w, 409, "conflict", "Conflict", map[string]any{"detail": s.UpgradeConflict})
+		case s.UpgradeNoOperation:
+			w.Header().Set("Location", "/v1/kubernetes/clusters/"+id)
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			s.accept(w, "op/upgrade-"+id)
+		}
+	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && r.Method == http.MethodGet:
+		id := strings.TrimPrefix(p, "/v1/kubernetes/clusters/")
+		for _, c := range s.Clusters {
+			if c["id"] == id {
+				cluster := map[string]any{}
+				for k, v := range c {
+					if k != "nodes" {
+						cluster[k] = v
+					}
+				}
+				writeJSON(w, 200, map[string]any{"cluster": cluster, "nodes": c["nodes"]})
+				return
+			}
+		}
+		problem(w, 404, "not-found", "Not found", map[string]any{"detail": "No such Kubernetes cluster in this account."})
 	case strings.HasPrefix(p, "/v1/operations/"):
 		id := strings.TrimPrefix(p, "/v1/operations/")
 		if s.EmptyOperationBody {
