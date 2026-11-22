@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/update"
 )
 
 // releases serves the GitHub latest-release document and counts requests.
@@ -23,9 +25,9 @@ func releases(t *testing.T, status int, tag string) *atomic.Int32 {
 		_, _ = w.Write([]byte(`{"tag_name":"` + tag + `"}`))
 	}))
 	t.Cleanup(srv.Close)
-	old := LatestReleaseURL
-	LatestReleaseURL = srv.URL
-	t.Cleanup(func() { LatestReleaseURL = old })
+	oldLatest, oldBase := update.LatestReleaseURL, update.DownloadBase
+	update.LatestReleaseURL, update.DownloadBase = srv.URL, srv.URL // nothing reaches GitHub
+	t.Cleanup(func() { update.LatestReleaseURL, update.DownloadBase = oldLatest, oldBase })
 	return &n
 }
 
@@ -100,9 +102,9 @@ func TestVersionCheckNeverCarriesTheElevationSecret(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tag_name":"v0.2.0"}`))
 	}))
 	t.Cleanup(srv.Close)
-	old := LatestReleaseURL
-	LatestReleaseURL = srv.URL
-	t.Cleanup(func() { LatestReleaseURL = old })
+	old := update.LatestReleaseURL
+	update.LatestReleaseURL = srv.URL
+	t.Cleanup(func() { update.LatestReleaseURL = old })
 
 	h := newHarness(t)
 	h.cacheDir = t.TempDir()
