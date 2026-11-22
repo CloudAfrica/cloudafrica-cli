@@ -79,7 +79,7 @@ func (a *App) updateCommand() string {
 			return m
 		}
 	}
-	return "ca update"
+	return a.exe() + " update"
 }
 
 // executable is the running binary with symlinks resolved, so a Homebrew

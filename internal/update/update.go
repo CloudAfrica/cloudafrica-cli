@@ -114,7 +114,7 @@ func Run(ctx context.Context, o Options) (Result, error) {
 	if err != nil {
 		msg := fmt.Sprintf("cannot write to %s, where ca is installed", dir)
 		if o.GOOS != "windows" {
-			msg += "; run `sudo ca update`"
+			msg += "; run `sudo " + shellQuote(o.Exe) + " update`"
 		}
 		return res, &RefusedError{msg}
 	}
@@ -248,6 +248,7 @@ func probe(ctx context.Context, path string, timeout time.Duration) (string, err
 	defer cancel()
 	cmd := exec.CommandContext(pctx, path, "version")
 	cmd.Stdin = nil
+	cmd.Env = withoutCredentials(os.Environ())
 	out, err := cmd.Output()
 	if err != nil && pctx.Err() != nil && ctx.Err() == nil {
 		return "", fmt.Errorf("%s version did not finish within %s", filepath.Base(path), timeout)
@@ -266,6 +267,26 @@ func probe(ctx context.Context, path string, timeout time.Duration) (string, err
 	}
 	line, _, _ := bufio.NewReader(bytes.NewReader(out)).ReadLine()
 	return string(line), nil
+}
+
+// withoutCredentials drops CLOUDAFRICA_* (the token and the pairing secret
+// among them): a probed sibling may be another program.
+func withoutCredentials(env []string) []string {
+	kept := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(strings.ToUpper(kv), "CLOUDAFRICA_") {
+			kept = append(kept, kv)
+		}
+	}
+	return kept
+}
+
+// shellQuote quotes path for a POSIX shell when it needs it.
+func shellQuote(path string) string {
+	if strings.Trim(path, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-+") == "" {
+		return path
+	}
+	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
 // replaceRunning moves src to dst where dst may be running: Windows will not

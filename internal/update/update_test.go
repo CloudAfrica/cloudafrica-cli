@@ -45,6 +45,8 @@ func main() {
 	switch v {
 	case "slow":
 		time.Sleep(time.Minute)
+	case "env":
+		fmt.Printf("%s%s|%t\n", os.Getenv("CLOUDAFRICA_TOKEN"), os.Getenv("CLOUDAFRICA_ELEVATION"), os.Getenv("PATH") != "")
 	case "broken":
 		fmt.Fprintln(os.Stderr, "fake ca is broken")
 		os.Exit(1)
@@ -65,7 +67,7 @@ func TestMain(m *testing.M) {
 	if err := os.WriteFile(src, []byte(fakeSource), 0o600); err != nil {
 		panic(err)
 	}
-	for _, v := range []string{"0.3.1", "0.4.0", "0.5.0", "broken", "foreign", "slow"} {
+	for _, v := range []string{"0.3.1", "0.4.0", "0.5.0", "broken", "foreign", "slow", "env"} {
 		out := filepath.Join(dir, v)
 		cmd := exec.Command("go", "build", "-o", out, "-ldflags", "-X main.v="+v, src)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
@@ -494,7 +496,7 @@ func TestUnwritableDirectoryIsRefused(t *testing.T) {
 	o := r.options(exe, runtime.GOOS, "0.3.1")
 	_, err := Run(t.Context(), o)
 	var refused *RefusedError
-	if !errors.As(err, &refused) || !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "sudo ca update") {
+	if !errors.As(err, &refused) || !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "sudo "+exe+" update") {
 		t.Errorf("err = %v", err)
 	}
 	if r.downloads.Load() != 0 {
@@ -643,14 +645,36 @@ func TestWindowsSiblingThatWillNotRun(t *testing.T) {
 	}
 }
 
+// A probed sibling may be another program, so it gets no credentials.
+func TestProbeWithholdsCredentials(t *testing.T) {
+	t.Setenv("CLOUDAFRICA_TOKEN", "cak_protected")
+	t.Setenv("CLOUDAFRICA_ELEVATION", "cae_secret")
+	line, err := probe(t.Context(), install(t, t.TempDir(), "env.exe", "env"), 10*time.Second)
+	if err != nil || line != "|true" {
+		t.Errorf("%q, %v", line, err)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		"/usr/local/bin/ca": "/usr/local/bin/ca",
+		"/opt/my tools/ca":  "'/opt/my tools/ca'",
+		"/opt/it's/ca":      `'/opt/it'\''s/ca'`,
+	} {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestProbeCarriesStderrAndNamesATimeout(t *testing.T) {
 	dir := t.TempDir()
-	_, err := probe(t.Context(), install(t, dir, "broken", "broken"), 10*time.Second)
+	_, err := probe(t.Context(), install(t, dir, "broken.exe", "broken"), 10*time.Second)
 	var exited *exec.ExitError
 	if !errors.As(err, &exited) || !strings.Contains(err.Error(), "fake ca is broken") {
 		t.Errorf("broken: %v", err)
 	}
-	slow := install(t, dir, "slow", "slow")
+	slow := install(t, dir, "slow.exe", "slow")
 	_, err = probe(t.Context(), slow, 50*time.Millisecond)
 	if errors.As(err, &exited) || err == nil || !strings.Contains(err.Error(), "did not finish within 50ms") {
 		t.Errorf("slow: %v", err)

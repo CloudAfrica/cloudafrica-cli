@@ -91,6 +91,14 @@ func TestVersionNoticeNamesCaUpdate(t *testing.T) {
 	if got := h.stderr.String(); got != "A newer release is available: v0.2.0. Run 'ca update'.\n" {
 		t.Errorf("notice %q", got)
 	}
+	// Installed only as cloudafrica beside another program's ca.
+	h.run("version") // builds h.app
+	h.app.Exe = "cloudafrica"
+	h.stderr.Reset()
+	h.app.Run(t.Context(), []string{"version"})
+	if got := h.stderr.String(); got != "A newer release is available: v0.2.0. Run 'cloudafrica update'.\n" {
+		t.Errorf("notice as cloudafrica %q", got)
+	}
 }
 
 func TestUpdateExitCodes(t *testing.T) {
