@@ -31,6 +31,19 @@ cosign verify-blob cloudafrica-cli_<version>_SHA256SUMS \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+## Update
+
+```sh
+ca update           # a ca from install.sh or install.ps1: download, check against SHA256SUMS, replace
+ca update --check   # only report whether a newer release exists
+brew upgrade ca     # Homebrew
+scoop update ca     # Scoop
+```
+
+`ca update` on a Homebrew or Scoop install changes nothing and names that command instead. It checks the
+download against the release's `SHA256SUMS`, the same check the install scripts make; it does not verify the
+cosign signature. To go back to an earlier release, rerun the install script with `CA_VERSION`.
+
 ## Sign in
 
 ```sh
@@ -142,8 +155,8 @@ KUBECONFIG=prod.kubeconfig kubectl get nodes
 |---|---|
 | 0 | success |
 | 1 | API error, or a failed operation |
-| 2 | usage error |
-| 3 | `--wait` timed out, or `ca auth elevate` was not confirmed in 5 minutes |
+| 2 | usage error, or `ca update` refused (a development build, or a directory it cannot write to) |
+| 3 | `--wait` timed out, `ca auth elevate` was not confirmed in 5 minutes, or `ca update` timed out reaching GitHub |
 | 4 | not signed in, or the session ended (`ca auth login`) |
 | 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope); a scope `ca auth login` does not request needs a user API token that has it (see Scripts) |
 
