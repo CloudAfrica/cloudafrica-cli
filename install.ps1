@@ -26,7 +26,9 @@ function Add-CloudAfricaUserPath([string] $Dir) {
     # as REG_SZ with every %VARIABLE% in it expanded.
     $key = Get-Item -Path 'HKCU:\Environment'
     $path = [string] $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
-    $entries = $path -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
+    # Compared expanded, so %LOCALAPPDATA%\Programs\cloudafrica counts as already there.
+    $entries = $path -split ';' | Where-Object { $_ } |
+        ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') }
     if ($entries -contains $Dir.TrimEnd('\'))
         { return $false }
     $value = if ($path -and -not $path.EndsWith(';')) { "$path;$Dir" } else { "$path$Dir" }
@@ -97,16 +99,16 @@ function Install-CloudAfricaCli {
             }
         }
 
-        $want = Get-Content -Path (Join-Path $tmp $sums) |
+        $want = Get-Content -LiteralPath (Join-Path $tmp $sums) |
             ForEach-Object { $f = -split $_; if ($f.Count -eq 2 -and $f[1] -eq $archive) { $f[0] } } |
             Select-Object -First 1
         if (-not $want)
             { throw "install.ps1: $archive is not listed in $sums" }
-        $got = (Get-FileHash -Path (Join-Path $tmp $archive) -Algorithm SHA256).Hash
+        $got = (Get-FileHash -LiteralPath (Join-Path $tmp $archive) -Algorithm SHA256).Hash
         if ($got -ne $want)
             { throw "install.ps1: checksum mismatch for $archive" }
 
-        Expand-Archive -Path (Join-Path $tmp $archive) -DestinationPath (Join-Path $tmp 'x')
+        Expand-Archive -LiteralPath (Join-Path $tmp $archive) -DestinationPath (Join-Path $tmp 'x')
         $new = Join-Path $tmp 'x\ca.exe'
         # Checked before anything is replaced: a ca.exe that does not run would otherwise overwrite a
         # working install, and then read as another program that later installs refuse to replace.

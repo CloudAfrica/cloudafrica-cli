@@ -160,10 +160,14 @@ try {
     Check 'a foreign cloudafrica is kept with a warning'
 
     # Without CA_INSTALL_DIR the CLI goes under LOCALAPPDATA.
+    # The PATH already names it through %LOCALAPPDATA%, which must not gain a duplicate.
     if ($env:CI) {
+        $seeded = 'C:\ca-test-keep;%LOCALAPPDATA%\Programs\cloudafrica'
+        Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value $seeded -Type ExpandString
         if (-not (Invoke-Install '')) { Die "default-directory install failed: $(Output)" }
         if (-not (Reports-Version "$defaultDir\ca.exe")) { Die "the default install did not put ca.exe in $defaultDir" }
-        Check 'without CA_INSTALL_DIR the CLI installs under LOCALAPPDATA'
+        if ((Get-RawUserPath) -ne $seeded) { Die "a PATH entry naming the directory through a variable was duplicated: $(Get-RawUserPath)" }
+        Check 'without CA_INSTALL_DIR the CLI installs under LOCALAPPDATA, already on PATH by variable'
     } else {
         Write-Host "skip - the default-directory case writes $defaultDir; set CI to run it"
     }
