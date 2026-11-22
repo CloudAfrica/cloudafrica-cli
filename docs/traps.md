@@ -24,9 +24,11 @@ Author misses the PR review caught. Check these before opening a PR.
 - **Pin a length or range boundary with the off-by-one value.** A test value at the minimum passes
   when the minimum is lowered; add the value one below it as a refused case.
 - **Run golangci-lint locally** (`go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run`);
-  CI fails on staticcheck quick-fixes that `go vet` does not report.
+  CI fails on staticcheck quick-fixes and forcetypeassert that `go vet` does not report (missed again
+  on #11).
 - **Every enum state gets a branch and a test.** A `== CURRENT` check with an `else` lumps the
   other four upgrade states together; switch over the generated consts and add a table row each.
+  A state the API may add later ends a wait with an error, never a loop (#11).
 - **`--wait` never exits 0 without waiting** unless the end state already holds. Each early return
   (no operation id, nothing to do) checks the flag.
 - **A substring assertion must not match its negation.** `"ready"` is in `"not ready"`; assert the
@@ -61,3 +63,14 @@ Author misses the PR review caught. Check these before opening a PR.
 - **A rename keeps the source's mtime;** age a renamed file by a timestamp in its name, not by its
   ModTime. Any cleanup that may run while another process is mid-swap leaves young files alone
   (Copilot, #10).
+- **Every input form of a body flag gets a refused case.** `--data` took `null`, an array, and a
+  valid object followed by trailing content; each needs a test (#11).
+- **A decode error is never discarded.** A 2xx whose body is not JSON, a list page missing its rows
+  key or with a non-string cursor, is an error, not an empty result (#11).
+- **Every overlay section gets a generator refusal test.** A stale noun, an unknown converter or an
+  unused column set passed silently until each had one (#11).
+- **A fallback covers every failure of the thing it falls back from.** The name lookup fell back to
+  the id only for one named scope; any list failure but 401 or a cancelled context must (#11).
+- **An "at least one of" check counts every way a field can be given,** `--data` included (#11).
+- **A PR body's rule is a claim about the code.** "An unlisted operation fails generation" was
+  false; check it against the code path before writing it (Copilot, #11).
