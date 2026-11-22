@@ -111,6 +111,11 @@ ca vpc vip public-ip attach|detach --vpc web --vip lb1
 ca vpc vip firewall-rule list|create|delete|set-description --vpc web --vip lb1
 ca vip list
 ca ip-address list
+ca bucket list|get|create|delete
+ca bucket usage logs-7f3a --hours 168
+ca bucket versioning get|set logs-7f3a
+ca bucket-key list|create|delete|reveal-secret
+ca bucket-key grant|revoke ci --bucket logs-7f3a
 ca ssh-key list|create|update|delete
 ca vm list
 ca vm get web-01

@@ -85,6 +85,7 @@ type Server struct {
 	Writes         []*http.Request
 	WriteURLs      []string         // method, path and query of each /v1 write
 	Bodies         []map[string]any // decoded JSON body of each /v1 write (nil if none)
+	ReadURLs       []string         // method, path and query of each /v1 GET
 	IdemKeys       []string
 	DeleteCalls    int
 	ElevationCalls int
@@ -377,6 +378,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := r.URL.Path
+	if r.Method == http.MethodGet {
+		s.ReadURLs = append(s.ReadURLs, r.Method+" "+r.URL.RequestURI())
+	}
 	if r.Method != http.MethodGet {
 		raw, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewReader(raw))
