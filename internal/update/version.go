@@ -55,7 +55,7 @@ type version struct {
 }
 
 func parseVersion(s string) (version, bool) {
-	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	s = strings.TrimPrefix(s, "v")
 	var v version
 	if i := strings.IndexByte(s, '-'); i >= 0 {
 		s, v.pre = s[:i], s[i+1:]
@@ -69,7 +69,7 @@ func parseVersion(s string) (version, bool) {
 	}
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
-		if err != nil || n < 0 {
+		if err != nil || strings.Trim(p, "0123456789") != "" {
 			return v, false
 		}
 		v.n[i] = n
@@ -79,7 +79,7 @@ func parseVersion(s string) (version, bool) {
 
 // prerelease reports whether pre is a semver prerelease: dot-separated
 // [0-9A-Za-z-] identifiers. A tag ends up in a URL and a file name, so
-// nothing else gets through.
+// parseVersion accepts only digits, dots and these.
 func prerelease(pre string) bool {
 	for _, id := range strings.Split(pre, ".") {
 		if id == "" || strings.Trim(id, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") != "" {

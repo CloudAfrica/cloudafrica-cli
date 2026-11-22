@@ -205,8 +205,9 @@ func sibling(exe string) string {
 }
 
 // replaceSibling swaps the other Windows name when it is this CLI, as
-// install.ps1 decides it: a foreign ca.exe stays. One that cannot be run to
-// tell is left too, with an error so the user hears of it.
+// install.ps1 decides it: one that runs and exits non-zero or prints another
+// line is a foreign ca.exe and stays. One that cannot be started, or does not
+// finish, is left too, with an error so the user hears of it.
 func replaceSibling(ctx context.Context, o Options, tmp string) error {
 	name := sibling(o.Exe)
 	if name == "" {
@@ -217,6 +218,10 @@ func replaceSibling(ctx context.Context, o Options, tmp string) error {
 		return nil
 	}
 	line, err := probe(ctx, dst, o.ProbeTimeout)
+	var exited *exec.ExitError
+	if errors.As(err, &exited) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("%s was not updated: running it to check it is ca: %w", dst, err)
 	}
@@ -236,13 +241,26 @@ func ours(line string) bool {
 }
 
 // probe runs `path version` and returns its first line. stdout is a pipe, so
-// the binary does no terminal-only update check.
+// the binary does no terminal-only update check. A non-zero exit is an
+// *exec.ExitError carrying the start of stderr; a timeout is not one.
 func probe(ctx context.Context, path string, timeout time.Duration) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	pctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path, "version")
+	cmd := exec.CommandContext(pctx, path, "version")
 	cmd.Stdin = nil
 	out, err := cmd.Output()
+	if err != nil && pctx.Err() != nil && ctx.Err() == nil {
+		return "", fmt.Errorf("%s version did not finish within %s", filepath.Base(path), timeout)
+	}
+	var exited *exec.ExitError
+	if errors.As(err, &exited) {
+		if msg := strings.TrimSpace(string(exited.Stderr)); msg != "" {
+			if len(msg) > 200 {
+				msg = msg[:200] + "..."
+			}
+			return "", fmt.Errorf("%w: %s", err, msg)
+		}
+	}
 	if err != nil {
 		return "", err
 	}

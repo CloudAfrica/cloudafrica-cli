@@ -107,6 +107,15 @@ func TestUpdateExitCodes(t *testing.T) {
 	}
 }
 
+func TestUpdateRefusesAnUnresolvableExecutable(t *testing.T) {
+	releases(t, http.StatusOK, "v0.2.0")
+	h := newHarness(t)
+	h.executable = func() (string, error) { return filepath.Join(t.TempDir(), "gone", "ca"), nil }
+	if code := h.run("update"); code != ExitAPI || !strings.Contains(h.stderr.String(), "resolving") {
+		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	}
+}
+
 // The pairing secret goes only to the API endpoint, never to GitHub.
 func TestUpdateNeverCarriesTheElevationSecret(t *testing.T) {
 	var got atomic.Value

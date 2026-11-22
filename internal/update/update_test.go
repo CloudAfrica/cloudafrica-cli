@@ -23,7 +23,8 @@ import (
 )
 
 // fake holds tiny binaries that answer `version` like ca does, keyed by the
-// version they print; "broken" exits 1 and "foreign" prints another program's
+// version they print; "broken" exits 1 with a stderr line, "slow" never
+// answers, and "foreign" prints another program's
 // line. Run with "sleep" they block, standing in for a ca still running.
 var fake = map[string][]byte{}
 
@@ -42,7 +43,10 @@ func main() {
 		time.Sleep(time.Minute)
 	}
 	switch v {
+	case "slow":
+		time.Sleep(time.Minute)
 	case "broken":
+		fmt.Fprintln(os.Stderr, "fake ca is broken")
 		os.Exit(1)
 	case "foreign":
 		fmt.Println("foreign 1.0")
@@ -61,7 +65,7 @@ func TestMain(m *testing.M) {
 	if err := os.WriteFile(src, []byte(fakeSource), 0o600); err != nil {
 		panic(err)
 	}
-	for _, v := range []string{"0.3.1", "0.4.0", "0.5.0", "broken", "foreign"} {
+	for _, v := range []string{"0.3.1", "0.4.0", "0.5.0", "broken", "foreign", "slow"} {
 		out := filepath.Join(dir, v)
 		cmd := exec.Command("go", "build", "-o", out, "-ldflags", "-X main.v="+v, src)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
@@ -404,7 +408,7 @@ func TestBadDownloadsReplaceNothing(t *testing.T) {
 		}, "not listed in cloudafrica-cli_0.4.0_SHA256SUMS"},
 		{"broken binary", func(t *testing.T, r *release) {
 			r.publish(t, goos, members("broken"))
-		}, "the downloaded ca does not run (exit status 1); nothing was replaced"},
+		}, "the downloaded ca does not run (exit status 1: fake ca is broken); nothing was replaced"},
 		{"wrong version", func(t *testing.T, r *release) {
 			r.publish(t, goos, members("0.5.0"))
 		}, `the downloaded ca reports "ca 0.5.0 (fake)", not version 0.4.0; nothing was replaced`},
@@ -601,20 +605,53 @@ func TestWindowsSwapReplacesOurSiblingOnly(t *testing.T) {
 	}
 }
 
-// A sibling that will not run might be ours, so it is kept and reported.
-func TestWindowsSiblingThatWillNotRunIsReported(t *testing.T) {
-	r := newRelease(t, "v0.4.0")
-	r.publish(t, "windows", map[string][]byte{"ca.exe": fake["0.4.0"], "cloudafrica.exe": fake["0.4.0"]})
-	dir := t.TempDir()
-	exe := install(t, dir, "ca.exe", "0.3.1")
-	sib := install(t, dir, "cloudafrica.exe", "broken")
-	res, err := Run(t.Context(), r.options(exe, "windows", "0.3.1"))
-	if err != nil || res.State != Updated || res.SiblingErr == nil ||
-		!strings.Contains(res.SiblingErr.Error(), sib+" was not updated: running it to check it is ca") {
-		t.Fatalf("%+v, %v", res, err)
+// A sibling that cannot be started might be ours, so it is kept and
+// reported; one that runs and exits non-zero is foreign, kept quietly.
+func TestWindowsSiblingThatWillNotRun(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		content []byte
+		warn    bool
+	}{
+		{"cannot start", []byte("not an executable"), true},
+		{"exits non-zero", fake["broken"], false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRelease(t, "v0.4.0")
+			r.publish(t, "windows", map[string][]byte{"ca.exe": fake["0.4.0"], "cloudafrica.exe": fake["0.4.0"]})
+			dir := t.TempDir()
+			exe := install(t, dir, "cloudafrica.exe", "0.3.1")
+			sib := filepath.Join(dir, "ca.exe")
+			if err := os.WriteFile(sib, c.content, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			res, err := Run(t.Context(), r.options(exe, "windows", "0.3.1"))
+			if err != nil || res.State != Updated {
+				t.Fatalf("%+v, %v", res, err)
+			}
+			warned := res.SiblingErr != nil &&
+				strings.Contains(res.SiblingErr.Error(), sib+" was not updated: running it to check it is ca")
+			if warned != c.warn || (!c.warn && res.SiblingErr != nil) {
+				t.Errorf("SiblingErr = %v", res.SiblingErr)
+			}
+			if got, _ := os.ReadFile(sib); !bytes.Equal(got, c.content) {
+				t.Error("the sibling changed")
+			}
+		})
 	}
-	if got, _ := os.ReadFile(sib); !bytes.Equal(got, fake["broken"]) {
-		t.Error("the sibling changed")
+}
+
+func TestProbeCarriesStderrAndNamesATimeout(t *testing.T) {
+	dir := t.TempDir()
+	_, err := probe(t.Context(), install(t, dir, "broken", "broken"), 10*time.Second)
+	var exited *exec.ExitError
+	if !errors.As(err, &exited) || !strings.Contains(err.Error(), "fake ca is broken") {
+		t.Errorf("broken: %v", err)
+	}
+	slow := install(t, dir, "slow", "slow")
+	_, err = probe(t.Context(), slow, 50*time.Millisecond)
+	if errors.As(err, &exited) || err == nil || !strings.Contains(err.Error(), "did not finish within 50ms") {
+		t.Errorf("slow: %v", err)
 	}
 }
 
