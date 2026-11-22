@@ -95,6 +95,29 @@ func TestK8sTokenNotFoundNamesWhoCanMint(t *testing.T) {
 	}
 }
 
+// A refused or under-scoped token gets a remedy on the token path, never
+// `ca auth login`, which cannot mint.
+func TestK8sTokenRefusalsNameTheTokenRemedy(t *testing.T) {
+	for token, c := range map[string]struct {
+		code int
+		hint string
+	}{
+		"bad":       {ExitAuth, tokenRefusedHint},
+		"cak_plain": {ExitStepUp, tokenScopeHint},
+	} {
+		t.Run(token, func(t *testing.T) {
+			h := newHarness(t)
+			h.env["CLOUDAFRICA_TOKEN"] = token
+			if code := h.run("k8s", "token", "k-1"); code != c.code {
+				t.Fatalf("exit %d, stderr %s", code, h.stderr)
+			}
+			if !strings.Contains(h.stderr.String(), c.hint) || strings.Contains(h.stderr.String(), "ca auth login") {
+				t.Errorf("stderr %q", h.stderr)
+			}
+		})
+	}
+}
+
 func TestK8sTokenAnswerWithoutATokenIsAnError(t *testing.T) {
 	for name, body := range map[string]string{
 		"empty":        "",

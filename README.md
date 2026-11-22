@@ -119,7 +119,7 @@ next one, if there is a newer target.
 `ca k8s kubeconfig` prints the cluster's kubeconfig with its user set to run `ca k8s token`, in place of
 the downloaded `sh -c curl` command, so it also works on native Windows. It holds no credential. kubectl
 runs `ca k8s token` whenever it needs a token: that mints a 15-minute cluster-admin token and needs
-`CLOUDAFRICA_TOKEN` (your own API token with `protected:compute`, as an owner or admin of the account)
+`CLOUDAFRICA_TOKEN` (your own API token with `protected:compute`)
 and `CLOUDAFRICA_ELEVATION` paired with it, as for a script (see Scripts). A `ca auth login` sign-in
 cannot mint a cluster token. The kubeconfig pins `CLOUDAFRICA_ENDPOINT` to the API it came from.
 

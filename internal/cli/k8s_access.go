@@ -24,8 +24,14 @@ var errTokenNeedsPAT = errors.New("a cluster token needs CLOUDAFRICA_TOKEN set t
 	"protected:compute, and CLOUDAFRICA_ELEVATION set to the secret paired with it " +
 	"(`CLOUDAFRICA_ELEVATION=$(ca auth elevate)`); a `ca auth login` sign-in cannot get one")
 
-const tokenNotFoundHint = "404 also means CLOUDAFRICA_TOKEN is not a person's own API token, or that person has no " +
-	"access to the cluster's account."
+// The remedies for a refused cluster token. None offers `ca auth login`,
+// which cannot mint one (errTokenNeedsPAT).
+const (
+	tokenNotFoundHint = "Check the cluster ID, and that CLOUDAFRICA_TOKEN is your own API token that can see this cluster."
+	tokenRefusedHint  = "CLOUDAFRICA_TOKEN was refused; check that it is your own API token and has not expired."
+	tokenScopeHint    = "CLOUDAFRICA_TOKEN was not granted protected:compute; use your own API token that has it, " +
+		"then pair it with `CLOUDAFRICA_ELEVATION=$(ca auth elevate)`."
+)
 
 func execInstallHint(exe string) string {
 	return fmt.Sprintf("Needs the CloudAfrica CLI as `%s` on PATH (https://github.com/CloudAfrica/cloudafrica-cli). "+
@@ -47,7 +53,7 @@ func (a *App) k8sToken() *cobra.Command {
 		Short: "Print a 15-minute cluster-admin token as a kubectl ExecCredential",
 		Long: "Prints the ExecCredential JSON kubectl's exec plugin reads; `ca k8s kubeconfig` writes a kubeconfig " +
 			"that runs this. It always prints JSON, whatever --output says. Needs CLOUDAFRICA_TOKEN (your own API " +
-			"token with protected:compute, as an account owner or admin) and CLOUDAFRICA_ELEVATION (the secret " +
+			"token with protected:compute) and CLOUDAFRICA_ELEVATION (the secret " +
 			"paired with it); a `ca auth login` sign-in cannot get a cluster token.",
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -77,8 +83,13 @@ func mintClusterToken(ctx context.Context, s *session, id string) ([]byte, error
 	}
 	if err := cloudafrica.CheckResponse(r.HTTPResponse, r.Body); err != nil {
 		var ae *cloudafrica.APIError
-		if errors.As(err, &ae) && ae.Status == http.StatusNotFound {
+		switch {
+		case errors.As(err, &ae) && ae.Status == http.StatusNotFound:
 			return nil, &hintedError{err: err, hint: tokenNotFoundHint}
+		case errors.As(err, &ae) && ae.Status == http.StatusUnauthorized:
+			return nil, &hintedError{err: err, hint: tokenRefusedHint}
+		case refusedScope(err) != "":
+			return nil, &hintedError{err: err, hint: tokenScopeHint}
 		}
 		return nil, err
 	}
