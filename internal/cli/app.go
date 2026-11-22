@@ -257,7 +257,7 @@ func (a *App) Root() *cobra.Command {
 	pf.StringVarP(&a.outputFlag, "output", "o", "", "output format: table, json or yaml (default table on a terminal, json otherwise)")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "print ids only")
 
-	root.AddCommand(a.authCmd(), a.vmCmd(), a.sshKeyCmd(), a.vpcCmd(), a.datacenterCmd(), a.operationCmd(),
+	root.AddCommand(a.authCmd(), a.vmCmd(), a.k8sCmd(), a.sshKeyCmd(), a.vpcCmd(), a.datacenterCmd(), a.operationCmd(),
 		a.apiCmd(), a.versionCmd())
 	return root
 }

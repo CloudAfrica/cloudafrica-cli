@@ -1,0 +1,164 @@
+package cli
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
+)
+
+func elevated(t *testing.T) *harness {
+	t.Helper()
+	h := newHarness(t)
+	h.seed("default", &fakeapi.Grant{Scopes: append([]string{}, defaultScopes...), Elevated: true}, time.Now().Add(time.Hour))
+	return h
+}
+
+func cluster(id string, upgrade map[string]any) map[string]any {
+	c := map[string]any{"id": id, "name": "prod", "state": "ACTIVE", "kubernetesVersion": "v1.33.1", "workers": 3}
+	if upgrade != nil {
+		c["upgrade"] = upgrade
+	}
+	return c
+}
+
+func targets(versions ...string) []any {
+	out := []any{}
+	for _, v := range versions {
+		out = append(out, map[string]any{"kubernetes": v, "talos": "v1.10.0"})
+	}
+	return out
+}
+
+func TestK8sListShowsTheWorkersUpgradeState(t *testing.T) {
+	h := signedIn(t)
+	h.fake.Clusters = []map[string]any{
+		cluster("k-1", map[string]any{"workers": map[string]any{"state": "UPGRADE_AVAILABLE"}}),
+		cluster("k-2", nil),
+		cluster("k-3", map[string]any{"workers": map[string]any{"state": "CURRENT"}}),
+	}
+	h.mustRun("k8s", "list", "-o", "table")
+	lines := strings.Split(strings.TrimSpace(h.stdout.String()), "\n")
+	if len(lines) != 4 || !strings.Contains(lines[0], "UPGRADE") {
+		t.Fatalf("stdout:\n%s", h.stdout)
+	}
+	for i, want := range []string{"UPGRADE_AVAILABLE", "-", "CURRENT"} {
+		if f := strings.Fields(lines[i+1]); f[len(f)-1] != want {
+			t.Errorf("row %d = %q, want UPGRADE %s", i+1, lines[i+1], want)
+		}
+	}
+	h.mustRun("kubernetes", "list", "-q")
+	if got := strings.Fields(h.stdout.String()); strings.Join(got, ",") != "k-1,k-2,k-3" {
+		t.Errorf("alias ids = %v", got)
+	}
+}
+
+func TestK8sGetPrintsTheDetailObject(t *testing.T) {
+	h := signedIn(t)
+	c := cluster("k-1", map[string]any{
+		"controlPlane":            map[string]any{"state": "DEADLINE", "deadline": "2026-12-31"},
+		"workers":                 map[string]any{"state": "UPGRADE_AVAILABLE"},
+		"workerKubernetesVersion": "v1.32.4", "workerTalosVersion": "v1.9.5", "workerTargets": targets("v1.33.1"),
+	})
+	c["nodes"] = []any{map[string]any{"name": "w-1", "status": "running", "ready": true, "privateIp": "10.0.0.5"}}
+	h.fake.Clusters = []map[string]any{c}
+	h.mustRun("k8s", "get", "k-1", "-o", "json")
+	var got map[string]any
+	if err := json.Unmarshal(h.stdout.Bytes(), &got); err != nil || got["cluster"] == nil || got["nodes"] == nil {
+		t.Fatalf("json = %s (%v)", h.stdout, err)
+	}
+	h.mustRun("k8s", "get", "k-1", "-o", "table")
+	for _, want := range []string{"v1.33.1 DEADLINE (deadline 2026-12-31)", "v1.32.4 (Talos v1.9.5) UPGRADE_AVAILABLE",
+		"v1.33.1 (Talos v1.10.0)", "Node w-1", "ready"} {
+		if !strings.Contains(h.stdout.String(), want) {
+			t.Errorf("table lacks %q:\n%s", want, h.stdout)
+		}
+	}
+}
+
+func TestUpgradeWorkersTakesTheNewestTarget(t *testing.T) {
+	h := elevated(t)
+	h.fake.Clusters = []map[string]any{cluster("k-1", map[string]any{"workerTargets": targets("v1.32.5", "v1.33.1")})}
+	h.mustRun("k8s", "upgrade-workers", "k-1", "-q")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "POST /v1/kubernetes/clusters/k-1/actions/upgrade-workers" ||
+		h.fake.Bodies[0]["targetKubernetes"] != "v1.33.1" {
+		t.Fatalf("writes %v bodies %v", h.fake.WriteURLs, h.fake.Bodies)
+	}
+	if got := strings.TrimSpace(h.stdout.String()); got != "op/upgrade-k-1" {
+		t.Errorf("stdout = %q", got)
+	}
+}
+
+func TestUpgradeWorkersWithNoTarget(t *testing.T) {
+	for name, c := range map[string]struct {
+		upgrade map[string]any
+		code    int
+		stderr  string
+	}{
+		"current": {map[string]any{"workers": map[string]any{"state": "CURRENT"}, "workerTargets": []any{}}, ExitOK,
+			"workers are current"},
+		"deadline, no target": {map[string]any{"workers": map[string]any{"state": "DEADLINE", "deadline": "2027-01-15"}},
+			ExitOK, "DEADLINE (deadline 2027-01-15); no worker upgrade is available yet"},
+		"unavailable": {nil, ExitAPI, "upgrade status is unavailable; try again"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := elevated(t)
+			h.fake.Clusters = []map[string]any{cluster("k-1", c.upgrade)}
+			code := h.run("k8s", "upgrade-workers", "k-1")
+			if code != c.code || len(h.fake.Writes) != 0 || !strings.Contains(h.stderr.String(), c.stderr) {
+				t.Errorf("exit %d (want %d), writes %d, stderr %q", code, c.code, len(h.fake.Writes), h.stderr)
+			}
+			if h.stdout.Len() != 0 {
+				t.Errorf("stdout = %q", h.stdout)
+			}
+		})
+	}
+}
+
+func TestUpgradeWorkersVersionGetsItsV(t *testing.T) {
+	for _, v := range []string{"1.37.2", "v1.37.2"} {
+		h := elevated(t)
+		h.mustRun("k8s", "upgrade-workers", "k-1", "--version", v, "-q")
+		if len(h.fake.Bodies) != 1 || h.fake.Bodies[0]["targetKubernetes"] != "v1.37.2" {
+			t.Errorf("--version %s: bodies %v", v, h.fake.Bodies)
+		}
+	}
+}
+
+func TestUpgradeWorkersPrintsTheConflictReason(t *testing.T) {
+	h := elevated(t)
+	h.fake.UpgradeConflict = "Another change is running on this cluster."
+	if code := h.run("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1"); code != ExitAPI ||
+		!strings.Contains(h.stderr.String(), "Another change is running on this cluster.") {
+		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	}
+}
+
+func TestUpgradeWorkersNotPairedExits5(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	if code := h.run("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1"); code != ExitStepUp ||
+		!strings.Contains(h.stderr.String(), "ca auth elevate") {
+		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	}
+}
+
+func TestUpgradeWorkersWithNoOperationToFollow(t *testing.T) {
+	h := elevated(t)
+	h.fake.UpgradeNoOperation = true
+	if code := h.run("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "--wait"); code != ExitOK ||
+		!strings.Contains(h.stderr.String(), "ca k8s get k-1") {
+		t.Errorf("exit %d, stderr %q", code, h.stderr)
+	}
+}
+
+func TestUpgradeWorkersWaits(t *testing.T) {
+	h := elevated(t)
+	h.fake.OpStates["op/upgrade-k-1"] = []string{"running", "complete"}
+	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "--wait", "-o", "json")
+	if !strings.Contains(h.stdout.String(), `"complete"`) {
+		t.Errorf("stdout = %s", h.stdout)
+	}
+}
