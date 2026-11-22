@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -52,6 +53,9 @@ type Rule struct {
 	Reason    string `json:"reason"`
 }
 
+// pageCap reads a route's largest page from the limit parameter's description.
+var pageCap = regexp.MustCompile(`from 1 to (\d+)`)
+
 // OpOverlay overrides one operation.
 type OpOverlay struct {
 	Path       string                 `json:"path"`
@@ -59,6 +63,7 @@ type OpOverlay struct {
 	Wait       string                 `json:"wait"`
 	Flags      map[string]FlagOverlay `json:"flags"`
 	AtLeastOne []string               `json:"atLeastOne"`
+	Exclusive  [][]string             `json:"exclusive"`
 	Example    string                 `json:"example"`
 }
 
@@ -652,6 +657,9 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		}
 		if c.List && (p.Name == "cursor" || p.Name == "limit") {
 			c.Paged = true
+			if m := pageCap.FindStringSubmatch(p.Description); p.Name == "limit" && m != nil {
+				c.PageLimit, _ = strconv.Atoi(m[1])
+			}
 			continue
 		}
 		if f, ok := field(p.Name, p.Schema, p.Required, p.Description, "query parameter"); ok {
@@ -687,6 +695,17 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		}
 	}
 	c.AtLeastOne = oo.AtLeastOne
+	for _, grp := range oo.Exclusive {
+		for _, f := range grp {
+			if _, ok := flagNames[f]; !ok {
+				g.fail("%s: exclusive: no flag --%s", op.OperationID, f)
+			}
+		}
+	}
+	if len(oo.Exclusive) == 1 {
+		g.fail("%s: exclusive needs at least two groups", op.OperationID)
+	}
+	c.Exclusive = oo.Exclusive
 
 	// Async.
 	if r, ok := op.Responses["202"]; ok {

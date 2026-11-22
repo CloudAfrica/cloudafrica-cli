@@ -33,7 +33,7 @@ func fixtureDoc() map[string]any {
 				"get": map[string]any{"operationId": "listWidgets", "summary": "List widgets\nmore", "security": sec("read:w"),
 					"parameters": []any{
 						map[string]any{"name": "cursor", "in": "query", "schema": map[string]any{"type": "string"}},
-						map[string]any{"name": "limit", "in": "query", "schema": map[string]any{"type": "integer"}},
+						map[string]any{"name": "limit", "in": "query", "description": "Page size, a whole number from 1 to 50; defaults to 50.", "schema": map[string]any{"type": "integer"}},
 						map[string]any{"name": "colour", "in": "query", "schema": map[string]any{"type": "string", "enum": []any{"red", "blue"}}},
 					},
 					"responses": ok(ref("CursorPageWidget"))},
@@ -156,6 +156,9 @@ func TestGenerateDerivesTheFixture(t *testing.T) {
 	}
 
 	list := opByID(t, out, "listWidgets")
+	if list.PageLimit != 50 {
+		t.Errorf("PageLimit = %d, want the 50 the limit description names", list.PageLimit)
+	}
 	if !list.List || !list.Paged || list.Short != "List widgets" || list.Columns != "Widget" ||
 		len(list.Query) != 1 || list.Query[0].Flag != "colour" || !reflect.DeepEqual(list.Query[0].Enum, []string{"red", "blue"}) {
 		t.Errorf("list = %+v", list)
@@ -349,6 +352,18 @@ func TestGenerateRefuses(t *testing.T) {
 				return strings.Replace(o, "      ramMib:", "    atLeastOne: [nope]\n    flags:\n      ramMib:", 1)
 			},
 			want: "createWidget: atLeastOne: no flag --nope",
+		},
+		"bad exclusive flag": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "      ramMib:", "    exclusive: [[name], [nope]]\n    flags:\n      ramMib:", 1)
+			},
+			want: "createWidget: exclusive: no flag --nope",
+		},
+		"single exclusive group": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "      ramMib:", "    exclusive: [[name]]\n    flags:\n      ramMib:", 1)
+			},
+			want: "createWidget: exclusive needs at least two groups",
 		},
 		"202 without Location": {
 			doc: func(d map[string]any) {

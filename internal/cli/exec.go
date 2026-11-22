@@ -4,6 +4,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -134,7 +135,7 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		f.String(p.Flag, "", paramHelp(p))
 	}
 	for _, fl := range slices.Concat(op.Query, op.Body) {
-		help := fl.Help
+		help := strings.ReplaceAll(fl.Help, "`", "")
 		if len(fl.Enum) > 0 {
 			help = strings.TrimSpace(help + " (one of: " + strings.Join(fl.Enum, ", ") + ")")
 		}
@@ -262,6 +263,9 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		if body, err = a.bodyFrom(op, f, r.data); err != nil {
 			return usageErr(err)
 		}
+	}
+	if err := exclusiveGiven(op, f); err != nil {
+		return usageErr(err)
 	}
 	if len(op.AtLeastOne) > 0 && !atLeastOneGiven(op, f, body) {
 		return usageErr(fmt.Errorf("give %s", orList(op.AtLeastOne)))
@@ -629,15 +633,16 @@ func rowsField(columns string) string {
 }
 
 // listPages walks every page of a list path.
-func listPages(ctx context.Context, s *session, path string, query url.Values, paged bool, rows string) ([]json.RawMessage, error) {
+func listPages(ctx context.Context, s *session, path string, query url.Values, pageSize int, rows string) ([]json.RawMessage, error) {
 	out := []json.RawMessage{}
 	seen := map[string]bool{}
 	q := url.Values{}
 	for k, v := range query {
 		q[k] = v
 	}
+	paged := pageSize > 0
 	if paged {
-		q.Set("limit", strconv.Itoa(pageLimit))
+		q.Set("limit", strconv.Itoa(pageSize))
 	}
 	for {
 		_, body, _, err := send(ctx, s, http.MethodGet, path, q, nil)
@@ -689,7 +694,11 @@ func (a *App) runList(ctx context.Context, s *session, pr output.Printer, op cmd
 		}
 		return nil
 	}
-	all, err := listPages(ctx, s, path, query, op.Paged, rows)
+	size := 0
+	if op.Paged {
+		size = cmp.Or(op.PageLimit, pageLimit)
+	}
+	all, err := listPages(ctx, s, path, query, size, rows)
 	if err != nil {
 		return err
 	}
@@ -866,7 +875,7 @@ func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, val
 	if idField == "" {
 		idField = "id"
 	}
-	rows, err := listPages(ctx, s, r.List, nil, true, "data")
+	rows, err := listPages(ctx, s, r.List, nil, pageLimit, "data")
 	if err != nil {
 		var e *cloudafrica.APIError
 		if parent != nil || ctx.Err() != nil || errors.As(err, &e) && e.Status == http.StatusUnauthorized {
@@ -906,6 +915,25 @@ func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, val
 		fmt.Fprintf(&b, "\n  %s  %s", field(m, idField), field(m, r.Match))
 	}
 	return "", false, usageErr(errors.New(b.String()))
+}
+
+// exclusiveGiven refuses flags from two different op.Exclusive groups.
+func exclusiveGiven(op cmdspec.Op, f *pflag.FlagSet) error {
+	first := ""
+	for _, grp := range op.Exclusive {
+		for _, name := range grp {
+			if !f.Changed(name) {
+				continue
+			}
+			if first != "" && !slices.Contains(grp, first) {
+				return fmt.Errorf("--%s and --%s cannot be combined", first, name)
+			}
+			if first == "" {
+				first = name
+			}
+		}
+	}
+	return nil
 }
 
 // atLeastOneGiven reports whether a flag in op.AtLeastOne was given, or --data

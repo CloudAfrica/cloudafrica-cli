@@ -29,7 +29,7 @@ groups:
   bucket: Manage object storage buckets
   bucket versioning: Read and change a bucket's versioning
   bucket-key: Manage object storage access keys
-  datacenter: List datacenters
+  datacenter: List datacenters and check placement feasibility
   os-image: List OS images
   operation: Inspect and cancel asynchronous operations
   placement-group: Manage placement groups
@@ -39,7 +39,9 @@ groups:
   backup-policy: List the backup policy of every VM
   backup-window: List the backup windows
   billing: Read the balance and accrual, and manage the billing details
+  billing details: Read and change the billing details
   member: Manage the account's members
+  member role: Change a member's role
   project: Manage projects
   project resource: Manage the resources in a project
   support: Raise and follow support tickets
@@ -212,9 +214,10 @@ operations:
   getAccountDeletedVmBackupRetention:
     path: account backup-retention
   listActivity:
+    exclusive: [[types], [subject-type, subject-id]]
     example: |
       ca activity list --limit 20
-      ca activity list --types vm.started,vm.stopped
+      ca activity list --types vm,vpc
       ca activity list --subject-type vm --subject-id "$(ca vm get web-01 -q)"
   listBackupPolicies:
     path: backup-policy list

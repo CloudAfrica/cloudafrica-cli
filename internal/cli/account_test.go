@@ -1,21 +1,37 @@
 package cli
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
 )
 
 func readURL(h *harness, want string) bool { return slices.Contains(h.fake.ReadURLs, want) }
 
+// stamp is how a time column prints an RFC 3339 value in this environment's zone.
+func stamp(rfc3339 string) string {
+	t, err := time.Parse(time.RFC3339, rfc3339)
+	if err != nil {
+		panic(err)
+	}
+	return t.Local().Format("2006-01-02 15:04 MST")
+}
+
+// row is table()'s rendering of one row whose cells are given in order.
+func row(cells ...string) string {
+	return fmt.Sprint([][]string{strings.Fields(strings.Join(cells, " "))})
+}
+
 // Account reads print their own columns; a null limit is "unlimited" and a
 // null usage stays blank.
 func TestAccountReads(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
-		"GET /v1/account": {Body: `{"accountId":"acc-1","accountName":"Globex","tokenName":"ci","scopes":["read:compute","write:compute"],
+		"GET /v1/account": {Body: `{"accountId":"acc-1","accountName":"Globex","tokenName":"ci","expiresAt":"2026-12-01T08:00:00Z","scopes":["read:compute","write:compute"],
 			"rateLimit":{"limit":600,"remaining":599,"resetAt":1}}`},
 		"GET /v1/account/limits": {Body: `{"data":[
 			{"key":"vm.count","scope":"ACCOUNT","limit":50,"used":7},
@@ -24,7 +40,7 @@ func TestAccountReads(t *testing.T) {
 	})
 	head, rows := table(h, "account", "get")
 	if head != "ACCOUNT ID ACCOUNT TOKEN EXPIRES SCOPES RATE LIMIT REMAINING" ||
-		rows != "[[acc-1 Globex ci read:compute, write:compute 600 599]]" {
+		rows != row("acc-1", "Globex", "ci", stamp("2026-12-01T08:00:00Z"), "read:compute, write:compute", "600", "599") {
 		t.Errorf("account get %q %s", head, rows)
 	}
 	head, rows = table(h, "account", "limits")
@@ -39,18 +55,22 @@ func TestAccountReads(t *testing.T) {
 
 // --types repeats the query key once per value, whether given as commas or as
 // a repeated flag, and an empty list or an empty value is refused before any
-// request.
+// request. The route caps a page at 50, so that is the page size asked for.
 func TestActivityTypesRepeat(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{"GET /v1/activity": {Body: `{"data":[
-		{"id":"a-1","verb":"vm.started","status":"succeeded","actorClass":"CUSTOMER","actorDisplayName":"Jo B","subjectType":"vm","subjectLabel":"web-01"}]}`}})
-	head, rows := table(h, "activity", "list", "--types", "vm.started,vm.stopped", "--types", "vm.deleted",
-		"--subject-type", "vm")
+		{"id":"a-1","startedAt":"2026-11-22T08:00:00Z","verb":"vm.start","status":"failed","actorClass":"CUSTOMER","actorDisplayName":"Jo B",
+		 "subjectType":"vm","subjectLabel":"web-01","failureReason":"quota"}]}`}})
+	head, rows := table(h, "activity", "list", "--types", "vm,vpc", "--types", "ip")
 	if head != "ID STARTED VERB STATUS ACTOR ACTOR NAME SUBJECT SUBJECT NAME REASON" ||
-		rows != "[[a-1 vm.started succeeded CUSTOMER Jo B vm web-01]]" {
+		rows != row("a-1", stamp("2026-11-22T08:00:00Z"), "vm.start", "failed", "CUSTOMER", "Jo B", "vm", "web-01", "quota") {
 		t.Errorf("activity %q %s", head, rows)
 	}
-	if want := "GET /v1/activity?limit=200&subjectType=vm&types=vm.started&types=vm.stopped&types=vm.deleted"; !readURL(h, want) {
+	if want := "GET /v1/activity?limit=50&types=vm&types=vpc&types=ip"; !readURL(h, want) {
+		t.Errorf("reads %v, want %s", h.fake.ReadURLs, want)
+	}
+	h.mustRun("activity", "list", "--subject-type", "vm", "--subject-id", "vm-1", "-o", "json")
+	if want := "GET /v1/activity?limit=50&subjectId=vm-1&subjectType=vm"; !readURL(h, want) {
 		t.Errorf("reads %v, want %s", h.fake.ReadURLs, want)
 	}
 	n := len(h.fake.ReadURLs)
@@ -58,6 +78,65 @@ func TestActivityTypesRepeat(t *testing.T) {
 		if code := h.run("activity", "list", "--types", v); code != ExitUsage || len(h.fake.ReadURLs) != n {
 			t.Errorf("--types %q: exit %d, reads %d", v, code, len(h.fake.ReadURLs)-n)
 		}
+	}
+}
+
+// The two modes of /v1/activity do not mix: the API answers 400, so the CLI
+// refuses before any request.
+func TestActivityModesDoNotMix(t *testing.T) {
+	h := s3Harness(t)
+	for _, args := range [][]string{
+		{"activity", "list", "--types", "vm", "--subject-type", "vm"},
+		{"activity", "list", "--subject-id", "vm-1", "--types", "vm"},
+	} {
+		if code := h.run(args...); code != ExitUsage || len(h.fake.ReadURLs) != 0 || !strings.Contains(h.stderr.String(), "cannot be combined") {
+			t.Errorf("%v: exit %d, reads %d\n%s", args, code, len(h.fake.ReadURLs), h.stderr)
+		}
+	}
+}
+
+// Every list walks at the page size its route documents: the generator reads
+// "from 1 to N" off the limit parameter, so no list is asked for more than it takes.
+func TestPageLimitComesFromTheSpec(t *testing.T) {
+	var n int
+	for _, op := range genOps {
+		if !op.Paged {
+			continue
+		}
+		n++
+		if op.PageLimit < 1 || op.PageLimit > pageLimit {
+			t.Errorf("%s: PageLimit %d, want 1..%d", strings.Join(op.Path, " "), op.PageLimit, pageLimit)
+		}
+		if op.OperationID == "listActivity" && op.PageLimit != 50 {
+			t.Errorf("listActivity: PageLimit %d, want 50", op.PageLimit)
+		}
+	}
+	if n == 0 {
+		t.Fatal("no paged operation found")
+	}
+}
+
+// A flag's help may not carry backticks: pflag would turn the first span into
+// the value's name and print the rest literally.
+func TestGeneratedHelpHasNoBackticks(t *testing.T) {
+	h := s3Harness(t)
+	for _, args := range [][]string{{"member", "create", "--help"}, {"member", "role", "set", "--help"}} {
+		h.mustRun(args...)
+		out := h.stdout.String()
+		_, flags, _ := strings.Cut(out, "\nFlags:\n")
+		if strings.Contains(flags, "`") {
+			t.Errorf("%v flag help has a backtick:\n%s", args, flags)
+		}
+		h.stdout.Reset()
+	}
+}
+
+// A group's one-line title is never an auto-derived "Manage <noun>s" that is wrong in English.
+func TestGroupTitlesAreWritten(t *testing.T) {
+	h := s3Harness(t)
+	h.mustRun("billing", "--help")
+	if out := h.stdout.String(); strings.Contains(out, "detailss") {
+		t.Errorf("billing help:\n%s", out)
 	}
 }
 
@@ -135,7 +214,7 @@ func TestProjectCommands(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/projects": {Body: `{"data":[
-			{"id":"p-1","name":"Prod","slug":"PRD","defaultProject":false,"resourceCount":3},
+			{"id":"p-1","name":"Prod","slug":"PRD","defaultProject":false,"resourceCount":3,"createdAt":"2026-11-01T08:00:00Z"},
 			{"id":"p-2","name":"Default","slug":"DEF","defaultProject":true,"resourceCount":0}]}`},
 		"GET /v1/projects/p-1":                {Body: `{"id":"p-1","name":"Prod","slug":"PRD"}`},
 		"GET /v1/projects/p-1/resources":      {Body: `{"data":[{"resourceId":"vm-1","type":"vm","name":"web-01","assignable":true},{"resourceId":"ip-1","type":"public_ip","name":"1.2.3.4","assignable":false}]}`},
@@ -145,7 +224,7 @@ func TestProjectCommands(t *testing.T) {
 		"DELETE /v1/projects/p-1":             {Status: 204},
 	})
 	head, rows := table(h, "project", "list")
-	if head != "ID NAME SLUG DEFAULT RESOURCES CREATED" || rows != "[[p-1 Prod PRD no 3] [p-2 Default DEF yes 0]]" {
+	if head != "ID NAME SLUG DEFAULT RESOURCES CREATED" || rows != fmt.Sprint([][]string{strings.Fields("p-1 Prod PRD no 3 " + stamp("2026-11-01T08:00:00Z")), {"p-2", "Default", "DEF", "yes", "0"}}) {
 		t.Errorf("project list %q %s", head, rows)
 	}
 	head, rows = table(h, "project", "resource", "list", "--project", "Prod")
@@ -180,7 +259,7 @@ func TestProjectCommands(t *testing.T) {
 }
 
 const ticketList = `{"data":[
-	{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B"},
+	{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B","updatedAt":"2026-11-20T09:30:00Z"},
 	{"id":"t-2","reference":1235,"subject":"Invoice","status":"waiting-on-you","raisedByName":"Sam"}]}`
 
 // A ticket is named by its reference number, the list filters by status as a
@@ -189,21 +268,21 @@ func TestSupportTicketCommands(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/support/tickets":                      {Body: ticketList},
-		"GET /v1/support/tickets/t-1":                  {Body: `{"ticket":{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B"},"messages":[{"id":"m-1"},{"id":"m-2"}]}`},
+		"GET /v1/support/tickets/t-1":                  {Body: `{"ticket":{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B","updatedAt":"2026-11-20T09:30:00Z"},"messages":[{"id":"m-1"},{"id":"m-2"}]}`},
 		"POST /v1/support/tickets":                     {Status: 201, Body: `{"id":"t-3","reference":1236,"subject":"New","status":"open"}`},
 		"POST /v1/support/tickets/t-1/replies":         {Body: `{"id":"t-1","reference":1234,"status":"open"}`},
 		"POST /v1/support/tickets/t-1/actions/resolve": {Body: `{"id":"t-1","reference":1234,"status":"resolved"}`},
 	})
 	head, rows := table(h, "support", "ticket", "list", "--status", "open,waiting-on-you", "--search", "backup")
 	if head != "REFERENCE ID SUBJECT STATUS RAISED BY UPDATED" ||
-		rows != "[[1234 t-1 Backup failed open Jo B] [1235 t-2 Invoice waiting-on-you Sam]]" {
+		rows != fmt.Sprint([][]string{strings.Fields("1234 t-1 Backup failed open Jo B " + stamp("2026-11-20T09:30:00Z")), {"1235", "t-2", "Invoice", "waiting-on-you", "Sam"}}) {
 		t.Errorf("ticket list %q %s", head, rows)
 	}
 	if want := "GET /v1/support/tickets?limit=200&q=backup&status=open&status=waiting-on-you"; !readURL(h, want) {
 		t.Errorf("reads %v, want %s", h.fake.ReadURLs, want)
 	}
 	head, rows = table(h, "support", "ticket", "get", "1234")
-	if head != "REFERENCE ID SUBJECT STATUS RAISED BY UPDATED MESSAGES" || rows != "[[1234 t-1 Backup failed open Jo B 2]]" {
+	if head != "REFERENCE ID SUBJECT STATUS RAISED BY UPDATED MESSAGES" || rows != row("1234", "t-1", "Backup failed", "open", "Jo B", stamp("2026-11-20T09:30:00Z"), "2") {
 		t.Errorf("ticket get %q %s", head, rows)
 	}
 	h.mustRun("support", "ticket", "get", "1234", "-q")
@@ -236,17 +315,17 @@ func TestSupportTicketCommands(t *testing.T) {
 func TestBillingCommands(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
-		"GET /v1/billing/balance": {Body: `{"current":"100.00","overdue":"0.00","total":"100.00","currency":"ZAR"}`},
-		"GET /v1/billing/accrual": {Body: `{"total":"12.50","currency":"ZAR","billableHours":10.5,"unpriceableHours":0}`},
-		"GET /v1/billing/details": {Body: `{"legalName":"Globex","billingEmail":"a@example.com","vatNumber":"4","postalAddress1":"1 Main","countryCode":"ZA","editable":true}`},
+		"GET /v1/billing/balance": {Body: `{"current":"100.00","overdue":"0.00","total":"100.00","currency":"ZAR","computedAt":"2026-11-22T06:00:00Z"}`},
+		"GET /v1/billing/accrual": {Body: `{"asOf":"2026-11-22T07:00:00Z","periodStart":"2026-11-01T00:00:00Z","periodEnd":"2026-12-01T00:00:00Z","total":"12.50","currency":"ZAR","billableHours":10.5,"unpriceableHours":0}`},
+		"GET /v1/billing/details": {Body: `{"legalName":"Globex","billingEmail":"a@example.com","vatNumber":"4","companyNumber":"2020/1","postalAddress1":"1 Main","postalAddress2":"Floor 2","postalAddress3":"Sandton","postalAddress4":"Gauteng","postalAddress5":"2196","countryCode":"ZA","editable":true}`},
 		"PUT /v1/billing/details": {Status: 204},
 	})
 	head, rows := table(h, "billing", "balance")
-	if head != "CURRENT OVERDUE TOTAL CURRENCY COMPUTED" || rows != "[[100.00 0.00 100.00 ZAR]]" {
+	if head != "CURRENT OVERDUE TOTAL CURRENCY COMPUTED" || rows != row("100.00", "0.00", "100.00", "ZAR", stamp("2026-11-22T06:00:00Z")) {
 		t.Errorf("balance %q %s", head, rows)
 	}
 	head, rows = table(h, "billing", "accrual", "--as-of", "2026-11-01T00:00:00Z")
-	if head != "AS OF PERIOD START PERIOD END TOTAL CURRENCY BILLABLE H UNPRICED H" || rows != "[[12.50 ZAR 10.5 0]]" {
+	if head != "AS OF PERIOD START PERIOD END TOTAL CURRENCY BILLABLE H UNPRICED H" || rows != row(stamp("2026-11-22T07:00:00Z"), stamp("2026-11-01T00:00:00Z"), stamp("2026-12-01T00:00:00Z"), "12.50", "ZAR", "10.5", "0") {
 		t.Errorf("accrual %q %s", head, rows)
 	}
 	if want := "GET /v1/billing/accrual?asOf=2026-11-01T00%3A00%3A00Z"; !readURL(h, want) {
@@ -254,7 +333,7 @@ func TestBillingCommands(t *testing.T) {
 	}
 	head, rows = table(h, "billing", "details", "get")
 	if head != "LEGAL NAME EMAIL VAT COMPANY NO ADDRESS 1 ADDRESS 2 ADDRESS 3 ADDRESS 4 ADDRESS 5 COUNTRY EDITABLE" ||
-		rows != "[[Globex a@example.com 4 1 Main ZA yes]]" {
+		rows != row("Globex", "a@example.com", "4", "2020/1", "1 Main", "Floor 2", "Sandton", "Gauteng", "2196", "ZA", "yes") {
 		t.Errorf("details %q %s", head, rows)
 	}
 	if code := h.run("billing", "details", "set", "--yes"); code != ExitUsage || len(h.fake.Writes) != 0 {
@@ -273,7 +352,7 @@ func TestAccountingAndPlacementReads(t *testing.T) {
 		"GET /v1/transactions": {Body: `{"data":[
 			{"kind":"INVOICE","number":"INV-1","date":"2026-10-31","amount":"115.00","currency":"ZAR","status":"paid"},
 			{"kind":"CREDIT_NOTE","number":"CN-1","date":"2026-11-02","amount":"-10.00","currency":"ZAR","status":"ISSUED","relatedNumber":"INV-1"}]}`},
-		"GET /v1/backup-policies":       {Body: `{"data":[{"vmId":"vm-1","policy":{"planDisplayName":"Daily","cadenceKind":"daily","windowPreference":"overnight","paused":false}}]}`},
+		"GET /v1/backup-policies":       {Body: `{"data":[{"vmId":"vm-1","policy":{"planDisplayName":"Daily","cadenceKind":"weekly","cadenceDay":3,"windowPreference":"overnight","paused":false,"lastFiredSlot":"2026-11-21T22:30:00Z"}}]}`},
 		"GET /v1/backup-windows":        {Body: `{"data":[{"preference":"overnight","startMinuteOfDayUtc":1350,"lengthMinutes":240}]}`},
 		"GET /v1/placement/feasibility": {Body: `{"datacenterSlug":"jnb","requested":2,"fits":1,"available":true,"reasons":["ram"]}`},
 	})
@@ -283,7 +362,7 @@ func TestAccountingAndPlacementReads(t *testing.T) {
 		t.Errorf("transactions %q %s", head, rows)
 	}
 	head, rows = table(h, "backup-policy", "list")
-	if head != "VM PLAN CADENCE DAY WINDOW PAUSED LAST RUN" || rows != "[[vm-1 Daily daily overnight no]]" {
+	if head != "VM PLAN CADENCE DAY WINDOW PAUSED LAST RUN" || rows != row("vm-1", "Daily", "weekly", "3", "overnight", "no", stamp("2026-11-21T22:30:00Z")) {
 		t.Errorf("policies %q %s", head, rows)
 	}
 	head, rows = table(h, "backup-window", "list")

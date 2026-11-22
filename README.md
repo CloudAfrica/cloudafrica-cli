@@ -132,12 +132,12 @@ ca placement-group list|get|create|delete
 ca placement-group member add|remove web-01 --placement-group spread
 ca operation get|wait|cancel <operation-id>
 ca account get|limits|backup-retention
-ca activity list --types vm.started,vm.stopped --subject-type vm
+ca activity list --types vm,vpc   # or --subject-type vm --subject-id <id> for one subject; the two do not mix
 ca project list|get|create|update|delete
 ca project resource list|move --project prod
-ca member list|create|delete|resend-invitation|cancel-invitation|role set jo@example.com   # create, delete and role set need protected:team
+ca member list|create|delete|resend-invitation|cancel-invitation|role set jo@example.com   # create, delete and role set need protected:team (`ca auth login --scope protected:team`, then `ca auth elevate`)
 ca support ticket list|get|create|reply|resolve 1234   # a ticket is named by its reference number
-ca billing balance|accrual|details get|details set   # details set needs protected:billing
+ca billing balance|accrual|details get|details set   # details set needs protected:billing (`ca auth login --scope protected:billing`, then `ca auth elevate`)
 ca transaction list
 ca backup-policy list
 ca backup-window list
@@ -147,8 +147,8 @@ ca api GET /v1/account   # any /v1 call
 
 Every command has `--help`. The conventions:
 
-- **Names or ids.** Where a command takes a VM, VPC, SSH key, VIP or placement group, a name works as
-  well as an id. A name that matches nothing is refused; one that matches several is refused with their ids.
+- **Names or ids.** Where a command takes a VM, VPC, SSH key, VIP, placement group, bucket, access key or project, a
+  name works as well as an id; a member is named by email and a support ticket by its reference number. A name that matches nothing is refused; one that matches several is refused with their ids.
   When the names cannot be listed (the credential lacks the scope, say), the value is used as an id.
 - **Waiting.** A command that starts an operation waits for it, printing progress on a terminal, and
   exits 1 if it fails. `--no-wait` prints the operation and returns; `ca operation wait` follows it later.
