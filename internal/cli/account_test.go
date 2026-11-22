@@ -88,8 +88,11 @@ func TestActivityModesDoNotMix(t *testing.T) {
 	for _, args := range [][]string{
 		{"activity", "list", "--types", "vm", "--subject-type", "vm"},
 		{"activity", "list", "--subject-id", "vm-1", "--types", "vm"},
+		{"activity", "list", "--subject-type", "vm"},
+		{"activity", "list", "--subject-id", "vm-1"},
+		{"activity", "list", "--subject-type", "vm", "--subject-id", ""},
 	} {
-		if code := h.run(args...); code != ExitUsage || len(h.fake.ReadURLs) != 0 || !strings.Contains(h.stderr.String(), "cannot be combined") {
+		if code := h.run(args...); code != ExitUsage || len(h.fake.ReadURLs) != 0 || h.stderr.Len() == 0 {
 			t.Errorf("%v: exit %d, reads %d\n%s", args, code, len(h.fake.ReadURLs), h.stderr)
 		}
 	}
@@ -290,7 +293,7 @@ func TestSupportTicketCommands(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/support/tickets":                      {Body: ticketList},
-		"GET /v1/support/tickets/t-1":                  {Body: `{"ticket":{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B","updatedAt":"2026-11-20T09:30:00Z"},"messages":[{"id":"m-1"},{"id":"m-2"}]}`},
+		"GET /v1/support/tickets/t-1":                  {Body: `{"ticket":{"id":"t-1","reference":1234,"subject":"Backup failed","status":"open","raisedByName":"Jo B","updatedAt":"2026-11-20T09:30:00Z"},"descriptionHtml":"<p>Hi</p>","messages":[{"id":"m-1","body":"on it"},{"id":"m-2","body":"see you soon"}]}`},
 		"POST /v1/support/tickets":                     {Status: 201, Body: `{"id":"t-3","reference":1236,"subject":"New","status":"open"}`},
 		"POST /v1/support/tickets/t-1/replies":         {Body: `{"id":"t-1","reference":1234,"status":"open"}`},
 		"POST /v1/support/tickets/t-1/actions/resolve": {Body: `{"id":"t-1","reference":1234,"status":"resolved"}`},
@@ -303,9 +306,9 @@ func TestSupportTicketCommands(t *testing.T) {
 	if want := "GET /v1/support/tickets?limit=200&q=backup&status=open&status=waiting-on-you"; !readURL(h, want) {
 		t.Errorf("reads %v, want %s", h.fake.ReadURLs, want)
 	}
-	head, rows = table(h, "support", "ticket", "get", "1234")
-	if head != "REFERENCE ID SUBJECT STATUS RAISED BY UPDATED MESSAGES" || rows != row("1234", "t-1", "Backup failed", "open", "Jo B", stamp("2026-11-20T09:30:00Z"), "2") {
-		t.Errorf("ticket get %q %s", head, rows)
+	h.mustRun("support", "ticket", "get", "1234", "-o", "table")
+	if out := h.stdout.String(); !strings.Contains(out, "see you soon") || !strings.Contains(out, "Hi") {
+		t.Errorf("ticket get hides the conversation:\n%s", out)
 	}
 	h.mustRun("support", "ticket", "get", "1234", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "t-1" {

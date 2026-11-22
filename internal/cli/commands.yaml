@@ -561,14 +561,6 @@ columns:
       - {header: UPDATED, path: updatedAt, format: time}
   PublicSupportTicketDetailDto:
     id: ticket.id
-    columns:
-      - {header: REFERENCE, path: ticket.reference}
-      - {header: ID, path: ticket.id}
-      - {header: SUBJECT, path: ticket.subject}
-      - {header: STATUS, path: ticket.status}
-      - {header: RAISED BY, path: ticket.raisedByName}
-      - {header: UPDATED, path: ticket.updatedAt, format: time}
-      - {header: MESSAGES, path: messages, format: count}
   PublicTransactionDto:
     id: number
     columns:

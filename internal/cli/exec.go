@@ -716,9 +716,10 @@ func (a *App) runList(ctx context.Context, s *session, pr output.Printer, op cmd
 // printRaw prints one response body: verbatim for json/yaml, through the column set for a table.
 func printRaw(pr output.Printer, columns string, body []byte) error {
 	cs, ok := genColumns[columns]
-	if !ok {
+	if !ok || len(cs.Columns) == 0 {
 		res := output.Result{Value: json.RawMessage(body)}
-		if id := cmp.Or(field(decode(body), "id"), field(decode(body), "userId")); id != "" {
+		v := decode(body)
+		if id := cmp.Or(field(v, cs.ID), field(v, "id"), field(v, "userId")); id != "" {
 			res.IDs = []string{id}
 		}
 		if pr.Format == output.Table && !pr.Quiet {
@@ -923,8 +924,19 @@ func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, val
 	return "", false, usageErr(errors.New(b.String()))
 }
 
-// exclusiveGiven refuses flags from two different op.Exclusive groups.
+// exclusiveGiven refuses flags from two different op.Exclusive groups, and a
+// group of several flags unless all of them are given and none is blank.
 func exclusiveGiven(op cmdspec.Op, f *pflag.FlagSet) error {
+	for _, grp := range op.Exclusive {
+		if len(grp) < 2 || !slices.ContainsFunc(grp, f.Changed) {
+			continue
+		}
+		for _, name := range grp {
+			if v := f.Lookup(name); !f.Changed(name) || strings.TrimSpace(v.Value.String()) == "" {
+				return fmt.Errorf("--%s go together and none may be blank", strings.Join(grp, ", --"))
+			}
+		}
+	}
 	first := ""
 	for _, grp := range op.Exclusive {
 		for _, name := range grp {
