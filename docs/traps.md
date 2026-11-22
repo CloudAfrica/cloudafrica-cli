@@ -45,3 +45,19 @@ Author misses the PR review caught. Check these before opening a PR.
   closes the shell, pinned by the test's sentinel), and `Set-StrictMode -Off` inside the function.
 - **Validate a downloaded binary before it replaces anything**; a broken one installed over ours
   then reads as a foreign program and blocks the next install.
+- **Split an error by kind before choosing the remedy.** `MkdirTemp` failing as permission denied
+  earns "run with sudo"; every other cause returns the wrapped error. One branch for both told a
+  full disk to use sudo (`ca update`, #10).
+- **A zero-value enum must not mean an outcome.** `State` starts at `iota + 1`, so an unset result
+  matches no reported state.
+- **A probe that fails has two answers:** it ran and exited non-zero (not ours, leave it quietly),
+  or it never started or timed out (unknown, warn). Folding both into one answer warns about a
+  foreign program or overwrites an unknown one.
+- **A child process gets no credentials it does not need.** Strip `CLOUDAFRICA_*` from anything
+  `ca` runs that is not `ca` doing the user's request, such as a version probe of a sibling binary
+  (Copilot, #10).
+- **Name the command the way the user invoked it.** A notice or remedy uses `a.exe()`, so a user
+  running `cloudafrica` is not told to run `ca`, which may be another program (Copilot, #10).
+- **A rename keeps the source's mtime;** age a renamed file by a timestamp in its name, not by its
+  ModTime. Any cleanup that may run while another process is mid-swap leaves young files alone
+  (Copilot, #10).
