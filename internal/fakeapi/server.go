@@ -95,6 +95,12 @@ type Server struct {
 	SSHKeys          []map[string]any
 	VPCs             []map[string]any
 	Datacenters      []map[string]any
+	PlacementGroups  []map[string]any
+	// Canned answers "METHOD path" ahead of every other /v1 route.
+	Canned map[string]Canned
+	// Require maps a path prefix to the scope it needs; a request that holds
+	// it and matches no route answers 200 {}.
+	Require map[string]string
 	// Clusters are the Kubernetes clusters; a "nodes" entry is served only
 	// by get, as the detail's nodes.
 	Clusters []map[string]any
@@ -114,6 +120,12 @@ type Server struct {
 	// a problem from 400 up, else KubeconfigBody.
 	KubeconfigStatus int
 	KubeconfigBody   string
+}
+
+// Canned is a fixed answer: Status (default 200) and Body, which is JSON or "".
+type Canned struct {
+	Status int
+	Body   string
 }
 
 // ClusterToken is the token the fake mints for a cluster.
@@ -159,6 +171,11 @@ func New(t testing.TB) *Server {
 		refresh:    map[string]*Grant{},
 		spent:      map[string]bool{},
 		OpStates:   map[string][]string{},
+		// Seeds the ids the tests name, so name resolution finds them.
+		VMs:             []map[string]any{{"id": "vm-1", "name": "web-1", "status": "stopped"}},
+		VPCs:            []map[string]any{{"id": "vpc-1", "name": "main"}},
+		SSHKeys:         []map[string]any{{"id": "k1", "name": "laptop"}, {"id": "k2", "name": "ci"}},
+		PlacementGroups: []map[string]any{{"id": "pg-1", "name": "spread"}},
 	}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
 	t.Cleanup(s.Close)
@@ -383,17 +400,39 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(p, "/v1/vpcs/") && r.Method == http.MethodDelete {
 		need = "protected:network"
 	}
+	required := false
+	for prefix, scope := range s.Require {
+		if strings.HasPrefix(p, prefix) {
+			need, required = scope, true
+		}
+	}
 	if p != "/v1/account" && p != "/v1/elevation-requests" && !g.Has(need) {
 		insufficientScope(w, need)
 		return
 	}
+	if c, ok := s.Canned[r.Method+" "+p]; ok {
+		status := c.Status
+		if status == 0 {
+			status = 200
+		}
+		if c.Body != "" {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, c.Body)
+		return
+	}
 	switch {
+	case required:
+		writeJSON(w, 200, map[string]any{})
 	case p == "/v1/elevation-requests" && r.Method == http.MethodPost:
 		s.elevationRequest(w, r, tok, g)
 	case p == "/v1/ssh-keys" && r.Method == http.MethodGet:
 		page(w, r, s.SSHKeys)
 	case p == "/v1/vpcs" && r.Method == http.MethodGet:
 		page(w, r, s.VPCs)
+	case p == "/v1/placement-groups" && r.Method == http.MethodGet:
+		page(w, r, s.PlacementGroups)
 	case p == "/v1/placement-groups/datacenters" && r.Method == http.MethodGet:
 		writeJSON(w, 200, map[string]any{"data": orEmpty(s.Datacenters)})
 	case p == "/v1/account":
@@ -525,6 +564,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		op := map[string]any{"id": id, "kind": "vm.action", "state": state}
 		if strings.HasPrefix(id, "op/create-") && state == "complete" {
 			op["createdResource"] = map[string]any{"id": "vm-new"}
+		}
+		if state == "running" {
+			op["progressPct"], op["progressMessage"] = 40, "copying"
 		}
 		if state == "failed" {
 			op["error"] = map[string]any{"kind": "fault", "message": "it broke"}

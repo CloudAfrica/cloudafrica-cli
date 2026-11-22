@@ -17,36 +17,24 @@ import (
 
 const defaultWaitTimeout = 10 * time.Minute
 
-// waitFlags are --wait and --timeout on an async command.
+// waitFlags are --no-wait and --timeout on an async command, which waits by default.
 type waitFlags struct {
-	wait    bool
+	noWait  bool
 	timeout time.Duration
+	// cancelled makes a cancelled operation the outcome waited for (`operation cancel`).
+	cancelled bool
 }
 
-func (w *waitFlags) bind(cmd *cobra.Command, withWait bool) {
-	if withWait {
-		cmd.Flags().BoolVar(&w.wait, "wait", false, "wait for the operation to finish")
+func (w *waitFlags) bind(cmd *cobra.Command, withNoWait bool) {
+	if withNoWait {
+		cmd.Flags().BoolVar(&w.noWait, "no-wait", false, "print the operation and return without waiting for it")
 	}
 	cmd.Flags().DurationVar(&w.timeout, "timeout", defaultWaitTimeout, "how long to wait for the operation")
 }
 
 func (a *App) operationCmd() *cobra.Command {
-	cmd := group("operation", "Inspect asynchronous operations")
+	cmd := group("operation", "Inspect and cancel asynchronous operations")
 	cmd.Aliases = []string{"op"}
-	get := &cobra.Command{
-		Use:   "get OPERATION_ID",
-		Short: "Show an operation",
-		Args:  exactArgs(1, "OPERATION_ID"),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.withSession(cmd.Context(), func(s *session) error {
-				op, err := getOperation(cmd.Context(), s, args[0])
-				if err != nil {
-					return err
-				}
-				return a.printOperation(op)
-			})
-		},
-	}
 	var wf waitFlags
 	wait := &cobra.Command{
 		Use:   "wait OPERATION_ID",
@@ -54,12 +42,12 @@ func (a *App) operationCmd() *cobra.Command {
 		Args:  exactArgs(1, "OPERATION_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.withSession(cmd.Context(), func(s *session) error {
-				return a.waitAndPrint(cmd.Context(), s, args[0], wf.timeout)
+				return a.waitAndPrint(cmd.Context(), s, args[0], wf)
 			})
 		},
 	}
 	wf.bind(wait, false)
-	cmd.AddCommand(get, wait)
+	cmd.AddCommand(wait)
 	return cmd
 }
 
@@ -121,21 +109,26 @@ func (a *App) printOperation(op *cloudafrica.Operation) error {
 	return pr.Print(output.Result{Value: op, Headers: operationHeaders, Rows: [][]string{operationRow(op)}, IDs: []string{id}})
 }
 
-// waitAndPrint polls an operation until it finishes or timeout passes. A
-// failed or cancelled operation prints and returns its error; running out of
-// time returns a deadline error (exit 3).
-func (a *App) waitAndPrint(ctx context.Context, s *session, id string, timeout time.Duration) error {
+// waitAndPrint polls an operation until it finishes or timeout passes,
+// writing its progress to stderr on a terminal. A failed or cancelled
+// operation prints and returns its error; running out of time returns a
+// deadline error (exit 3).
+func (a *App) waitAndPrint(ctx context.Context, s *session, id string, wf waitFlags) error {
+	timeout := wf.timeout
 	if timeout <= 0 {
 		timeout = defaultWaitTimeout
 	}
 	wctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	op, err := s.client.WaitForOperation(wctx, cloudafrica.OperationPath(strings.TrimLeft(id, "/")))
+	op, err := a.pollOperation(wctx, s, id)
 	if err != nil {
 		var oe *cloudafrica.OperationError
 		if errors.As(err, &oe) && op != nil {
 			if perr := a.printOperation(op); perr != nil {
 				return perr
+			}
+			if wf.cancelled && oe.State == "cancelled" {
+				return nil
 			}
 			return err
 		}
@@ -148,13 +141,72 @@ func (a *App) waitAndPrint(ctx context.Context, s *session, id string, timeout t
 	return a.printOperation(op)
 }
 
-// accepted prints a 202's operation, or waits for it with --wait.
+const (
+	pollStart = 2 * time.Second
+	pollCap   = 10 * time.Second
+)
+
+// pollOperation reads the operation until it is complete (nil error), failed
+// or cancelled (an *OperationError with the operation), or ctx ends.
+func (a *App) pollOperation(ctx context.Context, s *session, id string) (*cloudafrica.Operation, error) {
+	delay, ceiling := pollStart, pollCap
+	if a.OperationPoll > 0 {
+		delay, ceiling = a.OperationPoll, a.OperationPoll
+	}
+	last := ""
+	for {
+		op, err := getOperation(ctx, s, id)
+		if err != nil {
+			return nil, err
+		}
+		state := strings.ToLower(output.S(op.State))
+		if a.TTY && !a.quiet {
+			if p := progressLine(op); p != last {
+				fmt.Fprintln(a.Stderr, p)
+				last = p
+			}
+		}
+		switch state {
+		case "complete":
+			return op, nil
+		case "pending", "running":
+		case "failed", "cancelled":
+			oe := &cloudafrica.OperationError{ID: id, State: state}
+			if op.Error != nil {
+				oe.Kind = output.S(op.Error.Kind)
+				oe.Message = output.S(op.Error.Message)
+			}
+			return op, oe
+		default:
+			return op, fmt.Errorf("operation %s has unexpected state %q", id, state)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, ceiling)
+	}
+}
+
+func progressLine(op *cloudafrica.Operation) string {
+	line := output.S(op.Kind) + ": " + strings.ToLower(output.S(op.State))
+	if op.ProgressPct != nil {
+		line += fmt.Sprintf(" %d%%", *op.ProgressPct)
+	}
+	if m := output.S(op.ProgressMessage); m != "" {
+		line += " " + m
+	}
+	return line
+}
+
+// accepted waits for a 202's operation, or prints it with --no-wait.
 func (a *App) accepted(ctx context.Context, s *session, opID string, wf waitFlags) error {
 	if opID == "" {
 		return errors.New("the API accepted the request but returned no operation id")
 	}
-	if wf.wait {
-		return a.waitAndPrint(ctx, s, opID, wf.timeout)
+	if !wf.noWait {
+		return a.waitAndPrint(ctx, s, opID, wf)
 	}
 	pr, err := a.printer()
 	if err != nil {

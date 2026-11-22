@@ -64,15 +64,23 @@ func refusedScope(err error) string {
 	return requiredScope(e)
 }
 
-// loginGrants reports whether `ca auth login` requests scope, so that
-// signing in again can add it. An unknown scope ("") counts as yes.
+// loginGrants reports whether signing in again can add scope: it can for any
+// scope, a non-default one through --scope. An unknown scope ("") counts as yes.
 func loginGrants(scope string) bool {
-	return scope == "" || slices.Contains(defaultScopes, scope)
+	return scope == "" || strings.Contains(scope, ":")
 }
 
-// errNoProtectedScope refuses to pair a sign-in that was not granted
-// protected:compute: pairing cannot add the scope.
-var errNoProtectedScope = errors.New("this sign-in was not granted protected:compute, so pairing it would not " +
+// loginFlag is the `ca auth login` flag that requests scope ("" for a default one).
+func loginFlag(scope string) string {
+	if scope == "" || slices.Contains(defaultScopes, scope) {
+		return ""
+	}
+	return " --scope " + scope
+}
+
+// errNoProtectedScope refuses to pair a sign-in that was not granted any
+// protected: scope: pairing cannot add one.
+var errNoProtectedScope = errors.New("this sign-in was not granted any protected: scope, so pairing it would not " +
 	"allow protected actions")
 
 // stepUpSlug reports whether err is the gateway refusing a protected action:
@@ -189,7 +197,7 @@ func scopeHint(scope string, envToken, protected bool) string {
 			"CLOUDAFRICA_TOKEN, then pair it with `ca auth elevate`."
 	case protected && envToken:
 		return "CLOUDAFRICA_TOKEN was not granted " + named + "; use a token that has it, then `ca auth elevate`. " +
-			"Or unset it, run `ca auth login`, then `ca auth elevate`."
+			"Or unset it, run `ca auth login" + loginFlag(scope) + "`, then `ca auth elevate`."
 	case envToken && scope == "":
 		return "CLOUDAFRICA_TOKEN was not granted a scope this action needs; use a token that has it."
 	case envToken:
@@ -206,5 +214,6 @@ func scopeHint(scope string, envToken, protected bool) string {
 		return "This sign-in was not granted a scope this action needs. Run `ca auth login` and tick every scope " +
 			"on the consent page" + then + "."
 	}
-	return "This sign-in was not granted " + scope + ". Run `ca auth login` and tick it on the consent page" + then + "."
+	return "This sign-in was not granted " + scope + ". Run `ca auth login" + loginFlag(scope) +
+		"` and tick it on the consent page" + then + "."
 }

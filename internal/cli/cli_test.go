@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
+	"github.com/CloudAfrica/cloudafrica-cli/internal/gen"
 	"github.com/CloudAfrica/cloudafrica-cli/internal/profile"
 )
 
@@ -78,18 +79,19 @@ func (h *harness) run(args ...string) int {
 		stdout = failWriter{}
 	}
 	h.app = &App{
-		Version:      "0.1.0",
-		Stdout:       stdout,
-		Stderr:       h.stderr,
-		Stdin:        strings.NewReader(h.stdin),
-		Getenv:       func(k string) string { return h.env[k] },
-		TTY:          h.tty,
-		OpenBrowser:  open,
-		Store:        h.store,
-		CacheDir:     h.cacheDir,
-		LoginTimeout: lt,
-		Executable:   h.executable,
-		ElevatePoll:  10 * time.Millisecond,
+		Version:       "0.1.0",
+		Stdout:        stdout,
+		Stderr:        h.stderr,
+		Stdin:         strings.NewReader(h.stdin),
+		Getenv:        func(k string) string { return h.env[k] },
+		TTY:           h.tty,
+		OpenBrowser:   open,
+		Store:         h.store,
+		CacheDir:      h.cacheDir,
+		LoginTimeout:  lt,
+		Executable:    h.executable,
+		ElevatePoll:   10 * time.Millisecond,
+		OperationPoll: time.Millisecond,
 		ElevateTimeout: func() time.Duration {
 			if h.elevateTimeout > 0 {
 				return h.elevateTimeout
@@ -122,7 +124,7 @@ func (h *harness) seed(name string, g *fakeapi.Grant, expiry time.Time) *profile
 }
 
 func compute() *fakeapi.Grant {
-	return &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute"}}
+	return &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute", "read:network", "read:ssh-keys"}}
 }
 
 // protected holds every default scope but is not paired.
@@ -148,7 +150,9 @@ func TestLoginStoresProfileWithPKCEAndAccount(t *testing.T) {
 		t.Error("stored access token is not one the server issued")
 	}
 	q := h.fake.Authorizations[0]
-	if q.Get("scope") != "read:compute write:compute protected:compute read:network read:ssh-keys" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" {
+	scope := q.Get("scope")
+	if scope != strings.Join(defaultScopes, " ") || strings.Contains(scope, "sandbox") ||
+		strings.Contains(scope, "write:billing") || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" {
 		t.Errorf("authorize query = %v", q)
 	}
 	if runtime.GOOS != "windows" {
@@ -220,7 +224,7 @@ func TestLoginWarnsWhenScopeNotGranted(t *testing.T) {
 	h := newHarness(t)
 	h.fake.GrantScopes = func([]string) []string { return []string{"read:compute"} }
 	h.mustRun("auth", "login")
-	if !strings.Contains(h.stderr.String(), "not granted: write:compute") {
+	if !strings.Contains(h.stderr.String(), "write:compute") {
 		t.Errorf("no warning: %s", h.stderr)
 	}
 }
@@ -352,7 +356,7 @@ func TestWaitPrintsCreatedResource(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
 	h.mustRun("vm", "create", "--name", "web", "--datacenter", "jb1", "--image", "img", "--vpc", "vpc-1",
-		"--vcpu", "2", "--ram-gib", "4", "--boot-disk-gib", "20", "--accept-terms", "--wait", "-q")
+		"--vcpu", "2", "--ram-gib", "4", "--boot-disk-gib", "20", "--accept-terms", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "vm-new" {
 		t.Errorf("stdout = %q, want the created VM id", got)
 	}
@@ -362,7 +366,7 @@ func TestWaitTimeoutExitsTimeout(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
 	h.fake.OpStates["op/start-vm-1"] = []string{"running"}
-	if code := h.run("vm", "start", "vm-1", "--wait", "--timeout", "300ms"); code != ExitTimeout {
+	if code := h.run("vm", "start", "vm-1", "--timeout", "300ms"); code != ExitTimeout {
 		t.Fatalf("exit = %d, want %d; %s", code, ExitTimeout, h.stderr)
 	}
 }
@@ -371,7 +375,7 @@ func TestWaitFailedOperationExitsAPI(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
 	h.fake.OpStates["op/start-vm-1"] = []string{"failed"}
-	if code := h.run("vm", "start", "vm-1", "--wait", "-o", "json"); code != ExitAPI {
+	if code := h.run("vm", "start", "vm-1", "-o", "json"); code != ExitAPI {
 		t.Fatalf("exit = %d", code)
 	}
 	if !strings.Contains(h.stdout.String(), "it broke") || !strings.Contains(h.stderr.String(), "it broke") {
@@ -463,7 +467,7 @@ func TestDeleteWithoutYesOffTerminalIsUsageError(t *testing.T) {
 func TestAPIErrorExits1AndUsageExits2(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
-	if code := h.run("vm", "get", "missing"); code != ExitAPI {
+	if code := h.run("vm", "get", "00000000-0000-0000-0000-000000000000"); code != ExitAPI {
 		t.Errorf("404: exit = %d", code)
 	}
 	for _, args := range [][]string{{"vm", "get"}, {"bogus"}, {"vm", "bogus"}, {"vm", "list", "--nope"}, {"vm", "list", "-o", "xml"}} {
@@ -495,5 +499,28 @@ func TestLogoutRevokesAndDeletes(t *testing.T) {
 	}
 	if _, err := h.store.Load("default"); err == nil {
 		t.Error("profile still present")
+	}
+}
+
+func TestHandwrittenCommandsExist(t *testing.T) {
+	b, err := os.ReadFile("commands.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ov, err := gen.ParseOverlay(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ov.Handwritten) == 0 {
+		t.Fatal("commands.yaml lists no hand-written commands")
+	}
+	h := newHarness(t)
+	h.run("--help")
+	root := h.app.Root()
+	for id, path := range ov.Handwritten {
+		args := strings.Fields(path)
+		if c, rest, err := root.Find(args); err != nil || len(rest) != 0 || c.Name() != args[len(args)-1] {
+			t.Errorf("%s: no command %q", id, path)
+		}
 	}
 }

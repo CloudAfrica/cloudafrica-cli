@@ -45,6 +45,8 @@ type App struct {
 	// ElevatePoll and ElevateTimeout pace `ca auth elevate` (0: 2 s and 5 min).
 	ElevatePoll    time.Duration
 	ElevateTimeout time.Duration
+	// OperationPoll paces every operation wait (0: from 2 s, doubling to 10 s).
+	OperationPoll time.Duration
 	// Exe is the name the CLI was run as ("" means "ca"); a kubeconfig from
 	// `ca k8s kubeconfig` runs it again.
 	Exe string
@@ -216,7 +218,7 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 			if !a.confirm("Sign in again in the browser now (`ca auth login`)?") {
 				return err
 			}
-			if lerr := a.login(ctx, s.name); lerr != nil {
+			if lerr := a.login(ctx, s.name, refusedScope(err)); lerr != nil {
 				return lerr
 			}
 			signedIn = true
@@ -263,8 +265,8 @@ func (a *App) Root() *cobra.Command {
 	pf.StringVarP(&a.outputFlag, "output", "o", "", "output format: table, json or yaml (default table on a terminal, json otherwise)")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "print ids only")
 
-	root.AddCommand(a.authCmd(), a.vmCmd(), a.k8sCmd(), a.sshKeyCmd(), a.vpcCmd(), a.datacenterCmd(), a.operationCmd(),
-		a.apiCmd(), a.updateCmd(), a.versionCmd())
+	root.AddCommand(a.authCmd(), a.vmCmd(), a.k8sCmd(), a.operationCmd(), a.apiCmd(), a.updateCmd(), a.versionCmd())
+	a.addGenerated(root)
 	return root
 }
 

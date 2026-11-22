@@ -22,10 +22,13 @@ const Default = "default"
 // Profile is one account's sign-in. One profile is one account: a grant is
 // bound to the single account picked on the consent page.
 type Profile struct {
-	Endpoint     string    `json:"endpoint"`
-	AccountID    string    `json:"accountId,omitempty"`
-	AccountName  string    `json:"accountName,omitempty"`
-	Scope        string    `json:"scope,omitempty"`
+	Endpoint    string `json:"endpoint"`
+	AccountID   string `json:"accountId,omitempty"`
+	AccountName string `json:"accountName,omitempty"`
+	Scope       string `json:"scope,omitempty"`
+	// ExtraScopes were added with `ca auth login --scope`; every later
+	// sign-in of this profile requests them again.
+	ExtraScopes  []string  `json:"extraScopes,omitempty"`
 	AccessToken  string    `json:"accessToken"`
 	Expiry       time.Time `json:"expiry"`
 	RefreshToken string    `json:"refreshToken,omitempty"`

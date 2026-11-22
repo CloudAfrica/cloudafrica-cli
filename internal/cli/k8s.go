@@ -212,7 +212,8 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 		Long: "Upgrades every worker to a Kubernetes version and its Talos version, one node at a time. Each node " +
 			"drains, so a workload with one replica is down while its node restarts. Without --version it takes the " +
 			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says so and exits 0 if the " +
-			"workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE, else 1; with --wait only CURRENT exits 0.",
+			"workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE, else 1; when waiting (the default, unlike --no-wait) " +
+			"only CURRENT exits 0.",
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
@@ -231,7 +232,7 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 						return err
 					}
 					if t == "" {
-						if wf.wait && note != workersCurrent {
+						if !wf.noWait && note != workersCurrent {
 							return errors.New(note + "; there is nothing to wait for")
 						}
 						fmt.Fprintln(a.Stderr, note)
@@ -259,7 +260,7 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 				fmt.Fprintf(a.Stderr, "Upgrading the workers of %s to %s\n", id, target)
 				if !ok {
 					// Accepted with no operation to follow.
-					if wf.wait {
+					if !wf.noWait {
 						return fmt.Errorf("there is no operation to wait for; `ca k8s get %s` shows the upgrade", id)
 					}
 					fmt.Fprintf(a.Stderr, "There is no operation to follow; `ca k8s get %s` shows the upgrade.\n", id)

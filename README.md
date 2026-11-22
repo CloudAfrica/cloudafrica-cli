@@ -48,7 +48,8 @@ cosign signature. To go back to an earlier release, rerun the install script wit
 
 ```sh
 ca auth login     # opens the browser
-ca auth elevate   # allow protected actions (vm delete, k8s upgrade-workers) for this sign-in
+ca auth login --scope write:billing   # also request a scope login does not ask for by default
+ca auth elevate   # allow protected actions (such as vm delete, k8s upgrade-workers) for this sign-in
 ca auth status
 ca auth list
 ca auth logout
@@ -60,7 +61,8 @@ on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE
 Signing in grants scopes but never allows protected actions. `ca auth elevate` opens a portal page
 where you step up and confirm the code it prints; the sign-in may then use protected actions for the
 account's elevation window. Connected apps → "Allow protected actions" in the portal does the same.
-A sign-in made before `ca auth login` requested protected:compute must sign in again first.
+A sign-in made before `ca auth login` requested a protected: scope must sign in again first. Scopes
+added with `--scope` are kept, and requested again by every later `ca auth login` on that profile.
 
 For automation, `CLOUDAFRICA_TOKEN` (a user API token) overrides any profile. `CLOUDAFRICA_ENDPOINT`
 selects another API endpoint, which must be https (plain http only to a loopback address); a profile
@@ -68,7 +70,7 @@ can only be used against the endpoint it signed in to.
 
 ## Scripts
 
-A script uses `CLOUDAFRICA_TOKEN`. For protected actions (`vm delete`, `k8s upgrade-workers`) the token must hold the
+A script uses `CLOUDAFRICA_TOKEN`. For protected actions (such as `vm delete` and `k8s upgrade-workers`) the token must hold the
 protected scope, and a person pairs it before the run:
 
 ```sh
@@ -96,43 +98,65 @@ is set. The pairing lasts for the account's elevation window and only while that
 session does. Run `ca auth elevate` again with the variable still set to pair the same value. The
 secret is useless without the token, but treat it as one: do not log it or commit it.
 
-## Virtual machines
+## Commands
 
 ```sh
-ca datacenter list   # slugs for --datacenter
-ca vpc list          # ids for --vpc
-ca ssh-key list      # ids for --ssh-key
+ca datacenter list
+ca os-image list
+ca vpc list
+ca ssh-key list|create|update|delete
 ca vm list
-ca vm get <id>
-ca vm create --name web --datacenter <dc-slug> --image <image-id> --vpc <vpc> \
-  --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key <key-id> --accept-terms --wait
-ca vm start|shutdown|reboot|force-stop <id> [--wait] [--timeout 10m]
-ca vm resize <id> --vcpu 4 --ram-gib 8
-ca vm rename <id> <name>
-ca vm delete <id> --yes   # the VM must be stopped
-ca operation get|wait <operation-id>
+ca vm get web-01
+ca vm create --name web-01 --datacenter <dc-slug> --image <image-id> --vpc main \
+  --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key laptop --accept-terms
+ca vm start|shutdown|reboot|force-stop|restore web-01 [--no-wait] [--timeout 10m]
+ca vm resize web-01 --vcpu 4 --ram-gib 8
+ca vm rename web-01 --name db-01
+ca vm delete web-01   # the VM must be stopped
+ca vm disk|nic|public-ip|private-ip|ssh-key|vip|firewall-rule ... --vm web-01
+ca vm backup list|create|delete|restore-to-new-vm|set-protection --vm web-01
+ca vm backup-policy get|set|delete|preview-rotation --vm web-01
+ca placement-group list|get|create|delete
+ca placement-group member add|remove web-01 --placement-group spread
+ca operation get|wait|cancel <operation-id>
 ca api GET /v1/account   # any /v1 call
 ```
 
-Output is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only.
+Every command has `--help`. The conventions:
+
+- **Names or ids.** Where a command takes a VM, VPC, SSH key, VIP or placement group, a name works as
+  well as an id. A name that matches nothing is refused; one that matches several is refused with their ids.
+  When the names cannot be listed (the credential lacks the scope, say), the value is used as an id.
+- **Waiting.** A command that starts an operation waits for it, printing progress on a terminal, and
+  exits 1 if it fails. `--no-wait` prints the operation and returns; `ca operation wait` follows it later.
+- **Confirmation.** Deletes and protected actions ask first on a terminal; off a terminal they need `--yes`.
+  `k8s upgrade-workers` and `ca api` do not ask.
+- **Request bodies.** Flags set the top-level fields; `-d/--data` takes the whole JSON body (`-d @file.json`
+  or `-d @-` for stdin), and flags given with it win. `vm create` and the `k8s` commands take flags only;
+  `ca api` takes `-d` alone.
+- **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
+  `--cursor <next>`.
+- **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only.
+  JSON and YAML are the API's response as returned, except that a list followed across pages prints its
+  rows as one array (`--limit` prints the page as returned).
 
 ## Kubernetes
 
 ```sh
 ca k8s list               # UPGRADE: the workers' upgrade state
 ca k8s get <id>           # versions, upgrade state and deadlines, worker targets, nodes
-ca k8s upgrade-workers <id> [--version v1.33.1] [--wait] [--timeout 30m]
+ca k8s upgrade-workers <id> [--version v1.33.1] [--no-wait] [--timeout 30m]
 ca k8s kubeconfig <id> [--managed-vpn] > prod.kubeconfig
 ca k8s token <id>         # the 15-minute credential kubectl reads; the kubeconfig runs it
 ```
 
 `ca kubernetes` is the same command. `upgrade-workers` is a protected action. Each worker drains and
 restarts in turn, so a workload with one replica is down while its node restarts. Without `--version`
-it takes the newest worker target. If there is none, it says so on stderr and exits 0 when the workers
-are CURRENT, DEADLINE or UPGRADE_AVAILABLE (worker targets never go past the control plane's version),
-so a scheduled run stays quiet until a target is offered. Any other state with no target exits 1, and
-so does `--wait` unless the workers are CURRENT. Running it again after an upgrade finishes starts the
-next one, if there is a newer target.
+it takes the newest worker target. If there is none, it says so on stderr. With `--no-wait` it then
+exits 0 when the workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE (worker targets never go past the
+control plane's version), so a scheduled `--no-wait` run stays quiet until a target is offered. Any other
+state with no target exits 1, and so does waiting (the default) unless the workers are CURRENT.
+Running it again after an upgrade finishes starts the next one, if there is a newer target.
 
 `ca k8s kubeconfig` prints the cluster's kubeconfig with its user set to run `ca k8s token`, in place of
 the downloaded `sh -c curl` command, so it also works on native Windows. It holds no credential. kubectl
@@ -156,8 +180,8 @@ KUBECONFIG=prod.kubeconfig kubectl get nodes
 | 0 | success |
 | 1 | API error, or a failed operation |
 | 2 | usage error, or `ca update` refused (a development build, or a directory it cannot write to) |
-| 3 | `--wait` timed out, `ca auth elevate` was not confirmed in 5 minutes, or `ca update` timed out reaching GitHub |
+| 3 | waiting for an operation timed out (`--timeout`), `ca auth elevate` was not confirmed in 5 minutes, or `ca update` timed out reaching GitHub |
 | 4 | not signed in, or the session ended (`ca auth login`) |
-| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope); a scope `ca auth login` does not request needs a user API token that has it (see Scripts) |
+| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope) |
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

@@ -1,0 +1,253 @@
+# The overlay on the SDK's openapi.json that `go generate ./...` (internal/gen)
+# turns into commands_gen.go. An operation not hand-written, excluded or pending
+# here is generated, and generation fails if it cannot be (no column set, say).
+
+nouns:
+  network-interfaces: nic
+  kubernetes: k8s
+
+groups:
+  vm: Manage virtual machines
+  vm backup: Manage a VM's backups
+  vm backup-policy: Manage a VM's backup policy
+  vm disk: Manage a VM's disks
+  vm firewall-rule: Manage a VM's firewall rules
+  vm nic: Manage a VM's network interfaces
+  vm private-ip: Manage a VM's private IP addresses
+  vm public-ip: Manage a VM's public IP addresses
+  vm ssh-key: Manage the SSH keys on a VM
+  vm vip: Manage a VM's virtual IP membership
+  ssh-key: Manage SSH keys
+  vpc: Manage VPCs
+  datacenter: List datacenters
+  os-image: List OS images
+  operation: Inspect and cancel asynchronous operations
+  placement-group: Manage placement groups
+  placement-group member: Manage a placement group's members
+
+resources:
+  vm: {noun: VM, list: /v1/vms, match: name, idPattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'}
+  vpc: {noun: VPC, list: /v1/vpcs, match: name}
+  vip: {noun: VIP, list: /v1/vips, match: name}
+  ssh-key: {noun: SSH key, list: /v1/ssh-keys, match: name}
+  placement-group: {noun: placement group, list: /v1/placement-groups, match: name}
+
+params:
+  /v1/vms/{id}: {resource: vm}
+  /v1/vms/{id}/ssh-keys/{keyId}: {resource: ssh-key}
+  /v1/vms/{id}/vips/{vipId}: {resource: vip}
+  /v1/vms/{id}/backups/{startedAt}: {convert: epoch, help: "the backup's start time: RFC 3339 or epoch seconds"}
+  /v1/ssh-keys/{id}: {resource: ssh-key}
+  /v1/placement-groups/{id}: {resource: placement-group}
+  /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
+
+handwritten:
+  createVm: vm create
+  listKubernetesClusters: k8s list
+  getKubernetesCluster: k8s get
+  upgradeKubernetesClusterWorkers: k8s upgrade-workers
+  createKubernetesClusterToken: k8s token
+  getKubernetesClusterKubeconfig: k8s kubeconfig
+
+exclude:
+  - {prefix: /v1/kubernetes, reason: k8s lifecycle and node metrics are deferred}
+  - {prefix: /v1/ai, reason: AI sandboxes are their own product}
+  - {prefix: /v1/cards, reason: payment cards are managed in the portal; checkout is a browser flow}
+  - {operation: createElevationRequest, reason: ca auth elevate}
+  - {operation: getMe, reason: ca auth status}
+  - {operation: getSupportTicketAttachment, reason: a binary download; ca api covers it}
+  - {operation: deleteVmFirewallRules, reason: firewall-rule delete covers one rule}
+  - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
+
+pending:
+  - {prefix: '/v1/vpcs/{id}', slice: 2}
+  - {operation: createVpc, slice: 2}
+  - {operation: listIpAddresses, slice: 2}
+  - {operation: listVips, slice: 2}
+  - {prefix: /v1/buckets, slice: 3}
+  - {prefix: /v1/bucket-keys, slice: 3}
+  - {prefix: /v1/account, slice: 4}
+  - {prefix: /v1/activity, slice: 4}
+  - {prefix: /v1/projects, slice: 4}
+  - {prefix: /v1/members, slice: 4}
+  - {prefix: /v1/support, slice: 4}
+  - {prefix: /v1/billing, slice: 4}
+  - {prefix: /v1/transactions, slice: 4}
+  - {prefix: /v1/backup-policies, slice: 4}
+  - {prefix: /v1/backup-windows, slice: 4}
+  - {prefix: /v1/placement/feasibility, slice: 4}
+
+operations:
+  listVms:
+    flags:
+      slug: {help: only the VM with this slug}
+    example: |
+      ca vm list
+      ca vm list -o json
+  getVm:
+    example: ca vm get web-01
+  startVm:
+    example: ca vm start web-01
+  shutdownVm:
+    flags:
+      timeout: {name: guest-timeout}
+  applyVmPendingRestart:
+    flags:
+      timeout: {name: guest-timeout}
+  resizeVm:
+    flags:
+      cpus: {name: vcpu, help: the new vCPU count}
+      ramMib: {name: ram-gib, scale: 1024, help: the new RAM in GiB}
+      empty: {hide: true}
+    atLeastOne: [vcpu, ram-gib]
+    example: ca vm resize web-01 --vcpu 4 --ram-gib 8
+  renameVm:
+    example: ca vm rename web-01 --name db-01
+  backupVm:
+    path: vm backup create
+  attachVmNetworkInterface:
+    path: vm nic attach
+  detachVmNetworkInterface:
+    path: vm nic detach
+  attachVmPublicIp:
+    path: vm public-ip attach
+  detachVmPublicIp:
+    path: vm public-ip detach
+  attachVmSshKey:
+    path: vm ssh-key attach
+  detachVmSshKey:
+    path: vm ssh-key detach
+  addVmToVip:
+    path: vm vip add
+  removeVmFromVip:
+    path: vm vip remove
+  addPlacementGroupMember:
+    path: placement-group member add
+  removePlacementGroupMember:
+    path: placement-group member remove
+  updateVmBackupProtection:
+    path: vm backup set-protection
+  previewVmBackupPolicyRotation:
+    path: vm backup-policy preview-rotation
+  cancelOperation:
+    path: operation cancel
+    wait: self
+  listPlacementGroupDatacenters:
+    path: datacenter list
+
+columns:
+  PublicVmDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: STATUS, path: status}
+      - {header: VCPU, path: cpu.cores}
+      - {header: RAM MIB, path: memory.totalMb}
+      - {header: DATACENTER, path: datacenter}
+      - {header: PRIVATE IP, path: privateIp}
+      - {header: PUBLIC IP, path: publicIp}
+  PublicOperationDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: KIND, path: kind}
+      - {header: STATE, path: state}
+      - {header: PROGRESS, path: progressPct}
+      - {header: TARGET, path: target.id}
+      - {header: SUBMITTED, path: submittedAt, format: time}
+      - {header: MESSAGE, path: progressMessage}
+      - {header: ERROR, path: error.message}
+  PublicVmDiskDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: POSITION, path: position}
+      - {header: SIZE GIB, path: sizeGib}
+      - {header: INTERFACE, path: interfaceType}
+      - {header: BOOT, path: boot, format: bool}
+  PublicVmNicDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: POSITION, path: position}
+      - {header: MODEL, path: model}
+      - {header: PRIMARY, path: primary, format: bool}
+      - {header: IP, path: ipAddress}
+      - {header: MAC, path: macAddress}
+      - {header: VLAN, path: vlanTag}
+  PublicVmPublicIpDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: ADDRESS, path: address}
+      - {header: PRIMARY, path: primary, format: bool}
+      - {header: CREATED, path: createdAt, format: time}
+  PublicVmPrivateIpDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: ADDRESS, path: address}
+      - {header: NIC, path: nicId}
+  PublicSshKeyDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: FINGERPRINT, path: fingerprint}
+  PublicFirewallRuleDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: DIRECTION, path: direction, format: upper}
+      - {header: ACTION, path: action, format: upper}
+      - {header: PROTOCOL, path: protocol, format: upper}
+      - {header: SOURCE, path: source}
+      - {header: FROM PORT, path: fromPort}
+      - {header: TO PORT, path: toPort}
+      - {header: STATUS, path: status}
+      - {header: DESCRIPTION, path: description}
+  PublicBackupDto:
+    id: startedAt
+    columns:
+      - {header: STARTED, path: startedAt, format: time}
+      - {header: SIZE, path: sizeBytes, format: bytes}
+      - {header: DURATION S, path: durationSeconds}
+      - {header: PROTECTED, path: protected, format: bool}
+      - {header: ORIGIN, path: origin}
+      - {header: DESCRIPTION, path: description}
+  PublicBackupPolicyDto:
+    id: planId
+    columns:
+      - {header: PLAN, path: planDisplayName}
+      - {header: CADENCE, path: cadenceKind}
+      - {header: DAY, path: cadenceDay}
+      - {header: WINDOW, path: windowPreference}
+      - {header: PAUSED, path: paused, format: bool}
+      - {header: LAST RUN, path: lastFiredSlot, format: time}
+  PublicPlacementFeasibilityDto:
+    id: datacenterSlug
+    columns:
+      - {header: DATACENTER, path: datacenterSlug}
+      - {header: AVAILABLE, path: available, format: bool}
+      - {header: FITS, path: fits}
+      - {header: REASONS, path: reasons, format: list}
+  PublicPlacementGroupDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: STRATEGY, path: strategy}
+      - {header: DATACENTER, path: datacenterId}
+      - {header: HEALTH, path: health}
+      - {header: MEMBERS, path: members, format: count}
+      - {header: MAX, path: maxMembers}
+  PublicPlacementDatacenterDto:
+    id: slug
+    columns:
+      - {header: SLUG, path: slug}
+      - {header: NAME, path: label}
+  PublicOsImageDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: OS, path: os}
+      - {header: VERSION, path: version}
+      - {header: SSH KEY, path: requiresSshKey, format: bool}
+  PublicVpcDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: STATUS, path: status}
+      - {header: DESCRIPTION, path: description}
