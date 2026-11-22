@@ -354,7 +354,14 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 			return a.accepted(ctx, s, opID, waitFlags{noWait: r.noWait, timeout: r.timeout, cancelled: op.Async == cmdspec.Self})
 		})
 	}
+	name, _ := body["name"].(string)
+	if len(targets) > 0 {
+		name = targets[0].given
+	}
 	if len(bytes.TrimSpace(resp)) == 0 {
+		if err := missingSecret(op.OperationID, name, resp); err != nil {
+			return err
+		}
 		if status != http.StatusNoContent && op.Columns != "" {
 			return fmt.Errorf("HTTP %d with an empty body", status)
 		}
@@ -366,7 +373,10 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	if !json.Valid(resp) {
 		return fmt.Errorf("HTTP %d: the response is not JSON", status)
 	}
-	return printRaw(pr, op.Columns, resp)
+	if err := printRaw(pr, op.Columns, resp); err != nil {
+		return err
+	}
+	return missingSecret(op.OperationID, name, resp)
 }
 
 func orList(flags []string) string {

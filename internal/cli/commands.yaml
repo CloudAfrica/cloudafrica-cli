@@ -26,6 +26,9 @@ groups:
   vpc vip public-ip: Attach and detach a virtual IP's public address
   vip: List virtual IPs
   ip-address: List IP addresses
+  bucket: Manage object storage buckets
+  bucket versioning: Read and change a bucket's versioning
+  bucket-key: Manage object storage access keys
   datacenter: List datacenters
   os-image: List OS images
   operation: Inspect and cancel asynchronous operations
@@ -38,6 +41,8 @@ resources:
   vip: {noun: VIP, list: /v1/vips, match: name}
   ssh-key: {noun: SSH key, list: /v1/ssh-keys, match: name}
   placement-group: {noun: placement group, list: /v1/placement-groups, match: name}
+  bucket: {noun: bucket, list: /v1/buckets, match: name}
+  bucket-key: {noun: bucket key, list: /v1/bucket-keys, match: name}
 
 params:
   /v1/vms/{id}: {resource: vm}
@@ -48,6 +53,9 @@ params:
   /v1/vpcs/{id}: {resource: vpc}
   /v1/vpcs/{id}/vips/{vipId}: {resource: vip, within: vpcId}
   /v1/placement-groups/{id}: {resource: placement-group}
+  /v1/buckets/{id}: {resource: bucket, help: "the bucket name or id"}
+  /v1/bucket-keys/{keyId}: {resource: bucket-key, help: "the key name or id"}
+  /v1/bucket-keys/{keyId}/buckets/{bucketId}: {resource: bucket, help: "the bucket name or id"}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
 
 handwritten:
@@ -69,8 +77,6 @@ exclude:
   - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
 
 pending:
-  - {prefix: /v1/buckets, slice: 3}
-  - {prefix: /v1/bucket-keys, slice: 3}
   - {prefix: /v1/account, slice: 4}
   - {prefix: /v1/activity, slice: 4}
   - {prefix: /v1/projects, slice: 4}
@@ -151,6 +157,45 @@ operations:
       ca ip-address list -o json
   listPlacementGroupDatacenters:
     path: datacenter list
+  createBucket:
+    example: |
+      ca bucket create --display-name backups
+      ca bucket create --display-name audit --object-lock --versioning enabled
+  deleteBucket:
+    flags:
+      confirmBucketName: {help: "the bucket's name, spelled exactly as ca bucket list shows it"}
+    example: ca bucket delete logs-7f3a --confirm-bucket-name logs-7f3a
+  getBucketUsage:
+    path: bucket usage
+    positional: id
+    example: ca bucket usage logs-7f3a --hours 168
+  getBucketVersioning:
+    path: bucket versioning get
+    positional: id
+  updateBucketVersioning:
+    path: bucket versioning set
+    positional: id
+    example: ca bucket versioning set logs-7f3a --mode enabled
+  createBucketKey:
+    flags:
+      bucketResourceId: {help: "the id of the bucket to attach the key to (ca bucket get NAME -q prints it), not its name; omit for an account-level key"}
+    example: |
+      ca bucket-key create --name ci --access-type read --bucket-resource-id "$(ca bucket get logs-7f3a -q)"
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-key create --name ci2 --access-type full -q)
+  revealBucketKeySecret:
+    example: |
+      ca bucket-key reveal-secret ci
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-key reveal-secret ci -q)
+  grantBucketKeyBucketAccess:
+    path: bucket-key grant
+    positional: keyId
+    example: ca bucket-key grant ci --bucket logs-7f3a
+  revokeBucketKeyBucketAccess:
+    path: bucket-key revoke
+    positional: keyId
+    example: ca bucket-key revoke ci --bucket logs-7f3a
 
 columns:
   PublicVmDto:
@@ -303,3 +348,51 @@ columns:
       - {header: TO PORT, path: toPort}
       - {header: STATUS, path: status}
       - {header: DESCRIPTION, path: description}
+  PublicBucketDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: DISPLAY NAME, path: displayName}
+      - {header: STATUS, path: status}
+      - {header: BILLED, path: quotaBytes, format: bytes}
+      - {header: ON DISK, path: sizeActualBytes, format: bytes}
+      - {header: OBJECTS, path: objectCount}
+      - {header: CREATED, path: createdAt, format: time}
+  PublicBucketKeyDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: ACCESS KEY, path: accessKey}
+      - {header: ACCESS, path: accessType}
+      - {header: MASTER, path: master, format: bool}
+      - {header: BUCKET, path: bucketName}
+  PublicBucketKeyCreatedDto:
+    id: secretKey
+    columns:
+      - {header: ID, path: key.id}
+      - {header: NAME, path: key.name}
+      - {header: ACCESS KEY, path: key.accessKey}
+      - {header: ACCESS, path: key.accessType}
+      - {header: BUCKET, path: key.bucketName}
+      - {header: SECRET KEY, path: secretKey}
+  PublicRevealedKeySecretDto:
+    id: secretKey
+    columns:
+      - {header: KEY ID, path: keyId}
+      - {header: AVAILABLE, path: available, format: bool}
+      - {header: SECRET KEY, path: secretKey}
+  PublicBucketUsageDto:
+    id: bucketName
+    columns:
+      - {header: BUCKET, path: bucketName}
+      - {header: SIZE, path: sizeBytes, format: bytes}
+      - {header: ON DISK, path: sizeActualBytes, format: bytes}
+      - {header: OBJECTS, path: objectCount}
+      - {header: WINDOW H, path: windowHours}
+      - {header: UPLOADED, path: bytesUploaded, format: bytes}
+      - {header: DOWNLOADED, path: bytesDownloaded, format: bytes}
+      - {header: REQUESTS, path: operations}
+  PublicBucketVersioningDto:
+    id: mode
+    columns:
+      - {header: MODE, path: mode}
