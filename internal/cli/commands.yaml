@@ -181,6 +181,13 @@ operations:
       bucketResourceId: {help: "the id of the bucket to attach the key to (ca bucket get NAME -q prints it), not its name; omit for an account-level key"}
     example: |
       ca bucket-key create --name ci --access-type read --bucket-resource-id "$(ca bucket get logs-7f3a -q)"
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-key create --name ci2 --access-type full -q)
+  revealBucketKeySecret:
+    example: |
+      ca bucket-key reveal-secret ci
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-key reveal-secret ci -q)
   grantBucketKeyBucketAccess:
     path: bucket-key grant
     positional: keyId

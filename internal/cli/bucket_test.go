@@ -60,8 +60,9 @@ func TestBucketListGetAndNameResolution(t *testing.T) {
 	if head != "ID NAME DISPLAY NAME STATUS BILLED ON DISK OBJECTS CREATED" {
 		t.Errorf("header %q", head)
 	}
-	if want := "[[b-1 logs-7f3a Logs active 2.0 GiB 1.0 GiB 42 2026-11-01"; !strings.HasPrefix(rows, want) {
-		t.Errorf("rows %s, want prefix %s", rows, want)
+	created := time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC).Local().Format("2006-01-02 15:04 MST")
+	if want := "[[b-1 logs-7f3a Logs active 2.0 GiB 1.0 GiB 42 " + strings.Join(strings.Fields(created), " ") + "]]"; rows != want {
+		t.Errorf("rows %s, want %s", rows, want)
 	}
 	h.mustRun("bucket", "list", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "b-1" {
@@ -265,7 +266,10 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 	if got := strings.Join(strings.Fields(h.stdout.String()), " "); got != "KEY ID AVAILABLE SECRET KEY k-0 no" {
 		t.Errorf("unavailable row %q", got)
 	}
-	contains(t, h.stderr.String(), "holds no secret", "ca bucket-key delete master")
+	contains(t, h.stderr.String(), "holds no secret", "ca bucket-key create")
+	if strings.Contains(h.stderr.String(), "delete") {
+		t.Errorf("the hint advises a delete: %s", h.stderr)
+	}
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/bucket-keys":                            {Body: keyList},
 		"POST /v1/bucket-keys/k-1/actions/reveal-secret": {Body: `{"keyId":"k-1","available":true}`},

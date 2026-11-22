@@ -27,7 +27,7 @@ func missingSecret(operationID, name string, resp []byte) error {
 		if field(v, "available") == "false" {
 			return &hintedError{
 				err:  errors.New("the backend holds no secret for this key"),
-				hint: fmt.Sprintf("Delete the key and create it again: ca bucket-key delete %[1]s", name),
+				hint: "A key created now carries a secret: ca bucket-key create --name NAME --access-type read|full",
 			}
 		}
 		return &hintedError{

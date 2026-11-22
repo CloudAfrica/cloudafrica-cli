@@ -148,7 +148,8 @@ Every command has `--help`. The conventions:
   `ca api` takes `-d` alone.
 - **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
   `--cursor <next>`.
-- **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only.
+- **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only (the secret key
+  for `bucket-key create` and `reveal-secret`).
   JSON and YAML are the API's response as returned, except that a list followed across pages prints its
   rows as one array (`--limit` prints the page as returned).
 
