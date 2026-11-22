@@ -111,7 +111,9 @@ func newRelease(t *testing.T, tag string) *release {
 		}
 		if r.stall > 0 && !strings.HasSuffix(req.URL.Path, "SHA256SUMS") {
 			_, _ = w.Write(b[:len(b)/2])
-			w.(http.Flusher).Flush()
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
 			select {
 			case <-time.After(r.stall):
 			case <-req.Context().Done():

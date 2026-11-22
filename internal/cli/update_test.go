@@ -164,7 +164,8 @@ func TestUpdateReplacesTheBinaryThroughTheLink(t *testing.T) {
 	var headers atomic.Value
 	headers.Store("")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		headers.Store(headers.Load().(string) + r.Header.Get(elevationHeader) + r.Header.Get("Authorization"))
+		seen, _ := headers.Load().(string)
+		headers.Store(seen + r.Header.Get(elevationHeader) + r.Header.Get("Authorization"))
 		switch r.URL.Path {
 		case "/latest":
 			_, _ = w.Write([]byte(`{"tag_name":"v0.2.0"}`))
