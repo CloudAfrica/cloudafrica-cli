@@ -218,6 +218,17 @@ func TestGenerateRefuses(t *testing.T) {
 			},
 			want: "getSecret: no column set for CreateWidget",
 		},
+		"get with an inline response schema": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "  - {operation: getSecret, reason: not for the CLI}\n", "", 1)
+			},
+			doc: func(d map[string]any) {
+				at(d, "paths", "/v1/secret", "get")["responses"] =
+					map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{
+						"schema": map[string]any{"type": "object"}}}}}
+			},
+			want: "getSecret: the 200 response schema is inline",
+		},
 		"duplicate command": {
 			overlay: func(o string) string {
 				return o + "  getJob:\n    path: widget get\n"

@@ -423,8 +423,6 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case required:
-		writeJSON(w, 200, map[string]any{})
 	case p == "/v1/elevation-requests" && r.Method == http.MethodPost:
 		s.elevationRequest(w, r, tok, g)
 	case p == "/v1/ssh-keys" && r.Method == http.MethodGet:
@@ -572,6 +570,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			op["error"] = map[string]any{"kind": "fault", "message": "it broke"}
 		}
 		writeJSON(w, 200, op)
+	case required:
+		writeJSON(w, 200, map[string]any{})
 	default:
 		http.NotFound(w, r)
 	}

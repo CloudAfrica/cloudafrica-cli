@@ -391,3 +391,48 @@ func TestResizeTakesDisksFromData(t *testing.T) {
 		t.Errorf("an empty --data: exit %d", code)
 	}
 }
+
+// A VIP's firewall rules come back unpaged under "rules": the table and -q
+// read that field, JSON is the body verbatim, and --vpc and --vip resolve.
+func TestVipFirewallRuleListReadsRules(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[
+			{"id":"r1","direction":"ingress","action":"accept","protocol":"tcp","fromPort":443,"toPort":443}],
+			"writable":false,"readOnlyReason":"managed"}`},
+	})
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "table")
+	out := h.stdout.String()
+	for _, want := range []string{"DIRECTION", "INGRESS", "ACCEPT", "TCP", "443"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table lacks %q:\n%s", want, out)
+		}
+	}
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "r1" {
+		t.Errorf("-q = %q", got)
+	}
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "json")
+	if !strings.Contains(h.stdout.String(), `"readOnlyReason": "managed"`) {
+		t.Errorf("json is not the body: %s", h.stdout)
+	}
+}
+
+// A VIP delete resolves the VPC flag and the VIP positional before it writes.
+func TestVpcVipDeleteResolvesBothNames(t *testing.T) {
+	h := newHarness(t)
+	g := protected()
+	g.Elevated = true
+	h.seed("default", g, time.Now().Add(time.Hour))
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips":                     {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
+	})
+	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+}

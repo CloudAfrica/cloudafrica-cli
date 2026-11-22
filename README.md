@@ -103,7 +103,14 @@ secret is useless without the token, but treat it as one: do not log it or commi
 ```sh
 ca datacenter list
 ca os-image list
-ca vpc list
+ca vpc list|get|create|update|delete
+ca vpc firewall-rule list --vpc web
+ca vpc reserved-ip list|create|delete --vpc web
+ca vpc vip create|delete --vpc web
+ca vpc vip public-ip attach|detach --vpc web --vip lb1
+ca vpc vip firewall-rule list|create|delete|set-description --vpc web --vip lb1
+ca vip list
+ca ip-address list
 ca ssh-key list|create|update|delete
 ca vm list
 ca vm get web-01

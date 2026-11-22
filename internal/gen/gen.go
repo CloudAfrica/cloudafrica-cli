@@ -707,6 +707,9 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 			name = refName(g.resolve(s).Properties["data"].Items)
 		}
 		if name == "" {
+			if method == "GET" {
+				g.fail("%s: the %s response schema is inline; a column set needs a named schema", op.OperationID, code)
+			}
 			continue
 		}
 		if _, ok := g.ov.Columns[name]; ok {
