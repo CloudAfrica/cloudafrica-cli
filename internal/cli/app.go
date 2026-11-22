@@ -45,6 +45,9 @@ type App struct {
 	// ElevatePoll and ElevateTimeout pace `ca auth elevate` (0: 2 s and 5 min).
 	ElevatePoll    time.Duration
 	ElevateTimeout time.Duration
+	// Exe is the name the CLI was run as ("" means "ca"); a kubeconfig from
+	// `ca k8s kubeconfig` runs it again.
+	Exe string
 
 	stdin *bufio.Reader // shared by every prompt, so none swallows another's answer
 
@@ -301,5 +304,16 @@ func NewFromOS(version string, tty bool, open func(string) error) (*App, error) 
 		TTY:         tty,
 		OpenBrowser: open,
 		Store:       profile.Store{Dir: dir},
+		Exe:         exeName(os.Args[0]),
 	}, nil
+}
+
+// exeName is the command name the CLI was run as, without a Windows .exe;
+// kubectl runs it again by PATH. An unusable argv0 is "".
+func exeName(argv0 string) string {
+	name := strings.TrimSuffix(filepath.Base(argv0), ".exe")
+	if name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
 }

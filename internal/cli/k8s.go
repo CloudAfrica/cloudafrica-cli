@@ -52,7 +52,7 @@ func upgradeStatus(version *string, st *cloudafrica.PublicKubernetesUpgradeStatu
 func (a *App) k8sCmd() *cobra.Command {
 	cmd := group("k8s", "Manage Kubernetes clusters")
 	cmd.Aliases = []string{"kubernetes"}
-	cmd.AddCommand(a.k8sList(), a.k8sGet(), a.k8sUpgradeWorkers())
+	cmd.AddCommand(a.k8sList(), a.k8sGet(), a.k8sUpgradeWorkers(), a.k8sToken(), a.k8sKubeconfig())
 	return cmd
 }
 

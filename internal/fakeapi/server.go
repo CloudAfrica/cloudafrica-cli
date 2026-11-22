@@ -103,6 +103,50 @@ type Server struct {
 	// UpgradeNoOperation makes upgrade-workers answer 202 with only the
 	// cluster's Location, as when no operation started.
 	UpgradeNoOperation bool
+	// EmptyClusterToken makes the token route answer 200 with no body, as a
+	// replayed request does.
+	EmptyClusterToken bool
+	// ClusterTokenBody, when set, is the JSON the token route answers.
+	ClusterTokenBody string
+	// TokenIdemKeys is the Idempotency-Key of each token request.
+	TokenIdemKeys []string
+	// KubeconfigStatus, when set, is the status the kubeconfig routes answer:
+	// a problem from 400 up, else KubeconfigBody.
+	KubeconfigStatus int
+	KubeconfigBody   string
+}
+
+// ClusterToken is the token the fake mints for a cluster.
+func ClusterToken(id string) string { return "cluster-token-" + id }
+
+// Kubeconfig is the kubeconfig the fake serves for a cluster: one exec user
+// running sh and curl, which rewriteKubeconfig replaces.
+func Kubeconfig(id, server string) string {
+	return `---
+apiVersion: v1
+kind: Config
+current-context: prod
+clusters:
+- name: prod
+  cluster:
+    server: ` + server + `
+    certificate-authority-data: Q0E=
+contexts:
+- name: prod
+  context:
+    cluster: prod
+    user: prod
+users:
+- name: prod
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: sh
+      args:
+      - -c
+      - curl -fsS -X POST -H @- 'https://api.example/v1/kubernetes/clusters/` + id + `/token'
+      interactiveMode: Never
+`
 }
 
 // New starts a fake server.
@@ -412,6 +456,42 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		default:
 			s.accept(w, "op/upgrade-"+id)
+		}
+	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && strings.HasSuffix(p, "/token") && r.Method == http.MethodPost:
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/v1/kubernetes/clusters/"), "/token")
+		s.TokenIdemKeys = append(s.TokenIdemKeys, r.Header.Get("Idempotency-Key"))
+		switch {
+		case !g.Has("protected:compute"):
+			insufficientScope(w, "protected:compute")
+		case !strings.HasPrefix(tok, "cak_"): // only a person's own API token mints
+			problem(w, 404, "not-found", "Not found", nil)
+		case !g.Elevated:
+			problem(w, 403, "not-paired", "Client not paired", nil)
+		case s.EmptyClusterToken:
+			w.WriteHeader(http.StatusOK)
+		case s.ClusterTokenBody != "":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, s.ClusterTokenBody)
+		default:
+			writeJSON(w, 200, map[string]any{"apiVersion": "client.authentication.k8s.io/v1beta1", "kind": "ExecCredential",
+				"status": map[string]any{"token": ClusterToken(id), "expirationTimestamp": "2026-11-22T10:15:00Z"}})
+		}
+	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && strings.Contains(p, "/kubeconfig") && r.Method == http.MethodGet:
+		id, variant, _ := strings.Cut(strings.TrimPrefix(p, "/v1/kubernetes/clusters/"), "/kubeconfig")
+		server := "https://prod.k8s.example:6443"
+		if variant == "/managed-vpn" {
+			server = "https://10.9.0.4:6443"
+		}
+		switch {
+		case s.KubeconfigStatus >= 400:
+			problem(w, s.KubeconfigStatus, "not-found", "Not found", nil)
+		case s.KubeconfigStatus != 0:
+			w.Header().Set("Content-Type", "application/yaml")
+			w.WriteHeader(s.KubeconfigStatus)
+			_, _ = io.WriteString(w, s.KubeconfigBody)
+		default:
+			w.Header().Set("Content-Type", "application/yaml")
+			_, _ = io.WriteString(w, Kubeconfig(id, server))
 		}
 	case strings.HasPrefix(p, "/v1/kubernetes/clusters/") && r.Method == http.MethodGet:
 		id := strings.TrimPrefix(p, "/v1/kubernetes/clusters/")
