@@ -108,10 +108,11 @@ ca k8s upgrade-workers <id> [--version v1.33.1] [--wait] [--timeout 30m]
 
 `ca kubernetes` is the same command. `upgrade-workers` is a protected action. Each worker drains and
 restarts in turn, so a workload with one replica is down while its node restarts. Without `--version`
-it takes the newest worker target. If there is none, it says why on stderr. It exits 0 when the workers
-are current, or when they wait on the control plane: a worker upgrade never goes past the control
-plane's version. So a scheduled run stays quiet until a target is offered. Any other state with no target
-exits 1. Running it again after an upgrade finishes starts the next one, if there is a newer target.
+it takes the newest worker target. If there is none, it says so on stderr and exits 0 when the workers
+are CURRENT, DEADLINE or UPGRADE_AVAILABLE (worker targets never go past the control plane's version),
+so a scheduled run stays quiet until a target is offered. Any other state with no target exits 1, and
+so does `--wait` unless the workers are CURRENT. Running it again after an upgrade finishes starts the
+next one, if there is a newer target.
 
 ## Exit codes
 

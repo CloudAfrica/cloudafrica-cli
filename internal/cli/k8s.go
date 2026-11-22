@@ -166,6 +166,8 @@ func (a *App) k8sGet() *cobra.Command {
 
 // errUpgradeUnavailable is a cluster read that carried no upgrade status,
 // which the API omits while it cannot read it.
+const workersCurrent = "workers are current"
+
 var errUpgradeUnavailable = errors.New("upgrade status is unavailable; try again")
 
 // newestWorkerTarget is the version to upgrade the workers to: the last
@@ -191,9 +193,9 @@ func newestWorkerTarget(c *cloudafrica.PublicKubernetesClusterDto) (target, note
 	}
 	switch state {
 	case cloudafrica.CURRENT:
-		return "", "workers are current", nil
+		return "", workersCurrent, nil
 	case cloudafrica.DEADLINE, cloudafrica.UPGRADEAVAILABLE:
-		return "", status + " yet: a worker upgrade never goes past the control plane's version", nil
+		return "", status + " yet", nil
 	default:
 		return "", "", fmt.Errorf("%s; `ca k8s get %s` shows the cluster", status, output.S(c.Id))
 	}
@@ -209,8 +211,8 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 		Short: "Upgrade a cluster's workers (a protected action: needs `ca auth elevate`)",
 		Long: "Upgrades every worker to a Kubernetes version and its Talos version, one node at a time. Each node " +
 			"drains, so a workload with one replica is down while its node restarts. Without --version it takes the " +
-			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says why: it exits 0 when the " +
-			"workers are current or wait on the control plane's version, and 1 otherwise.",
+			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says so and exits 0 if the " +
+			"workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE, else 1; with --wait only CURRENT exits 0.",
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
@@ -229,6 +231,9 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 						return err
 					}
 					if t == "" {
+						if wf.wait && note != workersCurrent {
+							return errors.New(note + "; there is nothing to wait for")
+						}
 						fmt.Fprintln(a.Stderr, note)
 						return nil
 					}

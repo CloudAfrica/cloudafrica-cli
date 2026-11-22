@@ -158,6 +158,24 @@ func TestUpgradeWorkersWithNoTarget(t *testing.T) {
 	}
 }
 
+func TestUpgradeWorkersWaitWithNoTarget(t *testing.T) {
+	for state, code := range map[string]int{"DEADLINE": ExitAPI, "UPGRADE_AVAILABLE": ExitAPI, "CURRENT": ExitOK} {
+		h := elevated(t)
+		h.fake.Clusters = []map[string]any{cluster("k-1", map[string]any{"workers": map[string]any{"state": state}})}
+		if got := h.run("k8s", "upgrade-workers", "k-1", "--wait"); got != code || len(h.fake.Writes) != 0 ||
+			(code == ExitAPI) != strings.Contains(h.stderr.String(), "nothing to wait for") {
+			t.Errorf("%s: exit %d (want %d), writes %d, stderr %q", state, got, code, len(h.fake.Writes), h.stderr)
+		}
+	}
+}
+
+func TestUpgradeWorkersWaitsUpTo30Minutes(t *testing.T) {
+	a := &App{}
+	if got := a.k8sUpgradeWorkers().Flags().Lookup("timeout").DefValue; got != "30m0s" {
+		t.Errorf("--timeout default = %s", got)
+	}
+}
+
 func TestUpgradeWorkersVersionGetsItsV(t *testing.T) {
 	for _, v := range []string{"1.37.2", "v1.37.2"} {
 		h := elevated(t)
