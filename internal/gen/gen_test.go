@@ -100,6 +100,18 @@ operations:
       ramMib: {name: ram-gib, scale: 1024}
 `
 
+// at walks nested objects of a fixture document.
+func at(m map[string]any, keys ...string) map[string]any {
+	for _, k := range keys {
+		next, ok := m[k].(map[string]any)
+		if !ok {
+			panic("fixture has no object at " + k)
+		}
+		m = next
+	}
+	return m
+}
+
 func generate(t *testing.T, d map[string]any, overlay string) (*Output, Report, error) {
 	t.Helper()
 	b, err := json.Marshal(d)
@@ -200,7 +212,7 @@ func TestGenerateRefuses(t *testing.T) {
 			},
 			// getSecret now generates; Widget has columns, so it is fine — use a schema without one.
 			doc: func(d map[string]any) {
-				d["paths"].(map[string]any)["/v1/secret"].(map[string]any)["get"].(map[string]any)["responses"] =
+				at(d, "paths", "/v1/secret", "get")["responses"] =
 					map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{
 						"schema": map[string]any{"$ref": "#/components/schemas/CreateWidget"}}}}}
 			},
@@ -286,7 +298,7 @@ func TestGenerateRefuses(t *testing.T) {
 		},
 		"202 without Location": {
 			doc: func(d map[string]any) {
-				d["paths"].(map[string]any)["/v1/widgets/{id}"].(map[string]any)["delete"].(map[string]any)["responses"] =
+				at(d, "paths", "/v1/widgets/{id}", "delete")["responses"] =
 					map[string]any{"202": map[string]any{}}
 			},
 			want: "deleteWidget: a 202 with no Location or OperationAccepted",
@@ -297,8 +309,9 @@ func TestGenerateRefuses(t *testing.T) {
 		},
 		"non-scalar query parameter": {
 			doc: func(d map[string]any) {
-				g := d["paths"].(map[string]any)["/v1/widgets"].(map[string]any)["get"].(map[string]any)
-				g["parameters"] = append(g["parameters"].([]any), map[string]any{"name": "ids", "in": "query",
+				g := at(d, "paths", "/v1/widgets", "get")
+				params, _ := g["parameters"].([]any)
+				g["parameters"] = append(params, map[string]any{"name": "ids", "in": "query",
 					"schema": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}})
 			},
 			want: "listWidgets: query parameter ids is not a scalar",
@@ -339,8 +352,8 @@ func TestGenerateRefuses(t *testing.T) {
 		},
 		"new operation, uncovered": {
 			doc: func(d map[string]any) {
-				d["paths"].(map[string]any)["/v1/widgets/{id}/actions/spin"].(map[string]any)["post"].(map[string]any)["operationId"] = "spinWidget"
-				d["paths"].(map[string]any)["/v1/gadgets"] = map[string]any{"get": map[string]any{"operationId": "listGadgets",
+				at(d, "paths", "/v1/widgets/{id}/actions/spin", "post")["operationId"] = "spinWidget"
+				at(d, "paths")["/v1/gadgets"] = map[string]any{"get": map[string]any{"operationId": "listGadgets",
 					"responses": map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{
 						"schema": map[string]any{"$ref": "#/components/schemas/CreateWidget"}}}}}}}
 			},
@@ -429,10 +442,9 @@ func TestSingularAndKebab(t *testing.T) {
 
 func TestScopesCoverHandwrittenAndPendingButNotExcluded(t *testing.T) {
 	d := fixtureDoc()
-	paths := d["paths"].(map[string]any)
-	paths["/v1/widgets/{id}/gears/{gearId}"].(map[string]any)["put"].(map[string]any)["security"] =
+	at(d, "paths", "/v1/widgets/{id}/gears/{gearId}", "put")["security"] =
 		[]any{map[string]any{"oauth": []string{"write:gear"}}}
-	paths["/v1/secret"].(map[string]any)["get"].(map[string]any)["security"] =
+	at(d, "paths", "/v1/secret", "get")["security"] =
 		[]any{map[string]any{"oauth": []string{"read:secret"}}}
 	out, rep, err := generate(t, d, fixtureOverlay+"handwritten:\n  setWidgetGear: widget gear set\n")
 	if err != nil {
