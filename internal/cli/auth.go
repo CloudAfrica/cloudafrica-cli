@@ -20,10 +20,13 @@ import (
 	"github.com/CloudAfrica/cloudafrica-cli/internal/profile"
 )
 
-// defaultScopes is what every sign-in requests. Holding protected:compute is
+// defaultScopes is what every sign-in requests: the read: and write: scopes
+// of the API operations the CLI covers (generated), and the protected:
+// scopes of its commonest protected actions. Holding a protected: scope is
 // not enough for a protected action: the sign-in must also be paired, which
 // is `ca auth elevate`.
-var defaultScopes = []string{"read:compute", "write:compute", "protected:compute", "read:network", "read:ssh-keys"}
+var defaultScopes = append(slices.Clone(genScopes),
+	"protected:compute", "protected:network", "protected:backup", "protected:s3")
 
 const (
 	elevatePollDefault    = 2 * time.Second
@@ -34,6 +37,7 @@ const (
 
 func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
+	var extra []string
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
@@ -46,9 +50,11 @@ func (a *App) authCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name)
+			return a.login(cmd.Context(), name, extra...)
 		},
 	}
+	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
+		"(repeatable; kept for every later sign-in of this profile)")
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
@@ -96,7 +102,7 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name string) error {
+func (a *App) login(ctx context.Context, name string, extra ...string) error {
 	old, err := a.loadForReplace(name)
 	if err != nil {
 		return err
@@ -113,7 +119,23 @@ func (a *App) login(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	scopes := append([]string{}, defaultScopes...)
+	var extras []string
+	if old != nil {
+		extras = append(extras, old.ExtraScopes...)
+	}
+	for _, sc := range extra {
+		sc = strings.TrimSpace(sc)
+		if sc == "" {
+			continue
+		}
+		if !strings.Contains(sc, ":") {
+			return usageErr(fmt.Errorf("--scope %q is not a scope: use the form read:compute or protected:billing", sc))
+		}
+		if !slices.Contains(defaultScopes, sc) && !slices.Contains(extras, sc) {
+			extras = append(extras, sc)
+		}
+	}
+	scopes := append(slices.Clone(defaultScopes), extras...)
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
 		Scopes:  scopes,
 		Open:    a.OpenBrowser,
@@ -126,6 +148,7 @@ func (a *App) login(ctx context.Context, name string) error {
 	p := &profile.Profile{
 		Endpoint:     endpoint,
 		Scope:        tok.Scope,
+		ExtraScopes:  extras,
 		AccessToken:  tok.AccessToken,
 		Expiry:       tok.Expiry(time.Now()),
 		RefreshToken: tok.RefreshToken,
@@ -172,14 +195,16 @@ func (a *App) login(ctx context.Context, name string) error {
 // opens the confirm page, and repeats the request until the answer is
 // paired or the wait runs out. The gateway derives the page and code from
 // the grant, so the page is opened once. A sign-in known to lack
-// protected:compute is refused before any request, since pairing it would
+// any protected: scope is refused before any request, since pairing it would
 // not allow protected actions. For CLOUDAFRICA_TOKEN it pairs a secret
 // instead (CLOUDAFRICA_ELEVATION, else a new one) and prints it, alone, on
 // stdout once paired, whatever -o says: a script captures it with $(...).
 func (a *App) elevate(ctx context.Context, s *session) error {
-	if s.scope != "" && !slices.Contains(strings.Fields(s.scope), "protected:compute") {
+	if s.scope != "" && !slices.ContainsFunc(strings.Fields(s.scope), func(sc string) bool {
+		return strings.HasPrefix(sc, "protected:")
+	}) {
 		return &hintedError{err: errNoProtectedScope,
-			hint: "Run `ca auth login` and tick protected:compute on the consent page, then `ca auth elevate`."}
+			hint: "Run `ca auth login` and tick the protected: scopes on the consent page, then `ca auth elevate`."}
 	}
 	poll, limit := a.ElevatePoll, a.ElevateTimeout
 	if poll <= 0 {

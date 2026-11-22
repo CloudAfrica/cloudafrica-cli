@@ -8,6 +8,8 @@ import (
 	"time"
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
 )
 
 func TestElevatePollsUntilPaired(t *testing.T) {
@@ -236,7 +238,7 @@ func TestElevateWithoutProtectedScopeOffersLogin(t *testing.T) {
 	if code := h.run("auth", "elevate"); code != ExitStepUp || h.fake.ElevationCalls != 0 {
 		t.Fatalf("exit %d, elevation calls %d", code, h.fake.ElevationCalls)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "not granted protected:compute") || !strings.Contains(s, "`ca auth login`") {
+	if s := h.stderr.String(); !strings.Contains(s, "not granted any protected: scope") || !strings.Contains(s, "`ca auth login`") {
 		t.Errorf("stderr %s", s)
 	}
 }
@@ -284,7 +286,7 @@ func TestDeleteRunningVMHintsStopFirst(t *testing.T) {
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitAPI {
 		t.Fatalf("exit %d", code)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "conflict") || !strings.Contains(s, "ca vm shutdown vm-1 --wait") {
+	if s := h.stderr.String(); !strings.Contains(s, "conflict") || !strings.Contains(s, "ca vm shutdown vm-1`") {
 		t.Errorf("stderr = %s", s)
 	}
 	h.fake.VMs[0]["status"] = "stopped"
@@ -325,7 +327,7 @@ func TestListSSHKeysVPCsAndDatacenters(t *testing.T) {
 // A profile signed in before read:network was a default is told to sign in again.
 func TestListWithoutItsScopeHintsLogin(t *testing.T) {
 	h := newHarness(t)
-	h.seed("default", compute(), time.Now().Add(time.Hour))
+	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:compute", "write:compute"}}, time.Now().Add(time.Hour))
 	if code := h.run("vpc", "list"); code != ExitAPI {
 		t.Fatalf("exit %d", code)
 	}

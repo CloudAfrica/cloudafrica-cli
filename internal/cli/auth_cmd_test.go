@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -212,30 +213,46 @@ func TestStepUpScopeStillMissingAfterLoginOffersLoginOnce(t *testing.T) {
 	}
 }
 
-// A scope `ca auth login` never requests is not offered a sign-in.
-func TestScopeLoginCannotGrantIsNotOfferedLogin(t *testing.T) {
+// A refusal for a scope login does not request by default names the
+// --scope that requests it, and the profile keeps that scope for later sign-ins.
+func TestNonDefaultScopeHintsLoginScopeAndIsKept(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.tty = true
-	h.stdin = "y\n"
-	if code := h.run("api", "DELETE", "/v1/vpcs/vpc-1"); code != ExitStepUp {
-		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	h.fake.Require = map[string]string{"/v1/billing/": "write:billing"}
+	if code := h.run("api", "POST", "/v1/billing/top-ups"); code != ExitAPI {
+		t.Fatalf("exit %d", code)
 	}
-	s := h.stderr.String()
-	if strings.Contains(s, "[y/N]") || len(h.fake.Authorizations) != 0 {
-		t.Errorf("offered a sign-in: %s", s)
+	if !strings.Contains(h.stderr.String(), "`ca auth login --scope write:billing`") {
+		t.Errorf("hint: %s", h.stderr)
 	}
-	if !strings.Contains(s, "A `ca auth login` sign-in cannot hold protected:network") ||
-		!strings.Contains(s, "then pair it with `ca auth elevate`") || strings.Contains(s, "Run `ca auth login`") {
-		t.Errorf("hint: %s", s)
+	h.mustRun("auth", "login", "--scope", "write:billing")
+	h.mustRun("api", "POST", "/v1/billing/top-ups")
+	h.mustRun("auth", "login")
+	if !slices.Contains(strings.Fields(h.fake.Authorizations[1].Get("scope")), "write:billing") {
+		t.Errorf("a later sign-in dropped write:billing: %v", h.fake.Authorizations[1])
 	}
+
 	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
-	if code := h.run("api", "DELETE", "/v1/vpcs/vpc-1"); code != ExitStepUp {
+	if code := h.run("api", "POST", "/v1/billing/top-ups"); code != ExitAPI {
 		t.Fatalf("env token: exit %d", code)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted protected:network; use a token "+
-		"that has it, then `ca auth elevate`.") || strings.Contains(s, "ca auth login") {
+	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted write:billing") {
 		t.Errorf("env-token hint: %s", s)
+	}
+}
+
+func TestLoginScopeFlagRequestsAndPersists(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("auth", "login", "--scope", "nocolon"); code != ExitUsage || len(h.fake.Authorizations) != 0 {
+		t.Fatalf("bad scope: exit %d, authorizations %d", code, len(h.fake.Authorizations))
+	}
+	h.mustRun("auth", "login", "--scope", "write:billing", "--scope", "read:compute")
+	got := strings.Fields(h.fake.Authorizations[0].Get("scope"))
+	if !slices.Equal(got, append(slices.Clone(defaultScopes), "write:billing")) {
+		t.Errorf("scope = %v", got)
+	}
+	if p, _ := h.store.Load("default"); !slices.Equal(p.ExtraScopes, []string{"write:billing"}) {
+		t.Errorf("extra scopes = %v", p.ExtraScopes)
 	}
 }
 

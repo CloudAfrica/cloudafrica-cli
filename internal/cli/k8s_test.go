@@ -147,7 +147,7 @@ func TestUpgradeWorkersWithNoTarget(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := elevated(t)
 			h.fake.Clusters = []map[string]any{cluster("k-1", c.upgrade)}
-			code := h.run("k8s", "upgrade-workers", "k-1")
+			code := h.run("k8s", "upgrade-workers", "k-1", "--no-wait")
 			if code != c.code || len(h.fake.Writes) != 0 || !strings.Contains(h.stderr.String(), c.stderr) {
 				t.Errorf("exit %d (want %d), writes %d, stderr %q", code, c.code, len(h.fake.Writes), h.stderr)
 			}
@@ -162,7 +162,7 @@ func TestUpgradeWorkersWaitWithNoTarget(t *testing.T) {
 	for state, code := range map[string]int{"DEADLINE": ExitAPI, "UPGRADE_AVAILABLE": ExitAPI, "CURRENT": ExitOK} {
 		h := elevated(t)
 		h.fake.Clusters = []map[string]any{cluster("k-1", map[string]any{"workers": map[string]any{"state": state}})}
-		if got := h.run("k8s", "upgrade-workers", "k-1", "--wait"); got != code || len(h.fake.Writes) != 0 ||
+		if got := h.run("k8s", "upgrade-workers", "k-1"); got != code || len(h.fake.Writes) != 0 ||
 			(code == ExitAPI) != strings.Contains(h.stderr.String(), "nothing to wait for") {
 			t.Errorf("%s: exit %d (want %d), writes %d, stderr %q", state, got, code, len(h.fake.Writes), h.stderr)
 		}
@@ -216,8 +216,8 @@ func TestUpgradeWorkersWithNoOperationToFollow(t *testing.T) {
 		h := elevated(t)
 		h.fake.UpgradeNoOperation = true
 		args := []string{"k8s", "upgrade-workers", "k-1", "--version", "v1.33.1"}
-		if c.wait {
-			args = append(args, "--wait")
+		if !c.wait {
+			args = append(args, "--no-wait")
 		}
 		if code := h.run(args...); code != c.code || !strings.Contains(h.stderr.String(), c.want) ||
 			len(h.fake.Writes) != 1 {
@@ -229,7 +229,7 @@ func TestUpgradeWorkersWithNoOperationToFollow(t *testing.T) {
 func TestUpgradeWorkersReadsTheOperationFromLocation(t *testing.T) {
 	h := elevated(t)
 	h.fake.OmitOperationID = true
-	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "-q")
+	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "--no-wait", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "op/upgrade-k-1" {
 		t.Errorf("stdout = %q", got)
 	}
@@ -238,7 +238,7 @@ func TestUpgradeWorkersReadsTheOperationFromLocation(t *testing.T) {
 func TestUpgradeWorkersWaits(t *testing.T) {
 	h := elevated(t)
 	h.fake.OpStates["op/upgrade-k-1"] = []string{"running", "complete"}
-	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "--wait", "-o", "json")
+	h.mustRun("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1", "-o", "json")
 	if !strings.Contains(h.stdout.String(), `"complete"`) {
 		t.Errorf("stdout = %s", h.stdout)
 	}

@@ -76,10 +76,10 @@ func TestActionsHitTheirEndpoints(t *testing.T) {
 		{[]string{"shutdown", "vm-1", "--guest-timeout", "30"}, "POST /v1/vms/vm-1/actions/shutdown?timeout=30"},
 		{[]string{"reboot", "vm-1"}, "POST /v1/vms/vm-1/actions/reboot"},
 		{[]string{"force-stop", "vm-1"}, "POST /v1/vms/vm-1/actions/force-stop"},
-		{[]string{"rename", "vm-1", "db"}, "POST /v1/vms/vm-1/actions/rename"},
+		{[]string{"rename", "vm-1", "--name", "db"}, "POST /v1/vms/vm-1/actions/rename"},
 	} {
 		h := signedIn(t)
-		h.mustRun(append(append([]string{"vm"}, c.args...), "-q")...)
+		h.mustRun(append(append([]string{"vm"}, c.args...), "--no-wait", "-q")...)
 		if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != c.want {
 			t.Errorf("%v: writes %v, want %s", c.args, h.fake.WriteURLs, c.want)
 		}
@@ -125,11 +125,11 @@ func TestDeleteOnTerminalAsksFirst(t *testing.T) {
 func TestAcceptedWithoutBodyUsesLocation(t *testing.T) {
 	h := signedIn(t)
 	h.fake.OmitOperationID = true
-	h.mustRun("vm", "start", "vm-1", "-q")
+	h.mustRun("vm", "start", "vm-1", "--no-wait", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "op/start-vm-1" {
 		t.Errorf("operation id = %q", got)
 	}
-	h.mustRun("vm", "start", "vm-1", "--wait", "-o", "json")
+	h.mustRun("vm", "start", "vm-1", "-o", "json")
 	if !strings.Contains(h.stdout.String(), `"op/start-vm-1"`) || !strings.Contains(h.stdout.String(), "complete") {
 		t.Errorf("wait output = %s", h.stdout)
 	}
