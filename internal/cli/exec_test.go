@@ -436,3 +436,109 @@ func TestVpcVipDeleteResolvesBothNames(t *testing.T) {
 		t.Errorf("writes %v", h.fake.WriteURLs)
 	}
 }
+
+// The networking list columns: ip-address IDs come from the address, servedBy
+// is a count, primary reads yes/no, and a null leaves the cell blank.
+func TestNetworkingListColumns(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/ip-addresses": {Body: `{"data":[
+			{"address":"203.0.113.7","kind":"public","ownerName":"web-01","ownerKind":"vm","primary":true},
+			{"address":"10.0.0.5","kind":"private","ownerName":"lb1","ownerKind":"vip","vpcName":"web","primary":false},
+			{"address":"203.0.113.9","kind":"public","primary":null}]}`},
+		"GET /v1/vips": {Body: `{"data":[
+			{"id":"vip-1","name":"lb1","vpcName":"web","servedBy":[{"vmId":"a"},{"vmId":"b"}]},
+			{"id":"vip-2","name":"lb2","vpcName":"web","servedBy":null}]}`},
+		"GET /v1/vpcs/vpc-1/reserved-ips": {Body: `{"data":[
+			{"id":"rip-1","address":"203.0.113.7","vmId":"vm-1"},{"id":"rip-2","address":"203.0.113.8","vmId":null}]}`},
+	})
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"ip-address", "list"}, "203.0.113.7 10.0.0.5 203.0.113.9"},
+		{[]string{"vip", "list"}, "vip-1 vip-2"},
+		{[]string{"vpc", "reserved-ip", "list", "--vpc", "web"}, "rip-1 rip-2"},
+	} {
+		h.mustRun(append(c.args, "-q")...)
+		if got := strings.Join(strings.Fields(h.stdout.String()), " "); got != c.want {
+			t.Errorf("%v -q = %q, want %q", c.args, got, c.want)
+		}
+	}
+	rows := func(args ...string) [][]string {
+		h.mustRun(append(args, "-o", "table")...)
+		var out [][]string
+		for _, l := range strings.Split(strings.TrimSpace(h.stdout.String()), "\n")[1:] {
+			out = append(out, strings.Fields(l))
+		}
+		return out
+	}
+	ips := rows("ip-address", "list")
+	if got := fmt.Sprint(ips); got != "[[203.0.113.7 public web-01 vm yes] [10.0.0.5 private lb1 vip web no] [203.0.113.9 public]]" {
+		t.Errorf("ip-address rows %s", got)
+	}
+	vips := rows("vip", "list")
+	if got := fmt.Sprint(vips); got != "[[vip-1 lb1 web 2] [vip-2 lb2 web]]" {
+		t.Errorf("vip rows %s", got)
+	}
+	reserved := rows("vpc", "reserved-ip", "list", "--vpc", "web")
+	if got := fmt.Sprint(reserved); got != "[[rip-1 203.0.113.7 vm-1] [rip-2 203.0.113.8]]" {
+		t.Errorf("reserved-ip rows %s", got)
+	}
+}
+
+// The gateway always sends "rules", so an empty list is an empty table and a
+// body without the field is an API error rather than an empty answer.
+func TestVipFirewallRuleListEmptyAndMissingRules(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	routes := map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[],"writable":true}`},
+	}
+	canned(h, routes)
+	args := []string{"vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web"}
+	h.mustRun(append(args, "-q")...)
+	if got := h.stdout.String(); got != "" {
+		t.Errorf("-q on no rules = %q", got)
+	}
+	h.mustRun(append(args, "-o", "table")...)
+	if lines := strings.Split(strings.TrimSpace(h.stdout.String()), "\n"); len(lines) != 1 || !strings.Contains(lines[0], "DIRECTION") {
+		t.Errorf("table on no rules:\n%s", h.stdout)
+	}
+	routes["GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules"] = fakeapi.Canned{Body: `{"writable":true}`}
+	if code := h.run(append(args, "-q")...); code != ExitAPI {
+		t.Errorf("missing rules: exit %d", code)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, `no "rules" field`) {
+		t.Errorf("stderr = %s", s)
+	}
+}
+
+// The VIP lookup is account-wide and takes no account of --vpc: a name two
+// VPCs share is refused as ambiguous, and an unknown name is a usage error;
+// neither writes.
+func TestVpcVipNameAmbiguousOrUnknownRefuses(t *testing.T) {
+	h := newHarness(t)
+	g := protected()
+	g.Elevated = true
+	h.seed("default", g, time.Now().Add(time.Hour))
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}, {"id": "vpc-2", "name": "db"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[
+			{"id":"vip-1","name":"lb1","vpcId":"vpc-1"},{"id":"vip-2","name":"lb1","vpcId":"vpc-2"}]}`},
+	})
+	if code := h.run("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
+		t.Errorf("ambiguous: exit %d", code)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, `have name "lb1"`) {
+		t.Errorf("ambiguous stderr = %s", s)
+	}
+	if code := h.run("vpc", "vip", "delete", "nope", "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
+		t.Errorf("unknown: exit %d", code)
+	}
+	if len(h.fake.WriteURLs) != 0 {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+}
