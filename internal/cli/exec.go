@@ -255,7 +255,7 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 			return usageErr(err)
 		}
 	}
-	if len(op.AtLeastOne) > 0 && !slices.ContainsFunc(op.AtLeastOne, f.Changed) {
+	if len(op.AtLeastOne) > 0 && !atLeastOneGiven(op, f, body) {
 		return usageErr(fmt.Errorf("give %s", orList(op.AtLeastOne)))
 	}
 	if op.List && r.cursor != "" && r.limit == 0 {
@@ -807,12 +807,14 @@ func (a *App) resolveName(ctx context.Context, s *session, resource, value strin
 		idField = "id"
 	}
 	rows, err := listPages(ctx, s, r.List, nil, true, "data")
-	if refusedScope(err) != "" {
-		// The credential cannot list them, so it can act only by id.
-		return value, false, nil
-	}
 	if err != nil {
-		return "", false, err
+		var e *cloudafrica.APIError
+		if ctx.Err() != nil || errors.As(err, &e) && e.Status == http.StatusUnauthorized {
+			return "", false, err
+		}
+		// The value may well be an id, and the API answers for a wrong one.
+		fmt.Fprintf(a.Stderr, "Cannot list %ss to look up %q (%v); using it as an id.\n", r.Noun, value, err)
+		return value, false, nil
 	}
 	var matches []any
 	for _, raw := range rows {
@@ -836,4 +838,25 @@ func (a *App) resolveName(ctx context.Context, s *session, resource, value strin
 		fmt.Fprintf(&b, "\n  %s  %s", field(m, idField), field(m, r.Match))
 	}
 	return "", false, usageErr(errors.New(b.String()))
+}
+
+// atLeastOneGiven reports whether a flag in op.AtLeastOne was given, or --data
+// set its field or a field that has no flag.
+func atLeastOneGiven(op cmdspec.Op, f *pflag.FlagSet, body map[string]any) bool {
+	if slices.ContainsFunc(op.AtLeastOne, f.Changed) {
+		return true
+	}
+	flagged := map[string]bool{}
+	for _, fl := range op.Body {
+		flagged[fl.Name] = true
+		if _, ok := body[fl.Name]; ok && slices.Contains(op.AtLeastOne, fl.Flag) {
+			return true
+		}
+	}
+	for k := range body {
+		if !flagged[k] {
+			return true
+		}
+	}
+	return false
 }

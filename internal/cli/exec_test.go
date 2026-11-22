@@ -344,3 +344,35 @@ func TestBooleanFlags(t *testing.T) {
 		t.Errorf("without --terms-accepted: exit %d, writes %d", code, len(h.fake.Writes))
 	}
 }
+
+func TestAFailedLookupFallsBackToTheID(t *testing.T) {
+	for name, c := range map[string]fakeapi.Canned{
+		"unnamed scope refusal": {Status: 403, Body: `{"type":"https://api.cloudafrica.net/problems/insufficient-scope","title":"Insufficient scope","status":403}`},
+		"other refusal":         {Status: 403, Body: `{"type":"https://api.cloudafrica.net/problems/forbidden","title":"Forbidden","status":403}`},
+	} {
+		h := signedIn(t)
+		canned(h, map[string]fakeapi.Canned{"GET /v1/vpcs": c})
+		h.mustRun(append(slices.Clone(createArgs), "--ssh-key", "k1", "-q")...)
+		if b := h.fake.Bodies[0]; b["vpcResourceId"] != "vpc-1" || !strings.Contains(h.stderr.String(), `using it as an id`) {
+			t.Errorf("%s: body %v, stderr %q", name, b, h.stderr)
+		}
+	}
+	h := signedIn(t)
+	canned(h, map[string]fakeapi.Canned{"GET /v1/vpcs": {Status: 401, Body: `{"type":"about:blank","title":"Unauthorized","status":401}`}})
+	if code := h.run(append(slices.Clone(createArgs), "--ssh-key", "k1", "-q")...); code == ExitOK || len(h.fake.Writes) != 0 {
+		t.Errorf("a 401 on the lookup: exit %d, writes %d", code, len(h.fake.Writes))
+	}
+}
+
+func TestResizeTakesDisksFromData(t *testing.T) {
+	h := signedIn(t)
+	h.mustRun("vm", "resize", "vm-1", "-d", `{"disks":[{"id":"d1","sizeGib":50}]}`, "--no-wait")
+	if got := fmt.Sprint(h.fake.Bodies[0]); got != "map[disks:[map[id:d1 sizeGib:50]]]" {
+		t.Errorf("body %s", got)
+	}
+	h = signedIn(t)
+	h.mustRun("vm", "resize", "vm-1", "-d", `{"cpus":4}`, "--no-wait")
+	if code := h.run("vm", "resize", "vm-1", "-d", `{}`); code != ExitUsage {
+		t.Errorf("an empty --data: exit %d", code)
+	}
+}

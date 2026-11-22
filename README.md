@@ -126,6 +126,7 @@ Every command has `--help`. The conventions:
 
 - **Names or ids.** Where a command takes a VM, VPC, SSH key, VIP or placement group, a name works as
   well as an id. A name that matches nothing is refused; one that matches several is refused with their ids.
+  When the names cannot be listed (the credential lacks the scope, say), the value is used as an id.
 - **Waiting.** A command that starts an operation waits for it, printing progress on a terminal, and
   exits 1 if it fails. `--no-wait` prints the operation and returns; `ca operation wait` follows it later.
 - **Confirmation.** Deletes and protected actions ask first on a terminal; off a terminal they need `--yes`.
