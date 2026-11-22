@@ -607,7 +607,12 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 			return cmdspec.Field{}, false
 		}
 		t := typeOf(rs)
-		if t != "string" && t != "integer" && t != "number" && t != "boolean" {
+		if t == "array" && where == "query parameter" {
+			if item := g.resolve(rs.Items); item != nil && typeOf(item) == "string" && len(item.Enum) == 0 {
+				t = "stringList"
+			}
+		}
+		if t != "string" && t != "integer" && t != "number" && t != "boolean" && t != "stringList" {
 			return cmdspec.Field{}, false
 		}
 		f := cmdspec.Field{Name: name, Flag: Kebab(name), Type: t, Required: required, Help: firstLine(desc)}

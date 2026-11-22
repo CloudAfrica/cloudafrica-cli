@@ -34,6 +34,17 @@ groups:
   operation: Inspect and cancel asynchronous operations
   placement-group: Manage placement groups
   placement-group member: Manage a placement group's members
+  account: Show the account and its limits
+  activity: List account activity
+  backup-policy: List the backup policy of every VM
+  backup-window: List the backup windows
+  billing: Read the balance and accrual, and manage the billing details
+  member: Manage the account's members
+  project: Manage projects
+  project resource: Manage the resources in a project
+  support: Raise and follow support tickets
+  support ticket: Manage support tickets
+  transaction: List invoices and credit notes
 
 resources:
   vm: {noun: VM, list: /v1/vms, match: name, idPattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'}
@@ -43,6 +54,9 @@ resources:
   placement-group: {noun: placement group, list: /v1/placement-groups, match: name}
   bucket: {noun: bucket, list: /v1/buckets, match: name}
   bucket-key: {noun: bucket key, list: /v1/bucket-keys, match: name}
+  project: {noun: project, list: /v1/projects, match: name}
+  member: {noun: member, list: /v1/members, match: email, id: userId}
+  support-ticket: {noun: support ticket, list: /v1/support/tickets, match: reference}
 
 params:
   /v1/vms/{id}: {resource: vm}
@@ -57,6 +71,10 @@ params:
   /v1/bucket-keys/{keyId}: {resource: bucket-key, help: "the key name or id"}
   /v1/bucket-keys/{keyId}/buckets/{bucketId}: {resource: bucket, help: "the bucket name or id"}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
+  /v1/projects/{id}: {resource: project}
+  /v1/projects/{id}/resources/{resourceId}: {help: "the resource's id (ca project resource list shows it)"}
+  /v1/members/{userId}: {resource: member, help: "the member's email or user id"}
+  /v1/support/tickets/{id}: {resource: support-ticket, help: "the ticket's reference number or id"}
 
 handwritten:
   createVm: vm create
@@ -76,17 +94,6 @@ exclude:
   - {operation: deleteVmFirewallRules, reason: firewall-rule delete covers one rule}
   - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
 
-pending:
-  - {prefix: /v1/account, slice: 4}
-  - {prefix: /v1/activity, slice: 4}
-  - {prefix: /v1/projects, slice: 4}
-  - {prefix: /v1/members, slice: 4}
-  - {prefix: /v1/support, slice: 4}
-  - {prefix: /v1/billing, slice: 4}
-  - {prefix: /v1/transactions, slice: 4}
-  - {prefix: /v1/backup-policies, slice: 4}
-  - {prefix: /v1/backup-windows, slice: 4}
-  - {prefix: /v1/placement/feasibility, slice: 4}
 
 operations:
   listVms:
@@ -196,6 +203,79 @@ operations:
     path: bucket-key revoke
     positional: keyId
     example: ca bucket-key revoke ci --bucket logs-7f3a
+
+  getAccount:
+    example: ca account get
+  getAccountLimits:
+    path: account limits
+    example: ca account limits
+  getAccountDeletedVmBackupRetention:
+    path: account backup-retention
+  listActivity:
+    example: |
+      ca activity list --limit 20
+      ca activity list --types vm.started,vm.stopped
+      ca activity list --subject-type vm --subject-id "$(ca vm get web-01 -q)"
+  listBackupPolicies:
+    path: backup-policy list
+  listBackupWindows:
+    path: backup-window list
+  getBillingBalance:
+    path: billing balance
+    example: ca billing balance
+  getBillingAccrual:
+    path: billing accrual
+    example: ca billing accrual
+  getBillingDetails:
+    path: billing details get
+  updateBillingDetails:
+    path: billing details set
+    atLeastOne: [billing-email, vat-number, company-number, postal-address1, postal-address2, postal-address3, postal-address4, postal-address5, country-code]
+    example: ca billing details set --billing-email accounts@example.com
+  listTransactions:
+    example: ca transaction list
+  createMember:
+    example: ca member create --email jo@example.com --role operator
+  deleteMember:
+    example: ca member delete jo@example.com
+  cancelMemberInvitation:
+    example: ca member cancel-invitation jo@example.com
+  resendMemberInvitation:
+    example: ca member resend-invitation jo@example.com
+  updateMemberRole:
+    path: member role set
+    positional: userId
+    example: ca member role set jo@example.com --role admin
+  getPlacementFeasibility:
+    path: datacenter feasibility
+    flags:
+      datacenterSlug: {name: datacenter}
+      ramMib: {name: ram-gib, scale: 1024, help: the VM's RAM in GiB}
+    example: ca datacenter feasibility --datacenter jnb --vcpu 4 --ram-gib 8 --boot-disk-gib 40
+  createProject:
+    example: ca project create --name Production --slug PRD
+  updateProject:
+    example: ca project update prod --name Production
+  moveProjectResource:
+    path: project resource move
+    positional: resourceId
+    example: ca project resource move "$(ca vm get web-01 -q)" --project prod
+  listSupportTickets:
+    flags:
+      q: {name: search}
+    example: |
+      ca support ticket list
+      ca support ticket list --status open,waiting-on-you
+  getSupportTicket:
+    example: ca support ticket get 1234
+  createSupportTicket:
+    example: ca support ticket create --subject "Backup failed" --description "The nightly backup of web-01 failed"
+  createSupportTicketReply:
+    path: support ticket reply
+    positional: id
+    example: ca support ticket reply 1234 --body "That fixed it"
+  resolveSupportTicket:
+    example: ca support ticket resolve 1234
 
 columns:
   PublicVmDto:
@@ -396,3 +476,135 @@ columns:
     id: mode
     columns:
       - {header: MODE, path: mode}
+  PublicAccountDto:
+    id: accountId
+    columns:
+      - {header: ACCOUNT ID, path: accountId}
+      - {header: ACCOUNT, path: accountName}
+      - {header: TOKEN, path: tokenName}
+      - {header: EXPIRES, path: expiresAt, format: time}
+      - {header: SCOPES, path: scopes, format: list}
+      - {header: RATE LIMIT, path: rateLimit.limit}
+      - {header: REMAINING, path: rateLimit.remaining}
+  PublicDeletedVmBackupRetentionDto:
+    id: retentionDays
+    columns:
+      - {header: RETENTION DAYS, path: retentionDays}
+  PublicLimitDto:
+    id: key
+    columns:
+      - {header: KEY, path: key}
+      - {header: SCOPE, path: scope}
+      - {header: LIMIT, path: limit, format: unlimited}
+      - {header: USED, path: used}
+  PublicActivityDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: STARTED, path: startedAt, format: time}
+      - {header: VERB, path: verb}
+      - {header: STATUS, path: status}
+      - {header: ACTOR, path: actorClass}
+      - {header: ACTOR NAME, path: actorDisplayName}
+      - {header: SUBJECT, path: subjectType}
+      - {header: SUBJECT NAME, path: subjectLabel}
+      - {header: REASON, path: failureReason}
+  PublicVmBackupPolicyDto:
+    id: vmId
+    columns:
+      - {header: VM, path: vmId}
+      - {header: PLAN, path: policy.planDisplayName}
+      - {header: CADENCE, path: policy.cadenceKind}
+      - {header: DAY, path: policy.cadenceDay}
+      - {header: WINDOW, path: policy.windowPreference}
+      - {header: PAUSED, path: policy.paused, format: bool}
+      - {header: LAST RUN, path: policy.lastFiredSlot, format: time}
+  PublicBackupWindowDto:
+    id: preference
+    columns:
+      - {header: WINDOW, path: preference}
+      - {header: STARTS UTC, path: startMinuteOfDayUtc, format: clock}
+      - {header: LENGTH MIN, path: lengthMinutes}
+  PublicMemberDto:
+    id: userId
+    columns:
+      - {header: USER ID, path: userId}
+      - {header: EMAIL, path: email}
+      - {header: FIRST NAME, path: firstName}
+      - {header: LAST NAME, path: lastName}
+      - {header: ROLE, path: role}
+      - {header: PENDING, path: pending, format: bool}
+  PublicProjectDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: SLUG, path: slug}
+      - {header: DEFAULT, path: defaultProject, format: bool}
+      - {header: RESOURCES, path: resourceCount}
+      - {header: CREATED, path: createdAt, format: time}
+  PublicProjectResourceDto:
+    id: resourceId
+    columns:
+      - {header: ID, path: resourceId}
+      - {header: TYPE, path: type}
+      - {header: NAME, path: name}
+      - {header: MOVABLE, path: assignable, format: bool}
+  PublicSupportTicketDto:
+    columns:
+      - {header: REFERENCE, path: reference}
+      - {header: ID, path: id}
+      - {header: SUBJECT, path: subject}
+      - {header: STATUS, path: status}
+      - {header: RAISED BY, path: raisedByName}
+      - {header: UPDATED, path: updatedAt, format: time}
+  PublicSupportTicketDetailDto:
+    id: ticket.id
+    columns:
+      - {header: REFERENCE, path: ticket.reference}
+      - {header: ID, path: ticket.id}
+      - {header: SUBJECT, path: ticket.subject}
+      - {header: STATUS, path: ticket.status}
+      - {header: RAISED BY, path: ticket.raisedByName}
+      - {header: UPDATED, path: ticket.updatedAt, format: time}
+      - {header: MESSAGES, path: messages, format: count}
+  PublicTransactionDto:
+    id: number
+    columns:
+      - {header: NUMBER, path: number}
+      - {header: KIND, path: kind}
+      - {header: DATE, path: date}
+      - {header: AMOUNT, path: amount}
+      - {header: CURRENCY, path: currency}
+      - {header: STATUS, path: status}
+      - {header: RELATED, path: relatedNumber}
+  PublicAccrualDto:
+    id: total
+    columns:
+      - {header: AS OF, path: asOf, format: time}
+      - {header: PERIOD START, path: periodStart, format: time}
+      - {header: PERIOD END, path: periodEnd, format: time}
+      - {header: TOTAL, path: total}
+      - {header: CURRENCY, path: currency}
+      - {header: BILLABLE H, path: billableHours}
+      - {header: UNPRICED H, path: unpriceableHours}
+  PublicBalanceDto:
+    id: total
+    columns:
+      - {header: CURRENT, path: current}
+      - {header: OVERDUE, path: overdue}
+      - {header: TOTAL, path: total}
+      - {header: CURRENCY, path: currency}
+      - {header: COMPUTED, path: computedAt, format: time}
+  PublicBillingDetailsDto:
+    id: billingEmail
+    columns:
+      - {header: LEGAL NAME, path: legalName}
+      - {header: EMAIL, path: billingEmail}
+      - {header: VAT, path: vatNumber}
+      - {header: COMPANY NO, path: companyNumber}
+      - {header: ADDRESS 1, path: postalAddress1}
+      - {header: ADDRESS 2, path: postalAddress2}
+      - {header: ADDRESS 3, path: postalAddress3}
+      - {header: ADDRESS 4, path: postalAddress4}
+      - {header: ADDRESS 5, path: postalAddress5}
+      - {header: COUNTRY, path: countryCode}
+      - {header: EDITABLE, path: editable, format: bool}

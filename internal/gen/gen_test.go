@@ -200,6 +200,37 @@ func TestGenerateDerivesTheFixture(t *testing.T) {
 	}
 }
 
+// An array of strings in the query becomes one repeatable flag; the same array
+// in a body stays a --data field.
+func TestGenerateStringListQuery(t *testing.T) {
+	d := fixtureDoc()
+	g := at(d, "paths", "/v1/widgets", "get")
+	params, _ := g["parameters"].([]any)
+	g["parameters"] = append(params, map[string]any{"name": "tags", "in": "query", "description": "Tags to include.",
+		"schema": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}})
+	out, _, err := generate(t, d, fixtureOverlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := opByID(t, out, "listWidgets").Query
+	if len(q) != 2 || q[1].Name != "tags" || q[1].Flag != "tags" || q[1].Type != "stringList" || q[1].Help != "Tags to include." {
+		t.Errorf("query = %+v", q)
+	}
+
+	d = fixtureDoc()
+	props := at(d, "components", "schemas", "CreateWidget", "properties")
+	props["tags"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	out, _, err = generate(t, d, fixtureOverlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range opByID(t, out, "createWidget").Body {
+		if f.Name == "tags" {
+			t.Errorf("a body array became a flag: %+v", f)
+		}
+	}
+}
+
 func TestGenerateRefuses(t *testing.T) {
 	for name, c := range map[string]struct {
 		doc     func(d map[string]any)
@@ -335,7 +366,16 @@ func TestGenerateRefuses(t *testing.T) {
 				g := at(d, "paths", "/v1/widgets", "get")
 				params, _ := g["parameters"].([]any)
 				g["parameters"] = append(params, map[string]any{"name": "ids", "in": "query",
-					"schema": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}})
+					"schema": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}}})
+			},
+			want: "listWidgets: query parameter ids is not a scalar",
+		},
+		"enum list query parameter": {
+			doc: func(d map[string]any) {
+				g := at(d, "paths", "/v1/widgets", "get")
+				params, _ := g["parameters"].([]any)
+				g["parameters"] = append(params, map[string]any{"name": "ids", "in": "query",
+					"schema": map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": []any{"a"}}}})
 			},
 			want: "listWidgets: query parameter ids is not a scalar",
 		},

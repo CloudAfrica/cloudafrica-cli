@@ -69,7 +69,7 @@ type Param struct {
 type Field struct {
 	Name string
 	Flag string
-	// Type is string, integer, number or boolean.
+	// Type is string, integer, number, boolean or stringList (a query parameter sent once per element).
 	Type string
 	// Format is the integer's width, int32 or int64 ("" for int64).
 	Format   string
@@ -107,7 +107,8 @@ type Column struct {
 	Header string
 	// Path is a dotted JSON path, e.g. "cpu.cores".
 	Path string
-	// Format is "", bytes, time, upper, bool, list or count.
+	// Format is "", bytes, time, upper, bool, list, count, clock (minutes after midnight as HH:MM) or
+	// unlimited (a null prints as "unlimited").
 	Format string
 }
 

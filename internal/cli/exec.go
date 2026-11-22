@@ -148,6 +148,8 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 			f.Float64(fl.Flag, 0, help)
 		case "boolean":
 			f.Bool(fl.Flag, false, help)
+		case "stringList":
+			f.StringSlice(fl.Flag, nil, strings.TrimSpace(help+" (repeat the flag or separate values with commas)"))
 		default:
 			f.String(fl.Flag, "", help)
 		}
@@ -244,6 +246,12 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		if !set {
 			if fl.Required {
 				return usageErr(fmt.Errorf("--%s is required", fl.Flag))
+			}
+			continue
+		}
+		if list, ok := v.([]string); ok {
+			for _, s := range list {
+				query.Add(fl.Name, s)
 			}
 			continue
 		}
@@ -440,6 +448,17 @@ func fieldValue(f *pflag.FlagSet, fl cmdspec.Field) (v any, set bool, err error)
 	case "boolean":
 		b, _ := f.GetBool(fl.Flag)
 		return b, true, nil
+	case "stringList":
+		list, _ := f.GetStringSlice(fl.Flag)
+		if len(list) == 0 {
+			return nil, true, fmt.Errorf("--%s: give at least one value", fl.Flag)
+		}
+		for _, s := range list {
+			if strings.TrimSpace(s) == "" {
+				return nil, true, fmt.Errorf("--%s: a value is empty", fl.Flag)
+			}
+		}
+		return list, true, nil
 	}
 	s, _ := f.GetString(fl.Flag)
 	if len(fl.Enum) > 0 && !slices.Contains(fl.Enum, s) {
@@ -754,9 +773,18 @@ func field(v any, path string) string {
 
 func format(v any, how string) string {
 	if v == nil {
+		if how == "unlimited" {
+			return "unlimited"
+		}
 		return ""
 	}
 	switch how {
+	case "clock":
+		if n, ok := v.(json.Number); ok {
+			if i, err := n.Int64(); err == nil && i >= 0 {
+				return fmt.Sprintf("%02d:%02d", i/60%24, i%60)
+			}
+		}
 	case "bytes":
 		if n, ok := v.(json.Number); ok {
 			if i, err := n.Int64(); err == nil {

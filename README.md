@@ -131,6 +131,17 @@ ca vm backup-policy get|set|delete|preview-rotation --vm web-01
 ca placement-group list|get|create|delete
 ca placement-group member add|remove web-01 --placement-group spread
 ca operation get|wait|cancel <operation-id>
+ca account get|limits|backup-retention
+ca activity list --types vm.started,vm.stopped --subject-type vm
+ca project list|get|create|update|delete
+ca project resource list|move --project prod
+ca member list|create|delete|resend-invitation|cancel-invitation|role set jo@example.com   # create, delete and role set need protected:team
+ca support ticket list|get|create|reply|resolve 1234   # a ticket is named by its reference number
+ca billing balance|accrual|details get|details set   # details set needs protected:billing
+ca transaction list
+ca backup-policy list
+ca backup-window list
+ca datacenter feasibility --datacenter jnb --vcpu 4 --ram-gib 8 --boot-disk-gib 40
 ca api GET /v1/account   # any /v1 call
 ```
 
