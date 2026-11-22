@@ -38,6 +38,16 @@ func TestOperationGetKeepsASlashedID(t *testing.T) {
 	}
 }
 
+func TestOperationTableShowsTheError(t *testing.T) {
+	h := signedIn(t)
+	canned(h, map[string]fakeapi.Canned{"GET /v1/operations/op-1": {Body: `{"id":"op-1","state":"failed",
+		"error":{"message":"disk full"}}`}})
+	h.mustRun("operation", "get", "op-1", "-o", "table")
+	if out := h.stdout.String(); !strings.Contains(out, "ERROR") || !strings.Contains(out, "disk full") {
+		t.Errorf("stdout = %s", out)
+	}
+}
+
 func TestDataMergesUnderFlags(t *testing.T) {
 	h := signedIn(t)
 	canned(h, map[string]fakeapi.Canned{"POST /v1/vms/vm-1/firewall-rules": {Status: 201, Body: `{}`}})
@@ -219,6 +229,11 @@ func TestListLimitPrintsOnePageVerbatim(t *testing.T) {
 	}
 	if code := h.run("vm", "list", "--cursor", "c2"); code != ExitUsage {
 		t.Errorf("--cursor without --limit: exit %d", code)
+	}
+	for _, n := range []string{"0", "-1"} {
+		if code := h.run("vm", "list", "--limit", n); code != ExitUsage {
+			t.Errorf("--limit %s: exit %d", n, code)
+		}
 	}
 	h.mustRun("vm", "list", "-o", "json")
 	var all []map[string]any

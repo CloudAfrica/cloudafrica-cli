@@ -261,8 +261,8 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	if op.List && r.cursor != "" && r.limit == 0 {
 		return usageErr(errors.New("--cursor needs --limit"))
 	}
-	if r.limit < 0 {
-		return usageErr(errors.New("--limit must be positive"))
+	if r.limit < 0 || r.limit == 0 && f.Changed("limit") {
+		return usageErr(errors.New("--limit must be at least 1"))
 	}
 	if op.Confirm && !r.yes && !a.TTY {
 		return usageErr(fmt.Errorf("refusing to %s without --yes when not on a terminal", strings.Join(op.Path, " ")))

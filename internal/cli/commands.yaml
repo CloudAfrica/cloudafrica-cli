@@ -1,6 +1,6 @@
 # The overlay on the SDK's openapi.json that `go generate ./...` (internal/gen)
-# turns into commands_gen.go. Every operation in the document must be generated,
-# hand-written, excluded or pending here, or generation fails.
+# turns into commands_gen.go. An operation not hand-written, excluded or pending
+# here is generated, and generation fails if it cannot be (no column set, say).
 
 nouns:
   network-interfaces: nic
@@ -155,6 +155,7 @@ columns:
       - {header: TARGET, path: target.id}
       - {header: SUBMITTED, path: submittedAt, format: time}
       - {header: MESSAGE, path: progressMessage}
+      - {header: ERROR, path: error.message}
   PublicVmDiskDto:
     columns:
       - {header: ID, path: id}
