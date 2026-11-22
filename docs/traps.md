@@ -7,6 +7,9 @@ Author misses the PR review caught. Check these before opening a PR.
 - **The write of a command's deliverable checks its error.** If stdout carries the result a script
   captures (a secret, a Location), a failed `fmt.Fprint*` must return an error, or the command exits
   0 with nothing captured. Pin it with an `h.failStdout` test per command (missed again on #8).
+  The response can lack the deliverable too: run each such command on a replay, an empty 200/201/204,
+  `available:false` and with `-q`, and see what a script captures (`bucket-key create|reveal-secret`,
+  #13: `-q` printed the key id, a replay and an empty 204 exited 0).
 - **Say what `ca` does, not what the gateway does.** A comment or help line about server behaviour
   is a claim about another repo; state ca's own rule, or cite the gateway source.
 - **A command's own precondition runs before anything that fails with other advice.** `ca k8s token`
@@ -32,7 +35,18 @@ Author misses the PR review caught. Check these before opening a PR.
 - **`--wait` never exits 0 without waiting** unless the end state already holds. Each early return
   (no operation id, nothing to do) checks the flag.
 - **A substring assertion must not match its negation.** `"ready"` is in `"not ready"`; assert the
-  whole row, and include the negative case.
+  whole row, and include the negative case. A new column set pins its header line and every cell of
+  a row filled in every column, so a swapped path fails; a prefix match leaves the tail unpinned
+  (#12, then #13 again: `contains` on loose tokens passed with two columns swapped).
+- **Read the SDK's description before naming a column.** `quotaBytes` is the priced usage, not a
+  limit; the header QUOTA told a customer the wrong thing (#13). Open the field's description.
+- **Trace every flag value in an example or help text through the executor.** Body fields are sent
+  verbatim and only path params resolve names, so `--bucket-resource-id logs-7f3a` sent a name where
+  the API wants an id, and the SDK's "id, not its name" help sat on a flag that does resolve names.
+  Run `ca <cmd> --help` for each override; a backticked span in help becomes the pflag metavar (#13).
+- **A remedy string is a claim about another command.** The reveal-secret hint said to delete the
+  key; the API refuses to delete the master key, which is the one most likely revealed. Check the
+  remedy against the API contract and test it on the case that triggers it (#13).
 - **Copy no helper by hand.** k8s inlined vm's 202 handling and drifted; reuse or factor it.
 - **A dependency bump checks what the dependency reports.** cloudafrica-go v0.2.0 kept `Version`
   at 0.1.0, so `ca` 0.2.0 printed the wrong SDK; `TestSDKVersionMatchesGoMod` now pins it, and run
