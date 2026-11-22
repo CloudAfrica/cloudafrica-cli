@@ -15,3 +15,10 @@ Author misses the PR review caught. Check these before opening a PR.
   when the minimum is lowered; add the value one below it as a refused case.
 - **Run golangci-lint locally** (`go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run`);
   CI fails on staticcheck quick-fixes that `go vet` does not report.
+- **Every enum state gets a branch and a test.** A `== CURRENT` check with an `else` lumps the
+  other four upgrade states together; switch over the generated consts and add a table row each.
+- **`--wait` never exits 0 without waiting** unless the end state already holds. Each early return
+  (no operation id, nothing to do) checks the flag.
+- **A substring assertion must not match its negation.** `"ready"` is in `"not ready"`; assert the
+  whole row, and include the negative case.
+- **Copy no helper by hand.** k8s inlined vm's 202 handling and drifted; reuse or factor it.
