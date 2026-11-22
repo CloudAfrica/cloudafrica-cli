@@ -70,7 +70,8 @@ function Invoke-Install([string] $Dir, [string] $Version = "v$version", [string]
     $env:CA_VERSION = $Version
     $env:CA_INSTALL_DIR = $Dir
     $env:LATEST = $Latest
-    $command = ". '$fake'; try { Get-Content -Raw '$installer' | Invoke-Expression } " +
+    # Strict mode as a caller might have it set, since iex runs the installer in the caller's scope.
+    $command = "Set-StrictMode -Version Latest; . '$fake'; try { Get-Content -Raw '$installer' | Invoke-Expression } " +
         "catch { Write-Host `$_.Exception.Message; Write-Host 'CA-TEST: threw'; exit 1 }; Write-Host 'CA-TEST: returned'"
     # Windows PowerShell turns a redirected native stderr into a terminating error under Stop.
     $ErrorActionPreference = 'Continue'
@@ -198,7 +199,7 @@ try {
     if (Test-Path "$d\ca.exe") { Die "unlisted archive left $d\ca.exe" }
     Check 'an archive missing from the checksum file is refused'
 
-    # An archive whose ca.exe does not run fails the install rather than reporting success.
+    # An archive whose ca.exe does not run is refused before it replaces a working install.
     Serve
     $broken = Join-Path $work 'broken'
     New-Item -ItemType Directory -Path $broken | Out-Null
@@ -208,10 +209,14 @@ try {
     Compress-Archive -Path "$broken\ca.exe" -DestinationPath $zip
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
     Set-Content (Join-Path $work "serve\$($sums.Name)") "$hash  $archive"
-    $d = Join-Path $work 'broken-install'
+    $d = Join-Path $work 'fresh'
+    $before = (Get-FileHash "$d\ca.exe").Hash
     if (Invoke-Install $d) { Die 'reported success for a ca.exe that does not run' }
-    if (-not (Output-Has 'does not run')) { Die "a broken ca.exe said: $(Output)" }
-    Check 'an installed ca.exe that does not run fails the install'
+    if (-not (Output-Has 'does not run; nothing was installed')) { Die "a broken ca.exe said: $(Output)" }
+    if ((Get-FileHash "$d\ca.exe").Hash -ne $before -or -not (Reports-Version "$d\cloudafrica.exe")) {
+        Die 'a broken ca.exe replaced a working install'
+    }
+    Check 'a downloaded ca.exe that does not run is refused and the install kept'
 
     Write-Host "$script:pass passed"
 } catch {
@@ -223,6 +228,9 @@ try {
     } else {
         Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value $savedPath -Type $savedKind
     }
+    # Broadcast the restored PATH, as install.ps1 broadcast the test's.
+    [Environment]::SetEnvironmentVariable('CA_INSTALL_PATH_REFRESH', '1', 'User')
+    [Environment]::SetEnvironmentVariable('CA_INSTALL_PATH_REFRESH', $null, 'User')
     if ($env:CI -and -not $defaultExisted)
         { Remove-Item $defaultDir -Recurse -Force -ErrorAction SilentlyContinue }
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

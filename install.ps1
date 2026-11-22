@@ -8,14 +8,14 @@
 #
 # Errors throw rather than exit: under `irm | iex` an exit would close the caller's shell.
 
-# Test-CloudAfricaCli reports whether $Path is this CLI: `ca version` prints "ca <version> (".
+# Test-CloudAfricaCli reports whether $Path is this CLI: `ca version` exits 0 and prints "ca <version> (".
 # The empty pipeline input is its stdin, so a program that reads one cannot hang the install. The
 # output is collected whole: Select-Object -First 1 would stop the pipeline without waiting for the
 # process, which then still holds the file the install is about to overwrite.
 function Test-CloudAfricaCli([string] $Path) {
     try {
         $lines = @($null | & $Path version 2>$null)
-        return "$($lines[0])" -like 'ca * (*'
+        return $LASTEXITCODE -eq 0 -and "$($lines[0])" -like 'ca * (*'
     } catch {
         return $false
     }
@@ -41,6 +41,8 @@ function Add-CloudAfricaUserPath([string] $Dir) {
 # The body is one function called on the last line, so a download cut short by `irm | iex`
 # runs nothing.
 function Install-CloudAfricaCli {
+    # `irm | iex` runs in the caller's scope, so this function would inherit its strict mode.
+    Set-StrictMode -Off
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
     $repo = 'https://github.com/CloudAfrica/cloudafrica-cli'
@@ -68,9 +70,8 @@ function Install-CloudAfricaCli {
             throw "install.ps1: cannot reach ${repo}: $($_.Exception.Message)"
         }
         # Where releases/latest redirected to: ResponseUri on Windows PowerShell, RequestUri on PowerShell 7.
-        $latest = $response.BaseResponse.ResponseUri
-        if (-not $latest)
-            { $latest = $response.BaseResponse.RequestMessage.RequestUri }
+        $latest = if ($PSVersionTable.PSEdition -eq 'Desktop') { $response.BaseResponse.ResponseUri }
+            else { $response.BaseResponse.RequestMessage.RequestUri }
         $tag = ("$latest" -split '/')[-1]
     }
     if ($tag -notmatch '^v[0-9]')
@@ -107,6 +108,10 @@ function Install-CloudAfricaCli {
 
         Expand-Archive -Path (Join-Path $tmp $archive) -DestinationPath (Join-Path $tmp 'x')
         $new = Join-Path $tmp 'x\ca.exe'
+        # Checked before anything is replaced: a ca.exe that does not run would otherwise overwrite a
+        # working install, and then read as another program that later installs refuse to replace.
+        if (-not (Test-CloudAfricaCli $new))
+            { throw "install.ps1: the downloaded ca.exe does not run; nothing was installed" }
         $ca = Join-Path $dir 'ca.exe'
         $alias = Join-Path $dir 'cloudafrica.exe'
         if ((Test-Path -LiteralPath $ca) -and -not (Test-CloudAfricaCli $ca)) {
@@ -136,8 +141,6 @@ function Install-CloudAfricaCli {
     if (($env:Path -split ';' | ForEach-Object { $_.TrimEnd('\') }) -notcontains $dir.TrimEnd('\'))
         { $env:Path = "$env:Path;$dir" }
     & $bin version
-    if ($LASTEXITCODE -ne 0)
-        { throw "install.ps1: $bin version exited $LASTEXITCODE; the installed binary does not run" }
 }
 
 Install-CloudAfricaCli
