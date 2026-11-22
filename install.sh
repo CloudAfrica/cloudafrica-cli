@@ -37,7 +37,7 @@ main() {
     case "$(uname -s)" in
         Linux) os=linux ;;
         Darwin) os=darwin ;;
-        *) fail "unsupported OS $(uname -s); on Windows use: scoop install ca" ;;
+        *) fail "unsupported OS $(uname -s); on Windows use install.ps1 or scoop" ;;
     esac
 
     case "$(uname -m)" in

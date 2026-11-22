@@ -13,9 +13,14 @@ scoop install ca                                    # Windows
 curl -fsSL https://github.com/CloudAfrica/cloudafrica-cli/releases/latest/download/install.sh | sh
 ```
 
+```powershell
+irm https://github.com/CloudAfrica/cloudafrica-cli/releases/latest/download/install.ps1 | iex
+```
+
 Each also installs `cloudafrica`, the same binary, for when `ca` is taken on your machine; if
-`ca` in the install directory is another program, `install.sh` leaves it and installs only `cloudafrica`.
-`install.sh` takes `CA_VERSION` (a tag) and `CA_INSTALL_DIR`. Release archives are on the
+`ca` in the install directory is another program, `install.sh` and `install.ps1` leave it and install
+only `cloudafrica`. Both take `CA_VERSION` (a tag) and `CA_INSTALL_DIR`; `install.ps1` defaults to
+`%LOCALAPPDATA%\Programs\cloudafrica` and adds the directory to your user `PATH`. Release archives are on the
 [releases page](https://github.com/CloudAfrica/cloudafrica-cli/releases); the checksum file is
 signed with cosign:
 
