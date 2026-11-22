@@ -9,11 +9,13 @@
 # Errors throw rather than exit: under `irm | iex` an exit would close the caller's shell.
 
 # Test-CloudAfricaCli reports whether $Path is this CLI: `ca version` prints "ca <version> (".
-# The empty pipeline input is its stdin, so a program that reads one cannot hang the install.
+# The empty pipeline input is its stdin, so a program that reads one cannot hang the install. The
+# output is collected whole: Select-Object -First 1 would stop the pipeline without waiting for the
+# process, which then still holds the file the install is about to overwrite.
 function Test-CloudAfricaCli([string] $Path) {
     try {
-        $first = $null | & $Path version 2>$null | Select-Object -First 1
-        return "$first" -like 'ca * (*'
+        $lines = @($null | & $Path version 2>$null)
+        return "$($lines[0])" -like 'ca * (*'
     } catch {
         return $false
     }
