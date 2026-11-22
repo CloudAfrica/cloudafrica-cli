@@ -4,6 +4,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -134,7 +135,7 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		f.String(p.Flag, "", paramHelp(p))
 	}
 	for _, fl := range slices.Concat(op.Query, op.Body) {
-		help := fl.Help
+		help := strings.ReplaceAll(fl.Help, "`", "")
 		if len(fl.Enum) > 0 {
 			help = strings.TrimSpace(help + " (one of: " + strings.Join(fl.Enum, ", ") + ")")
 		}
@@ -148,6 +149,8 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 			f.Float64(fl.Flag, 0, help)
 		case "boolean":
 			f.Bool(fl.Flag, false, help)
+		case "stringList":
+			f.StringSlice(fl.Flag, nil, strings.TrimSpace(help+" (repeat the flag or separate values with commas)"))
 		default:
 			f.String(fl.Flag, "", help)
 		}
@@ -163,7 +166,7 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		f.DurationVar(&r.timeout, "timeout", defaultWaitTimeout, "how long to wait for the operation")
 	}
 	if op.List && op.Paged {
-		f.IntVar(&r.limit, "limit", 0, "fetch one page of at most this many rows and print it as returned")
+		f.IntVar(&r.limit, "limit", 0, "fetch one page of at most this many rows (the route's cap applies) and print it as returned")
 		f.StringVar(&r.cursor, "cursor", "", "with --limit, the page to fetch (the previous page's nextCursor)")
 	}
 	return cmd
@@ -247,6 +250,12 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 			}
 			continue
 		}
+		if list, ok := v.([]string); ok {
+			for _, s := range list {
+				query.Add(fl.Name, s)
+			}
+			continue
+		}
 		query.Set(fl.Name, fmt.Sprint(v))
 	}
 	var body map[string]any
@@ -254,6 +263,9 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		if body, err = a.bodyFrom(op, f, r.data); err != nil {
 			return usageErr(err)
 		}
+	}
+	if err := exclusiveGiven(op, f); err != nil {
+		return usageErr(err)
 	}
 	if len(op.AtLeastOne) > 0 && !atLeastOneGiven(op, f, body) {
 		return usageErr(fmt.Errorf("give %s", orList(op.AtLeastOne)))
@@ -263,6 +275,12 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	}
 	if r.limit < 0 || r.limit == 0 && f.Changed("limit") {
 		return usageErr(errors.New("--limit must be at least 1"))
+	}
+	if op.PageLimit > 0 && r.limit > op.PageLimit {
+		return usageErr(fmt.Errorf("--limit is at most %d for %s", op.PageLimit, strings.Join(op.Path, " ")))
+	}
+	if err := cursorMode(op, f, r.cursor); err != nil {
+		return usageErr(err)
 	}
 	if op.Confirm && !r.yes && !a.TTY {
 		return usageErr(fmt.Errorf("refusing to %s without --yes when not on a terminal", strings.Join(op.Path, " ")))
@@ -440,6 +458,17 @@ func fieldValue(f *pflag.FlagSet, fl cmdspec.Field) (v any, set bool, err error)
 	case "boolean":
 		b, _ := f.GetBool(fl.Flag)
 		return b, true, nil
+	case "stringList":
+		list, _ := f.GetStringSlice(fl.Flag)
+		if len(list) == 0 {
+			return nil, true, fmt.Errorf("--%s: give at least one value", fl.Flag)
+		}
+		for _, s := range list {
+			if strings.TrimSpace(s) == "" {
+				return nil, true, fmt.Errorf("--%s: a value is empty", fl.Flag)
+			}
+		}
+		return list, true, nil
 	}
 	s, _ := f.GetString(fl.Flag)
 	if len(fl.Enum) > 0 && !slices.Contains(fl.Enum, s) {
@@ -610,15 +639,16 @@ func rowsField(columns string) string {
 }
 
 // listPages walks every page of a list path.
-func listPages(ctx context.Context, s *session, path string, query url.Values, paged bool, rows string) ([]json.RawMessage, error) {
+func listPages(ctx context.Context, s *session, path string, query url.Values, pageSize int, rows string) ([]json.RawMessage, error) {
 	out := []json.RawMessage{}
 	seen := map[string]bool{}
 	q := url.Values{}
 	for k, v := range query {
 		q[k] = v
 	}
+	paged := pageSize > 0
 	if paged {
-		q.Set("limit", strconv.Itoa(pageLimit))
+		q.Set("limit", strconv.Itoa(pageSize))
 	}
 	for {
 		_, body, _, err := send(ctx, s, http.MethodGet, path, q, nil)
@@ -670,7 +700,11 @@ func (a *App) runList(ctx context.Context, s *session, pr output.Printer, op cmd
 		}
 		return nil
 	}
-	all, err := listPages(ctx, s, path, query, op.Paged, rows)
+	size := 0
+	if op.Paged {
+		size = cmp.Or(op.PageLimit, pageLimit)
+	}
+	all, err := listPages(ctx, s, path, query, size, rows)
 	if err != nil {
 		return err
 	}
@@ -682,9 +716,10 @@ func (a *App) runList(ctx context.Context, s *session, pr output.Printer, op cmd
 // printRaw prints one response body: verbatim for json/yaml, through the column set for a table.
 func printRaw(pr output.Printer, columns string, body []byte) error {
 	cs, ok := genColumns[columns]
-	if !ok {
+	if !ok || len(cs.Columns) == 0 {
 		res := output.Result{Value: json.RawMessage(body)}
-		if id := field(decode(body), "id"); id != "" {
+		v := decode(body)
+		if id := cmp.Or(field(v, cs.ID), field(v, "id"), field(v, "userId")); id != "" {
 			res.IDs = []string{id}
 		}
 		if pr.Format == output.Table && !pr.Quiet {
@@ -754,9 +789,18 @@ func field(v any, path string) string {
 
 func format(v any, how string) string {
 	if v == nil {
+		if how == "unlimited" {
+			return "unlimited"
+		}
 		return ""
 	}
 	switch how {
+	case "clock":
+		if n, ok := v.(json.Number); ok {
+			if i, err := n.Int64(); err == nil && i >= 0 {
+				return fmt.Sprintf("%02d:%02d", i/60%24, i%60)
+			}
+		}
 	case "bytes":
 		if n, ok := v.(json.Number); ok {
 			if i, err := n.Int64(); err == nil {
@@ -838,7 +882,7 @@ func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, val
 	if idField == "" {
 		idField = "id"
 	}
-	rows, err := listPages(ctx, s, r.List, nil, true, "data")
+	rows, err := listPages(ctx, s, r.List, nil, pageLimit, "data")
 	if err != nil {
 		var e *cloudafrica.APIError
 		if parent != nil || ctx.Err() != nil || errors.As(err, &e) && e.Status == http.StatusUnauthorized {
@@ -878,6 +922,53 @@ func (a *App) resolveParam(ctx context.Context, s *session, p cmdspec.Param, val
 		fmt.Fprintf(&b, "\n  %s  %s", field(m, idField), field(m, r.Match))
 	}
 	return "", false, usageErr(errors.New(b.String()))
+}
+
+// exclusiveGiven refuses flags from two different op.Exclusive groups, and a
+// group of several flags unless all of them are given and none is blank.
+func exclusiveGiven(op cmdspec.Op, f *pflag.FlagSet) error {
+	for _, grp := range op.Exclusive {
+		if len(grp) < 2 || !slices.ContainsFunc(grp, f.Changed) {
+			continue
+		}
+		for _, name := range grp {
+			if v := f.Lookup(name); !f.Changed(name) || strings.TrimSpace(v.Value.String()) == "" {
+				return fmt.Errorf("--%s go together and none may be blank", strings.Join(grp, ", --"))
+			}
+		}
+	}
+	first := ""
+	for _, grp := range op.Exclusive {
+		for _, name := range grp {
+			if !f.Changed(name) {
+				continue
+			}
+			if first != "" && !slices.Contains(grp, first) {
+				return fmt.Errorf("--%s and --%s cannot be combined", first, name)
+			}
+			if first == "" {
+				first = name
+			}
+		}
+	}
+	return nil
+}
+
+// cursorMode refuses a --cursor given with a flag from a later exclusive group:
+// the cursor belongs to the first group, the plain feed, and the API answers 400
+// when it is mixed with the other mode.
+func cursorMode(op cmdspec.Op, f *pflag.FlagSet, cursor string) error {
+	if cursor == "" || len(op.Exclusive) < 2 {
+		return nil
+	}
+	for _, grp := range op.Exclusive[1:] {
+		for _, name := range grp {
+			if f.Changed(name) {
+				return fmt.Errorf("--cursor and --%s cannot be combined", name)
+			}
+		}
+	}
+	return nil
 }
 
 // atLeastOneGiven reports whether a flag in op.AtLeastOne was given, or --data

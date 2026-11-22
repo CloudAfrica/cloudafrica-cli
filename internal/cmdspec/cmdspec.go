@@ -39,14 +39,19 @@ type Op struct {
 	List bool
 	// Paged is true for a list that takes cursor and limit.
 	Paged bool
-	Async Async
+	// PageLimit is the largest page the route accepts, read from the limit parameter's description
+	// ("from 1 to N"); 0 means the description names none.
+	PageLimit int
+	Async     Async
 	// Confirm is true for a delete or a protected action.
 	Confirm bool
 	// Columns names the column set for the 200/201 body ("" when none).
 	Columns string
 	// AtLeastOne lists flags of which at least one must be given.
 	AtLeastOne []string
-	Scopes     []string
+	// Exclusive lists groups of flags that may not be mixed: flags from two different groups are refused.
+	Exclusive [][]string
+	Scopes    []string
 }
 
 // Param is a path parameter.
@@ -69,7 +74,7 @@ type Param struct {
 type Field struct {
 	Name string
 	Flag string
-	// Type is string, integer, number or boolean.
+	// Type is string, integer, number, boolean or stringList (a query parameter sent once per element).
 	Type string
 	// Format is the integer's width, int32 or int64 ("" for int64).
 	Format   string
@@ -107,7 +112,8 @@ type Column struct {
 	Header string
 	// Path is a dotted JSON path, e.g. "cpu.cores".
 	Path string
-	// Format is "", bytes, time, upper, bool, list or count.
+	// Format is "", bytes, time, upper, bool, list, count, clock (minutes after midnight as HH:MM) or
+	// unlimited (a null prints as "unlimited").
 	Format string
 }
 
