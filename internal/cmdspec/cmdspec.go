@@ -59,6 +59,10 @@ type Param struct {
 	// Verbatim parameters (pattern admits "/") are joined unescaped.
 	Verbatim bool
 	Help     string
+	// Within, when set, is the field of the resolved row that must equal the
+	// id of the path parameter WithinParam; a row elsewhere is refused.
+	Within      string
+	WithinParam string
 }
 
 // Field is a query parameter or a top-level body field.

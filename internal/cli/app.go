@@ -166,13 +166,13 @@ func sameOrigin(a, b string) bool {
 // request; it wraps this client's transport only, never a.Transport, which
 // the update check also uses.
 func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource, elevation string) (*cloudafrica.Client, error) {
-	rt := a.Transport
+	base := a.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	var rt http.RoundTripper = &singleShotTransport{base: base}
 	if elevation != "" {
-		base := rt
-		if base == nil {
-			base = http.DefaultTransport
-		}
-		rt = &elevationTransport{base: base, secret: elevation}
+		rt = &elevationTransport{base: rt, secret: elevation}
 	}
 	return cloudafrica.New(endpoint, ts,
 		cloudafrica.WithUserAgent("ca/"+a.Version),

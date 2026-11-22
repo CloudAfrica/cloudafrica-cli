@@ -391,3 +391,218 @@ func TestResizeTakesDisksFromData(t *testing.T) {
 		t.Errorf("an empty --data: exit %d", code)
 	}
 }
+
+// A VIP's firewall rules come back unpaged under "rules": the table and -q
+// read that field, JSON is the body verbatim, and --vpc and --vip resolve.
+func TestVipFirewallRuleListReadsRules(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[
+			{"id":"r1","direction":"ingress","action":"accept","protocol":"tcp","source":"0.0.0.0/0",
+			"fromPort":80,"toPort":443,"status":"applied","description":"web"}],
+			"writable":false,"readOnlyReason":"managed"}`},
+	})
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "table")
+	out := h.stdout.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "DIRECTION") ||
+		strings.Join(strings.Fields(lines[1]), " ") != "r1 INGRESS ACCEPT TCP 0.0.0.0/0 80 443 applied web" {
+		t.Errorf("table:\n%s", out)
+	}
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "r1" {
+		t.Errorf("-q = %q", got)
+	}
+	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "json")
+	if !strings.Contains(h.stdout.String(), `"readOnlyReason": "managed"`) {
+		t.Errorf("json is not the body: %s", h.stdout)
+	}
+}
+
+// A VIP delete resolves the VPC flag and the VIP positional before it writes.
+func TestVpcVipDeleteResolvesBothNames(t *testing.T) {
+	h := newHarness(t)
+	g := protected()
+	g.Elevated = true
+	h.seed("default", g, time.Now().Add(time.Hour))
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips":                     {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
+	})
+	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+}
+
+// The networking list columns: ip-address IDs come from the address, servedBy
+// is a count, primary reads yes/no, and a null leaves the cell blank.
+func TestNetworkingListColumns(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/ip-addresses": {Body: `{"data":[
+			{"address":"203.0.113.7","kind":"public","ownerName":"web-01","ownerKind":"vm","primary":true},
+			{"address":"10.0.0.5","kind":"private","ownerName":"lb1","ownerKind":"vip","vpcName":"web","primary":false},
+			{"address":"203.0.113.9","kind":"public","primary":null}]}`},
+		"GET /v1/vips": {Body: `{"data":[
+			{"id":"vip-1","name":"lb1","vpcName":"web","publicAddress":"203.0.113.20","privateAddress":"10.0.0.20",
+			"servedBy":[{"vmId":"a"},{"vmId":"b"}]},
+			{"id":"vip-2","name":"lb2","vpcName":"web","servedBy":null}]}`},
+		"GET /v1/vpcs/vpc-1/reserved-ips": {Body: `{"data":[
+			{"id":"rip-1","address":"203.0.113.7","vmId":"vm-1"},{"id":"rip-2","address":"203.0.113.8","vmId":null}]}`},
+	})
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"ip-address", "list"}, "203.0.113.7 10.0.0.5 203.0.113.9"},
+		{[]string{"vip", "list"}, "vip-1 vip-2"},
+		{[]string{"vpc", "reserved-ip", "list", "--vpc", "web"}, "rip-1 rip-2"},
+	} {
+		h.mustRun(append(c.args, "-q")...)
+		if got := strings.Join(strings.Fields(h.stdout.String()), " "); got != c.want {
+			t.Errorf("%v -q = %q, want %q", c.args, got, c.want)
+		}
+	}
+	rows := func(args ...string) [][]string {
+		h.mustRun(append(args, "-o", "table")...)
+		var out [][]string
+		for _, l := range strings.Split(strings.TrimSpace(h.stdout.String()), "\n")[1:] {
+			out = append(out, strings.Fields(l))
+		}
+		return out
+	}
+	ips := rows("ip-address", "list")
+	if got := fmt.Sprint(ips); got != "[[203.0.113.7 public web-01 vm yes] [10.0.0.5 private lb1 vip web no] [203.0.113.9 public]]" {
+		t.Errorf("ip-address rows %s", got)
+	}
+	vips := rows("vip", "list")
+	if got := fmt.Sprint(vips); got != "[[vip-1 lb1 web 203.0.113.20 10.0.0.20 2] [vip-2 lb2 web]]" {
+		t.Errorf("vip rows %s", got)
+	}
+	reserved := rows("vpc", "reserved-ip", "list", "--vpc", "web")
+	if got := fmt.Sprint(reserved); got != "[[rip-1 203.0.113.7 vm-1] [rip-2 203.0.113.8]]" {
+		t.Errorf("reserved-ip rows %s", got)
+	}
+}
+
+// An empty "rules" is an empty table; a body without "rules" is an API error,
+// not an empty list.
+func TestVipFirewallRuleListEmptyAndMissingRules(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	routes := map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
+		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[],"writable":true}`},
+	}
+	canned(h, routes)
+	args := []string{"vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web"}
+	h.mustRun(append(args, "-q")...)
+	if got := h.stdout.String(); got != "" {
+		t.Errorf("-q on no rules = %q", got)
+	}
+	h.mustRun(append(args, "-o", "table")...)
+	if lines := strings.Split(strings.TrimSpace(h.stdout.String()), "\n"); len(lines) != 1 || !strings.Contains(lines[0], "DIRECTION") {
+		t.Errorf("table on no rules:\n%s", h.stdout)
+	}
+	routes["GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules"] = fakeapi.Canned{Body: `{"writable":true}`}
+	if code := h.run(append(args, "-q")...); code != ExitAPI {
+		t.Errorf("missing rules: exit %d", code)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, `no "rules" field`) {
+		t.Errorf("stderr = %s", s)
+	}
+}
+
+// A VIP resolves within its --vpc: a name another VPC shares picks this VPC's,
+// a name or id only another VPC holds is refused, and refusals send nothing.
+func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
+	h := newHarness(t)
+	g := protected()
+	g.Elevated = true
+	h.seed("default", g, time.Now().Add(time.Hour))
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}, {"id": "vpc-2", "name": "db"}}
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/vips": {Body: `{"data":[
+			{"id":"vip-1","name":"lb1","vpcId":"vpc-1"},{"id":"vip-2","name":"lb1","vpcId":"vpc-2"},
+			{"id":"vip-3","name":"only-db","vpcId":"vpc-2"},
+			{"id":"vip-4","name":"twin","vpcId":"vpc-1"},{"id":"vip-5","name":"twin","vpcId":"vpc-1"}]}`},
+		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
+	})
+	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
+		t.Fatalf("writes %v", h.fake.WriteURLs)
+	}
+	for _, c := range []struct{ vip, want string }{
+		{"only-db", `no VIP with id or name "only-db" in --vpc web`},
+		{"vip-3", "VIP vip-3 is not in --vpc web"},
+		{"twin", `2 VIPs in --vpc web have name "twin"`},
+		{"nope", `no VIP with id or name "nope" in --vpc web`},
+	} {
+		h.stderr.Reset()
+		if code := h.run("vpc", "vip", "delete", c.vip, "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
+			t.Errorf("%s: exit %d", c.vip, code)
+		}
+		if s := h.stderr.String(); !strings.Contains(s, c.want) {
+			t.Errorf("%s: stderr = %s", c.vip, s)
+		}
+	}
+	if code := h.run("vpc", "vip", "firewall-rule", "list", "--vip", "only-db", "--vpc", "web"); code != ExitUsage {
+		t.Errorf("firewall-rule list on another VPC's VIP: exit %d", code)
+	}
+	if len(h.fake.WriteURLs) != 1 {
+		t.Errorf("a refused VIP was written: %v", h.fake.WriteURLs)
+	}
+	// Unable to list VIPs, a VPC-scoped command cannot check the VIP is in the
+	// VPC, so it stops rather than sending the value as an id.
+	h.fake.Canned["GET /v1/vips"] = fakeapi.Canned{Status: 500, Body: `{"title":"down"}`}
+	if code := h.run("vpc", "vip", "delete", "vip-3", "--vpc", "web", "--yes", "--no-wait"); code == ExitOK {
+		t.Errorf("an unlistable VIP was used as an id")
+	}
+	if len(h.fake.WriteURLs) != 1 {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+}
+
+// A 503 to a reservation is sent once, not retried, and says how to check
+// whether the address was reserved anyway.
+func TestUnrepeatableWriteIsNotRetriedOn503(t *testing.T) {
+	h := signedIn(t)
+	h.fake.VPCs = []map[string]any{{"id": "vpc-1", "name": "web"}}
+	canned(h, map[string]fakeapi.Canned{
+		"POST /v1/vpcs/vpc-1/reserved-ips": {Status: 503, Body: `{"title":"busy"}`},
+	})
+	if code := h.run("vpc", "reserved-ip", "create", "--vpc", "web"); code != ExitAPI {
+		t.Errorf("exit %d", code)
+	}
+	if len(h.fake.WriteURLs) != 1 {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+	s := h.stderr.String()
+	for _, want := range []string{"not retried", "ca vpc reserved-ip list --vpc web"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("stderr lacks %q: %s", want, s)
+		}
+	}
+}
+
+// Every operation whose contract warns that a retry after a 5xx can repeat it
+// is unrepeatable, and every unrepeatable entry names a generated operation.
+func TestUnrepeatableCoversEveryOperationThatWarns(t *testing.T) {
+	ops := map[string]bool{}
+	for _, op := range genOps {
+		ops[op.OperationID] = true
+		if strings.Contains(op.Long, "5xx") && unrepeatable[op.OperationID] == "" {
+			t.Errorf("%s warns about a retry after a 5xx but is not in unrepeatable", op.OperationID)
+		}
+	}
+	for id := range unrepeatable {
+		if !ops[id] {
+			t.Errorf("unrepeatable names %s, which is not a generated operation", id)
+		}
+	}
+}

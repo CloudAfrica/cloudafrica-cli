@@ -294,3 +294,16 @@ func TestOrdinaryScopeRefusalIsNotStepUp(t *testing.T) {
 		t.Errorf("hint does not name the scope: %s", s)
 	}
 }
+
+// A Require entry on a route the fake serves still answers with that route,
+// so a test that only adds a scope check does not get an empty body.
+func TestRequireOnAKnownRouteServesTheRoute(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.VPCs = []map[string]any{{"id": "v1", "name": "web"}}
+	h.fake.Require = map[string]string{"/v1/vpcs": "read:network"}
+	h.mustRun("vpc", "list", "-o", "json")
+	if !strings.Contains(h.stdout.String(), `"name": "web"`) {
+		t.Errorf("stdout: %s", h.stdout)
+	}
+}

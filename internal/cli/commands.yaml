@@ -19,6 +19,13 @@ groups:
   vm vip: Manage a VM's virtual IP membership
   ssh-key: Manage SSH keys
   vpc: Manage VPCs
+  vpc firewall-rule: List a VPC's firewall rules
+  vpc reserved-ip: Manage a VPC's reserved public IP addresses
+  vpc vip: Manage a VPC's virtual IPs
+  vpc vip firewall-rule: Manage a virtual IP's firewall rules
+  vpc vip public-ip: Attach and detach a virtual IP's public address
+  vip: List virtual IPs
+  ip-address: List IP addresses
   datacenter: List datacenters
   os-image: List OS images
   operation: Inspect and cancel asynchronous operations
@@ -38,6 +45,8 @@ params:
   /v1/vms/{id}/vips/{vipId}: {resource: vip}
   /v1/vms/{id}/backups/{startedAt}: {convert: epoch, help: "the backup's start time: RFC 3339 or epoch seconds"}
   /v1/ssh-keys/{id}: {resource: ssh-key}
+  /v1/vpcs/{id}: {resource: vpc}
+  /v1/vpcs/{id}/vips/{vipId}: {resource: vip, within: vpcId}
   /v1/placement-groups/{id}: {resource: placement-group}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
 
@@ -60,10 +69,6 @@ exclude:
   - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
 
 pending:
-  - {prefix: '/v1/vpcs/{id}', slice: 2}
-  - {operation: createVpc, slice: 2}
-  - {operation: listIpAddresses, slice: 2}
-  - {operation: listVips, slice: 2}
   - {prefix: /v1/buckets, slice: 3}
   - {prefix: /v1/bucket-keys, slice: 3}
   - {prefix: /v1/account, slice: 4}
@@ -132,6 +137,18 @@ operations:
   cancelOperation:
     path: operation cancel
     wait: self
+  listVpcVipFirewallRules:
+    path: vpc vip firewall-rule list
+  attachVpcVipPublicIp:
+    path: vpc vip public-ip attach
+  detachVpcVipPublicIp:
+    path: vpc vip public-ip detach
+  createVpc:
+    example: ca vpc create --name web
+  listIpAddresses:
+    example: |
+      ca ip-address list
+      ca ip-address list -o json
   listPlacementGroupDatacenters:
     path: datacenter list
 
@@ -249,5 +266,40 @@ columns:
     columns:
       - {header: ID, path: id}
       - {header: NAME, path: name}
+      - {header: STATUS, path: status}
+      - {header: DESCRIPTION, path: description}
+      - {header: CREATED, path: createdAt, format: time}
+  PublicVipDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: NAME, path: name}
+      - {header: VPC, path: vpcName}
+      - {header: PUBLIC IP, path: publicAddress}
+      - {header: PRIVATE IP, path: privateAddress}
+      - {header: SERVED BY, path: servedBy, format: count}
+  PublicReservedIpDto:
+    columns:
+      - {header: ID, path: id}
+      - {header: ADDRESS, path: address}
+      - {header: VM, path: vmId}
+  PublicIpAddressDto:
+    id: address
+    columns:
+      - {header: ADDRESS, path: address}
+      - {header: KIND, path: kind}
+      - {header: OWNER, path: ownerName}
+      - {header: OWNER KIND, path: ownerKind}
+      - {header: VPC, path: vpcName}
+      - {header: PRIMARY, path: primary, format: bool}
+  PublicVipFirewallRulesDto:
+    rows: rules
+    columns:
+      - {header: ID, path: id}
+      - {header: DIRECTION, path: direction, format: upper}
+      - {header: ACTION, path: action, format: upper}
+      - {header: PROTOCOL, path: protocol, format: upper}
+      - {header: SOURCE, path: source}
+      - {header: FROM PORT, path: fromPort}
+      - {header: TO PORT, path: toPort}
       - {header: STATUS, path: status}
       - {header: DESCRIPTION, path: description}

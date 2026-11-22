@@ -218,6 +218,17 @@ func TestGenerateRefuses(t *testing.T) {
 			},
 			want: "getSecret: no column set for CreateWidget",
 		},
+		"get with an inline response schema": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "  - {operation: getSecret, reason: not for the CLI}\n", "", 1)
+			},
+			doc: func(d map[string]any) {
+				at(d, "paths", "/v1/secret", "get")["responses"] =
+					map[string]any{"200": map[string]any{"content": map[string]any{"application/json": map[string]any{
+						"schema": map[string]any{"type": "object"}}}}}
+			},
+			want: "getSecret: the 200 response schema is inline",
+		},
 		"duplicate command": {
 			overlay: func(o string) string {
 				return o + "  getJob:\n    path: widget get\n"
@@ -249,6 +260,18 @@ func TestGenerateRefuses(t *testing.T) {
 		"stale param": {
 			overlay: func(o string) string { return strings.Replace(o, "params:\n", "params:\n  /v1/gone/{id}: {}\n", 1) },
 			want:    "commands.yaml params: no path starts with /v1/gone/{id}",
+		},
+		"within without a resource": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "params:\n", "params:\n  /v1/widgets/{id}/gears/{gearId}: {within: widgetId}\n", 1)
+			},
+			want: "commands.yaml params /v1/widgets/{id}/gears/{gearId}: within needs a resource",
+		},
+		"within on the first path parameter": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "{resource: widget}", "{resource: widget, within: ownerId}", 1)
+			},
+			want: "parameter id is within ownerId but follows no path parameter",
 		},
 		"param naming no resource": {
 			overlay: func(o string) string { return strings.Replace(o, "{resource: widget}", "{resource: nope}", 1) },
