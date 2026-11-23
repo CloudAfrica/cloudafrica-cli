@@ -98,12 +98,17 @@ func resolve(root *cobra.Command, line string) ([]*cobra.Command, []string, stri
 			}
 		}
 		if len(next) == 0 {
+			for _, c := range cmds {
+				if c.HasAvailableSubCommands() {
+					return nil, nil, "no command " + w + " under " + c.CommandPath()
+				}
+			}
 			break
 		}
 		cmds = next
 	}
 	for _, c := range cmds {
-		if !c.Runnable() && !(i < len(words) && strings.HasPrefix(words[i], "<")) {
+		if !c.Runnable() && (i >= len(words) || !strings.HasPrefix(words[i], "<")) {
 			return nil, nil, c.CommandPath() + " is a group, not a command"
 		}
 	}

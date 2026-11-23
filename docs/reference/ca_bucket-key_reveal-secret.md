@@ -15,7 +15,7 @@ ca bucket-key reveal-secret BUCKET_KEY [flags]
 ```
   ca bucket-key reveal-secret ci
   # -q prints the secret key, not the id
-  SECRET=$(ca bucket-key reveal-secret ci -q)
+  SECRET=$(ca bucket-key reveal-secret ci --yes -q)
 ```
 
 ### Options

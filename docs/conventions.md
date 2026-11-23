@@ -3,8 +3,10 @@
 Every command follows these, and every command has `--help`.
 
 - **Names or ids.** Where a command takes a VM, VPC, SSH key, VIP, placement group, bucket, access key or
-  project, a name works as well as an id; a member is named by email and a support ticket by its
-  reference number. A name that matches nothing is refused; one that matches several is refused with
+  project as its argument or through a flag such as `--vm`, a name works as well as an id; a member is
+  named by email and a support ticket by its reference number. A flag ending in `-resource-id`
+  (`--vpc-resource-id`, `--bucket-resource-id`) is sent as given and needs the id: `ca vpc get main -q`
+  prints it. A name that matches nothing is refused; one that matches several is refused with
   their ids. When the names cannot be listed (the credential lacks the scope, say), the value is used as
   an id.
 - **Waiting.** A command that starts an operation waits for it, printing progress on a terminal, and
@@ -15,7 +17,7 @@ Every command follows these, and every command has `--help`.
   (`-d @file.json` or `-d @-` for stdin), and flags given with it win. `vm create` and the `k8s` commands
   take flags only; `ca api` takes `-d` alone.
 - **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
-  `--cursor <next>`.
+  `--limit N --cursor <next>`.
 - **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only (the
   secret key for `bucket-key create` and `reveal-secret`). JSON and YAML are the API's response as
   returned, except that a list followed across pages prints its rows as one array (`--limit` prints the
