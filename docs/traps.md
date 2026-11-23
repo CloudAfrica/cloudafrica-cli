@@ -98,3 +98,9 @@ Author misses the PR review caught. Check these before opening a PR.
   message count and no message text (Copilot, #14).
 - **Run each deliverable command with `-q` on the response it really gets.** `member create -q`
   printed nothing because the response keys on `userId` (#14).
+- **A doc claim about a flag comes from the CLI, not the API's description.** `vm restore` was documented
+  as taking RFC 3339, `--cursor` without `--limit`, and every resource flag as taking a name; none held
+  (#15). Read the code path or run it.
+- **A `$(ca …)` capture of a confirm command needs `--yes`**, since a capture is not a terminal (#15).
+- **`git add -N .` stages deletions**, so `git diff --exit-code` after it misses a removed file; check
+  `git status --porcelain` instead (#15).
