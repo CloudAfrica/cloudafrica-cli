@@ -1,6 +1,7 @@
 package cli
 
 //go:generate go run ../gen/cagen
+//go:generate go run ../gen/docgen
 
 import (
 	"bytes"
