@@ -162,3 +162,23 @@ func TestDocumentedCommandsExist(t *testing.T) {
 		}
 	}
 }
+
+func TestRunReplacesOnlyReferencePages(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"keep.txt", "notes.md", "ca_removed-command.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"keep.txt", "notes.md", "ca.md"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ca_removed-command.md")); !os.IsNotExist(err) {
+		t.Errorf("stale page kept: %v", err)
+	}
+}

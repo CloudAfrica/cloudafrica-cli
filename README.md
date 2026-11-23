@@ -82,7 +82,7 @@ ca vm public-ip list --vm web-01
 ```
 
 `vm create` waits until the VM is built. When you are done, shut it down and delete it. Deleting is a
-[protected action](docs/auth.md#protected-actions), so run `ca auth elevate` first:
+[protected action](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md#protected-actions), so run `ca auth elevate` first:
 
 ```sh
 ca vm shutdown web-01
@@ -103,17 +103,17 @@ ca completion powershell | Out-String | Invoke-Expression   # PowerShell
 
 ## Documentation
 
-- [Signing in and protected actions](docs/auth.md), including scripts and CI
-- [Conventions](docs/conventions.md): names or ids, waiting, confirmation, output, exit codes, `ca api`
-- [Environment variables](docs/environment.md)
+- [Signing in and protected actions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md), including scripts and CI
+- [Conventions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/conventions.md): names or ids, waiting, confirmation, output, exit codes, `ca api`
+- [Environment variables](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/environment.md)
 - Commands by domain:
-  - [Compute](docs/compute.md): VMs, disks, backups, placement groups, SSH keys, images
-  - [Networking](docs/networking.md): VPCs, reserved IPs, VIPs, firewall rules
-  - [Object storage](docs/object-storage.md): buckets and access keys
-  - [Account, team and billing](docs/account.md)
-  - [Support](docs/support.md)
-  - [Kubernetes](docs/kubernetes.md) (not yet available in production)
-- [Command reference](docs/reference/ca.md): every command and flag, generated from `ca` itself
-- [Contributing](CONTRIBUTING.md)
+  - [Compute](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/compute.md): VMs, disks, backups, placement groups, SSH keys, images
+  - [Networking](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/networking.md): VPCs, reserved IPs, VIPs, firewall rules
+  - [Object storage](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/object-storage.md): buckets and access keys
+  - [Account, team and billing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/account.md)
+  - [Support](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/support.md)
+  - [Kubernetes](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/kubernetes.md) (not yet available in production)
+- [Command reference](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/reference/ca.md): every command and flag, generated from `ca` itself
+- [Contributing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/CONTRIBUTING.md)
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/LICENSE).
