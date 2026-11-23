@@ -4,25 +4,49 @@
 
 ## Install
 
+Then run `ca version` to check it worked.
+
+### macOS and Linux
+
+With Homebrew:
+
 ```sh
-brew install cloudafrica/tap/ca                     # macOS, Linux
+brew install cloudafrica/tap/ca
+```
 
-scoop bucket add cloudafrica https://github.com/CloudAfrica/scoop-bucket
-scoop install ca                                    # Windows
+Without Homebrew, use the install script:
 
+```sh
 curl -fsSL https://github.com/CloudAfrica/cloudafrica-cli/releases/latest/download/install.sh | sh
 ```
+
+### Windows
+
+With Scoop:
+
+```powershell
+scoop bucket add cloudafrica https://github.com/CloudAfrica/scoop-bucket
+scoop install ca
+```
+
+Without Scoop, run the install script in PowerShell:
 
 ```powershell
 irm https://github.com/CloudAfrica/cloudafrica-cli/releases/latest/download/install.ps1 | iex
 ```
 
-Each also installs `cloudafrica`, the same binary, for when `ca` is taken on your machine; if
+### Install script options
+
+Each install also installs `cloudafrica`, the same binary, for when `ca` is taken on your machine; if
 `ca` in the install directory is another program, `install.sh` and `install.ps1` leave it and install
 only `cloudafrica`. Both take `CA_VERSION` (a tag) and `CA_INSTALL_DIR`; `install.ps1` defaults to
-`%LOCALAPPDATA%\Programs\cloudafrica` and adds the directory to your user `PATH`. Release archives are on the
-[releases page](https://github.com/CloudAfrica/cloudafrica-cli/releases); the checksum file is
-signed with cosign:
+`%LOCALAPPDATA%\Programs\cloudafrica` and adds the directory to your user `PATH`.
+
+### Download a release
+
+Release archives are on the [releases page](https://github.com/CloudAfrica/cloudafrica-cli/releases)
+(macOS and Linux as `.tar.gz`, Windows as `.zip`, each for `amd64` and `arm64`), with a `SHA256SUMS` file
+to check them against. The checksum file is signed with cosign:
 
 ```sh
 cosign verify-blob cloudafrica-cli_<version>_SHA256SUMS \
