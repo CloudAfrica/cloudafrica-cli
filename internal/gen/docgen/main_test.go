@@ -29,6 +29,10 @@ func handWritten(t *testing.T) []string {
 
 var inlineCa = regexp.MustCompile("`(ca [^`]+)`")
 
+// fencedCa finds a `ca ...` invocation at the start of a line, inside $(...),
+// or on the right of an assignment or && — up to the end of that command.
+var fencedCa = regexp.MustCompile(`(?:^|\$\(|=\s*|&&\s*|;\s*)(ca\s[^)&;|]*)`)
+
 // commandLines returns each `ca ...` line in a fenced block and each `ca ...`
 // code span, with backslash continuations joined.
 func commandLines(t *testing.T, page string) []string {
@@ -60,8 +64,8 @@ func commandLines(t *testing.T, page string) []string {
 		if i := strings.Index(line, "#"); i >= 0 {
 			line = line[:i]
 		}
-		if t := strings.TrimSpace(line); strings.HasPrefix(t, "ca ") {
-			lines = append(lines, t)
+		for _, m := range fencedCa.FindAllStringSubmatch(strings.TrimSpace(line), -1) {
+			lines = append(lines, strings.TrimSpace(m[1]))
 		}
 	}
 	return lines
@@ -84,6 +88,9 @@ func resolve(root *cobra.Command, line string) ([]*cobra.Command, []string, stri
 	i := 0
 	for ; i < len(words); i++ {
 		w := words[i]
+		if strings.HasPrefix(w, "-") && i == 0 {
+			return nil, nil, "put flags after the command, so the test can resolve it"
+		}
 		if w == "|" || strings.HasPrefix(w, "-") || strings.HasPrefix(w, "<") || strings.HasPrefix(w, "[") {
 			break
 		}
@@ -185,5 +192,18 @@ func TestRunReplacesOnlyReferencePages(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ca_removed-command.md")); !os.IsNotExist(err) {
 		t.Errorf("stale page kept: %v", err)
+	}
+}
+
+func TestCommandLinesFindsCapturedInvocations(t *testing.T) {
+	page := filepath.Join(t.TempDir(), "p.md")
+	body := "```\nX=$(ca auth elevate) || exit\n$env:X = ca auth elevate\nca vm list -o json | jq .\n```\n"
+	if err := os.WriteFile(page, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(commandLines(t, page), "\n")
+	want := "ca auth elevate\nca auth elevate\nca vm list -o json"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

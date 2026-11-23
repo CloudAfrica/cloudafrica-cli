@@ -20,8 +20,9 @@ Every command follows these, and every command has `--help`.
   `--limit N --cursor <next>`.
 - **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only (the
   secret key for `bucket-key create` and `reveal-secret`). JSON and YAML are the API's response as
-  returned, except that a list followed across pages prints its rows as one array (`--limit` prints the
-  page as returned).
+  returned, with two exceptions. A list followed across pages prints its rows as one array (`--limit`
+  prints the page as returned). A command that starts an operation prints the finished operation, or
+  with `--no-wait` just `{"operationId": "..."}`.
 
 ## Operations
 
