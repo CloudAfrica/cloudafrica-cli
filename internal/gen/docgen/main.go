@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/cli"
@@ -22,17 +24,30 @@ func main() {
 	}
 }
 
-// run rewrites dir from scratch, so a removed command loses its page.
-func run(dir string) error {
+// root is the command tree the reference documents, with the completion
+// command cobra otherwise adds only when it runs.
+func root() *cobra.Command {
 	app := &cli.App{Stdout: io.Discard, Stderr: io.Discard, Getenv: func(string) string { return "" }}
-	root := app.Root()
-	root.DisableAutoGenTag = true
-	root.InitDefaultCompletionCmd()
-	if err := os.RemoveAll(dir); err != nil {
+	r := app.Root()
+	r.DisableAutoGenTag = true
+	r.InitDefaultCompletionCmd()
+	return r
+}
+
+// run removes the ca*.md pages in dir, so a removed command loses its page,
+// and writes the reference. It removes nothing else.
+func run(dir string) error {
+	old, err := filepath.Glob(filepath.Join(dir, "ca*.md"))
+	if err != nil {
 		return err
+	}
+	for _, f := range old {
+		if err := os.Remove(f); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return doc.GenMarkdownTree(root, dir)
+	return doc.GenMarkdownTree(root(), dir)
 }

@@ -81,8 +81,14 @@ ca vm create --name web-01 --datacenter <dc-slug> --image <image-id> --vpc main 
 ca vm public-ip list --vm web-01
 ```
 
-`vm create` waits until the VM is built. When you are done, `ca vm shutdown web-01` and then
-`ca vm delete web-01`.
+`vm create` waits until the VM is built. When you are done, shut it down and delete it. Deleting is a
+[protected action](docs/auth.md#protected-actions), so run `ca auth elevate` first:
+
+```sh
+ca vm shutdown web-01
+ca auth elevate
+ca vm delete web-01
+```
 
 ## Shell completion
 

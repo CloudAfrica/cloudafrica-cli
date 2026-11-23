@@ -10,7 +10,7 @@ go test -race -count=1 ./...
 ```
 
 CI (`.github/workflows/test.yml`) runs the same, then `golangci-lint`, a GoReleaser snapshot build and
-the install-script tests in `scripts/`. It fails when `go generate ./...` changes a committed file.
+the install-script tests in `scripts/`. It fails when `go generate ./...` changes, adds or removes a file.
 
 ## Where commands come from
 

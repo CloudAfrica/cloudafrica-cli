@@ -47,14 +47,16 @@ ca vm firewall-rule list|create|update|delete --vm web-01
 
 ## Backups
 
-A backup is named by its start time, RFC 3339 or epoch seconds.
+The `vm backup` commands name a backup by its start time, RFC 3339 or epoch seconds. `vm restore` takes
+epoch seconds only.
 
 ```sh
-ca vm backup list|create|delete --vm web-01
+ca vm backup list|create --vm web-01
+ca vm backup delete <started-at> --vm web-01
 ca vm backup set-protection <started-at> --vm web-01 --protected
 ca vm backup restore-site list --vm web-01 --backup <started-at>
 ca vm backup restore-to-new-vm <started-at> --vm web-01 ...
-ca vm restore web-01 ...
+ca vm restore web-01 --started-at <epoch-seconds>
 ca vm backup-policy get|set|delete|preview-rotation --vm web-01
 ca backup-policy list     # every VM's policy
 ca backup-window list     # the backup window catalogue
