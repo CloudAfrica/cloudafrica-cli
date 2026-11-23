@@ -1,0 +1,64 @@
+# Signing in and protected actions
+
+## Signing in
+
+```sh
+ca auth login     # opens the browser
+ca auth login --scope write:billing   # also request a scope login does not ask for by default
+ca auth status
+ca auth list
+ca auth logout
+```
+
+Tokens are stored per profile in the user config directory (`~/.config/cloudafrica/<profile>.json`
+on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE`, else `default`.
+
+Scopes added with `--scope` are kept, and requested again by every later `ca auth login` on that
+profile. A command that needs a scope the sign-in lacks says which, and how to add it.
+
+## Protected actions
+
+Signing in grants scopes but never allows protected actions, such as `vm delete` or
+`k8s upgrade-workers`. `ca auth elevate` opens a portal page where you step up and confirm the code it
+prints; the sign-in may then use protected actions for the account's elevation window. Connected apps →
+"Allow protected actions" in the portal does the same. A sign-in made before `ca auth login` requested
+a `protected:` scope must sign in again first.
+
+```sh
+ca auth elevate
+```
+
+## Scripts and CI
+
+A script uses `CLOUDAFRICA_TOKEN`, a user API token, which overrides any profile. For protected actions
+the token must hold the protected scope, and a person pairs it before the run:
+
+```sh
+export CLOUDAFRICA_TOKEN=cak_...
+CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit
+export CLOUDAFRICA_ELEVATION
+./teardown.sh
+```
+
+Keep the assignment on its own line. `eval "$(ca auth elevate)"` and
+`export CLOUDAFRICA_ELEVATION=$(ca auth elevate)` both return 0 when `ca auth elevate` fails, so the
+`|| exit` would never fire. In PowerShell, check the exit code yourself:
+
+```powershell
+$env:CLOUDAFRICA_ELEVATION = ca auth elevate
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+```
+
+In CI, store the printed value as a masked variable alongside the token. Running `ca auth elevate`
+without capturing it prints the secret to the terminal, where it stays in the scrollback.
+
+`ca auth elevate` opens a portal page where the person steps up and confirms the code; it then prints
+only the pairing secret on stdout, which `ca` sends with every request while `CLOUDAFRICA_ELEVATION`
+is set. The pairing lasts for the account's elevation window and only while that person's portal
+session does. Run `ca auth elevate` again with the variable still set to pair the same value. The
+secret is useless without the token, but treat it as one: do not log it or commit it.
+
+## Another endpoint
+
+`CLOUDAFRICA_ENDPOINT` selects another API endpoint, which must be https (plain http only to a loopback
+address); a profile can only be used against the endpoint it signed in to.
