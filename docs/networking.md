@@ -4,6 +4,9 @@ VPCs and what belongs to them: reserved public IPs, virtual IPs (VIPs) and their
 own interfaces, IPs and firewall rules are under [Compute](compute.md). Every command is in the
 [reference](reference/ca.md).
 
+Some of these commands, deletes among them, are protected actions: run `ca auth elevate` before them. One run
+without it exits 5 and says so. See [Protected actions](auth.md#protected-actions).
+
 ## VPCs
 
 ```sh

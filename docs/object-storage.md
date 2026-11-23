@@ -2,6 +2,9 @@
 
 Buckets and the access keys that reach them. Every command is in the [reference](reference/ca.md).
 
+Some of these commands, deletes among them, are protected actions: run `ca auth elevate` before them. One run
+without it exits 5 and says so. See [Protected actions](auth.md#protected-actions).
+
 ## Buckets
 
 ```sh
