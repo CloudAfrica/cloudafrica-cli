@@ -4,7 +4,7 @@ Make an authenticated API call
 
 ### Synopsis
 
-Send METHOD PATH (e.g. GET /v1/vms) to the API with the selected credential and print the response body. --data sends a JSON body: a literal, @file, or @- for stdin. Writes get a fresh Idempotency-Key.
+Send METHOD PATH (e.g. GET /v1/vms) to the API with the selected credential and print the response body. --data sends a JSON body: a literal, @file, or @- for stdin. Writes get a fresh Idempotency-Key, except a call that mints a URL or token.
 
 ```
 ca api METHOD PATH [flags]

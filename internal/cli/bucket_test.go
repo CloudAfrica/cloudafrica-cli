@@ -318,3 +318,116 @@ func TestBucketKeySecretsFailWhenStdoutCannotTakeThem(t *testing.T) {
 		}
 	}
 }
+
+const objectList = `{"data":[
+	{"key":"reports/q3.pdf","sizeBytes":2048,"lastModified":"2026-11-02T09:30:00Z","contentType":"application/pdf"},
+	{"key":"reports/q4.pdf","sizeBytes":1048576,"lastModified":"2026-11-03T09:30:00Z"}]}`
+
+// Objects list under a prefix, -q prints the keys, and the bucket name resolves to its id.
+func TestBucketObjectListSendsPrefixAndPrintsKeys(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets":             {Body: bucketList},
+		"GET /v1/buckets/b-1/objects": {Body: objectList},
+	})
+	head, rows := table(h, "bucket", "object", "list", "logs-7f3a", "--prefix", "reports/")
+	if head != "KEY SIZE TYPE MODIFIED" {
+		t.Errorf("header %q", head)
+	}
+	if !strings.HasPrefix(rows, "[[reports/q3.pdf 2.0 KiB application/pdf ") || !strings.Contains(rows, "[reports/q4.pdf 1.0 MiB ") {
+		t.Errorf("rows %s", rows)
+	}
+	if !slices.Contains(h.fake.ReadURLs, "GET /v1/buckets/b-1/objects?limit=200&prefix=reports%2F") {
+		t.Errorf("reads %v", h.fake.ReadURLs)
+	}
+	h.mustRun("bucket", "object", "list", "logs-7f3a", "-q")
+	if got := strings.Fields(h.stdout.String()); !slices.Equal(got, []string{"reports/q3.pdf", "reports/q4.pdf"}) {
+		t.Errorf("-q = %v", got)
+	}
+}
+
+// A key is required, and goes to the API as a query parameter.
+func TestBucketObjectGetAndVersionsNeedAKey(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets":                      {Body: bucketList},
+		"GET /v1/buckets/b-1/objects/metadata": {Body: `{"key":"reports/q3.pdf","versionId":"v2","sizeBytes":2048,"etag":"abc","contentType":"application/pdf"}`},
+		"GET /v1/buckets/b-1/objects/versions": {Body: `{"data":[{"key":"reports/q3.pdf","versionId":"v2","latest":true,"deleteMarker":false,"sizeBytes":2048}]}`},
+	})
+	for _, sub := range []string{"get", "versions"} {
+		if code := h.run("bucket", "object", sub, "logs-7f3a"); code != ExitUsage {
+			t.Errorf("%s without --key: exit %d", sub, code)
+		}
+	}
+	head, rows := table(h, "bucket", "object", "get", "logs-7f3a", "--key", "reports/q3.pdf")
+	if head != "KEY VERSION SIZE TYPE ETAG MODIFIED RETENTION RETAIN UNTIL" || !strings.HasPrefix(rows, "[[reports/q3.pdf v2 2.0 KiB application/pdf abc") {
+		t.Errorf("get table %q %s", head, rows)
+	}
+	head, rows = table(h, "bucket", "object", "versions", "logs-7f3a", "--key", "reports/q3.pdf")
+	if head != "KEY VERSION LATEST DELETE MARKER SIZE MODIFIED" || !strings.HasPrefix(rows, "[[reports/q3.pdf v2 yes no 2.0 KiB") {
+		t.Errorf("versions table %q %s", head, rows)
+	}
+}
+
+// A URL mint carries no Idempotency-Key: the API replays an empty 200 for a repeated one, so
+// a retried mint would print no URL. -q prints the URL itself for a script.
+func TestBucketObjectURLMintsCarryNoIdempotencyKey(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets": {Body: bucketList},
+		"POST /v1/buckets/b-1/objects/download-url": {Body: `{"url":"https://s3.example/get?sig=1","expiresAt":"2026-11-24T10:01:00Z"}`},
+		"POST /v1/buckets/b-1/objects/upload-url":   {Body: `{"url":"https://s3.example/put?sig=2","expiresAt":"2026-11-24T10:01:00Z","headers":{"Content-Type":"application/pdf"}}`},
+	})
+	h.mustRun("bucket", "object", "download-url", "logs-7f3a", "--key", "reports/q3.pdf", "--version-id", "v1", "--yes", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "https://s3.example/get?sig=1" {
+		t.Errorf("-q = %q", got)
+	}
+	h.mustRun("bucket", "object", "upload-url", "logs-7f3a", "--key", "reports/q3.pdf", "--content-type", "application/pdf",
+		"--content-length", "2048", "-o", "json")
+	contains(t, h.stdout.String(), `"Content-Type": "application/pdf"`)
+	if len(h.fake.IdemKeys) != 2 || h.fake.IdemKeys[0] != "" || h.fake.IdemKeys[1] != "" {
+		t.Errorf("idempotency keys = %q", h.fake.IdemKeys)
+	}
+	if b := h.fake.Bodies[0]; b["key"] != "reports/q3.pdf" || b["versionId"] != "v1" || len(b) != 2 {
+		t.Errorf("download body = %v", b)
+	}
+	if b := h.fake.Bodies[1]; b["contentType"] != "application/pdf" || b["contentLength"] != float64(2048) || len(b) != 3 {
+		t.Errorf("upload body = %v", b)
+	}
+	if code := h.run("bucket", "object", "upload-url", "logs-7f3a", "--key", "x"); code != ExitUsage || len(h.fake.Writes) != 2 {
+		t.Errorf("upload without type and length: exit %d, writes %d", code, len(h.fake.Writes))
+	}
+}
+
+// Lifecycle and CORS rules print one row per rule, and a replace sends the body as given,
+// including basedOn, which has no flag.
+func TestBucketLifecycleAndCorsReadAndReplace(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets":               {Body: bucketList},
+		"GET /v1/buckets/b-1/lifecycle": {Body: `{"rules":[{"prefix":"tmp/","enabled":true,"expirationDays":30,"expireDeleteMarker":false}]}`},
+		"PUT /v1/buckets/b-1/lifecycle": {Body: `{"rules":[]}`},
+		"GET /v1/buckets/b-1/cors":      {Body: `{"rules":[{"allowedOrigins":["https://example.com"],"allowedMethods":["GET","PUT"],"maxAgeSeconds":300}]}`},
+		"PUT /v1/buckets/b-1/cors":      {Body: `{"rules":[]}`},
+	})
+	head, rows := table(h, "bucket", "lifecycle", "get", "logs-7f3a")
+	if head != "PREFIX ENABLED EXPIRE DAYS NONCURRENT DAYS ABORT UPLOAD DAYS DELETE MARKERS" || !strings.HasPrefix(rows, "[[tmp/ yes 30") {
+		t.Errorf("lifecycle table %q %s", head, rows)
+	}
+	head, rows = table(h, "bucket", "cors", "get", "logs-7f3a")
+	if head != "ORIGINS METHODS HEADERS EXPOSE MAX AGE" || !strings.Contains(rows, "https://example.com") || !strings.Contains(rows, "300") {
+		t.Errorf("cors table %q %s", head, rows)
+	}
+	h.mustRun("bucket", "lifecycle", "set", "logs-7f3a", "--yes", "-d",
+		`{"rules":[],"basedOn":[{"prefix":"tmp/","enabled":true,"expirationDays":30}]}`)
+	h.mustRun("bucket", "cors", "set", "logs-7f3a", "--yes", "-d", `{"rules":[],"basedOn":[{"allowedOrigins":["*"]}]}`)
+	want := []string{"PUT /v1/buckets/b-1/lifecycle", "PUT /v1/buckets/b-1/cors"}
+	if strings.Join(h.fake.WriteURLs, "|") != strings.Join(want, "|") {
+		t.Fatalf("writes %v", h.fake.WriteURLs)
+	}
+	for i, b := range h.fake.Bodies {
+		if basedOn, ok := b["basedOn"].([]any); !ok || len(basedOn) != 1 {
+			t.Errorf("body %d lost basedOn: %v", i, b)
+		}
+	}
+}
