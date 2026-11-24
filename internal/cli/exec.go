@@ -378,7 +378,7 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 		name = targets[0].given
 	}
 	if len(bytes.TrimSpace(resp)) == 0 {
-		if err := missingSecret(op.OperationID, name, resp); err != nil {
+		if err := cmp.Or(missingSecret(op.OperationID, name, resp), missingURL(op.OperationID, resp)); err != nil {
 			return err
 		}
 		if status != http.StatusNoContent && op.Columns != "" {
@@ -392,8 +392,14 @@ func (a *App) runGenerated(cmd *cobra.Command, op cmdspec.Op, r genRun, args []s
 	if !json.Valid(resp) {
 		return fmt.Errorf("HTTP %d: the response is not JSON", status)
 	}
+	if err := missingURL(op.OperationID, resp); err != nil {
+		return err
+	}
 	if err := printRaw(pr, op.Columns, resp); err != nil {
 		return err
+	}
+	if note := tableNote(op.OperationID, resp); note != "" && pr.Format == output.Table && !pr.Quiet {
+		fmt.Fprintln(a.Stderr, note)
 	}
 	return missingSecret(op.OperationID, name, resp)
 }

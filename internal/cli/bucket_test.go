@@ -321,7 +321,22 @@ func TestBucketKeySecretsFailWhenStdoutCannotTakeThem(t *testing.T) {
 
 const objectList = `{"data":[
 	{"key":"reports/q3.pdf","sizeBytes":2048,"lastModified":"2026-11-02T09:30:00Z","contentType":"application/pdf"},
-	{"key":"reports/q4.pdf","sizeBytes":1048576,"lastModified":"2026-11-03T09:30:00Z"}]}`
+	{"key":"reports/q4.pdf","sizeBytes":1048576,"lastModified":"2026-11-03T09:30:00Z","contentType":"text/plain"}]}`
+
+// localTime is how a time cell renders: the instant in the local zone.
+func localTime(t *testing.T, s string) string {
+	t.Helper()
+	at, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return at.Local().Format("2006-01-02 15:04 MST")
+}
+
+// rowOf is what table() returns for a row whose cells hold these values.
+func rowOf(cells ...string) string {
+	return fmt.Sprint([][]string{strings.Fields(strings.Join(cells, " "))})
+}
 
 // Objects list under a prefix, -q prints the keys, and the bucket name resolves to its id.
 func TestBucketObjectListSendsPrefixAndPrintsKeys(t *testing.T) {
@@ -331,11 +346,12 @@ func TestBucketObjectListSendsPrefixAndPrintsKeys(t *testing.T) {
 		"GET /v1/buckets/b-1/objects": {Body: objectList},
 	})
 	head, rows := table(h, "bucket", "object", "list", "logs-7f3a", "--prefix", "reports/")
-	if head != "KEY SIZE TYPE MODIFIED" {
-		t.Errorf("header %q", head)
-	}
-	if !strings.HasPrefix(rows, "[[reports/q3.pdf 2.0 KiB application/pdf ") || !strings.Contains(rows, "[reports/q4.pdf 1.0 MiB ") {
-		t.Errorf("rows %s", rows)
+	want := fmt.Sprint([][]string{
+		strings.Fields("reports/q3.pdf 2.0 KiB application/pdf " + localTime(t, "2026-11-02T09:30:00Z")),
+		strings.Fields("reports/q4.pdf 1.0 MiB text/plain " + localTime(t, "2026-11-03T09:30:00Z")),
+	})
+	if head != "KEY SIZE TYPE MODIFIED" || rows != want {
+		t.Errorf("table %q %s, want %s", head, rows, want)
 	}
 	if !slices.Contains(h.fake.ReadURLs, "GET /v1/buckets/b-1/objects?limit=200&prefix=reports%2F") {
 		t.Errorf("reads %v", h.fake.ReadURLs)
@@ -346,13 +362,17 @@ func TestBucketObjectListSendsPrefixAndPrintsKeys(t *testing.T) {
 	}
 }
 
-// A key is required, and goes to the API as a query parameter.
-func TestBucketObjectGetAndVersionsNeedAKey(t *testing.T) {
+// get and versions need a key, send it as the key query parameter, and show every column;
+// list-deleted -q prints the delete markers' version ids, not keys.
+func TestBucketObjectGetVersionsAndListDeleted(t *testing.T) {
 	h := s3Harness(t)
+	const stamp = "2026-11-02T09:30:00Z"
 	canned(h, map[string]fakeapi.Canned{
-		"GET /v1/buckets":                      {Body: bucketList},
-		"GET /v1/buckets/b-1/objects/metadata": {Body: `{"key":"reports/q3.pdf","versionId":"v2","sizeBytes":2048,"etag":"abc","contentType":"application/pdf"}`},
-		"GET /v1/buckets/b-1/objects/versions": {Body: `{"data":[{"key":"reports/q3.pdf","versionId":"v2","latest":true,"deleteMarker":false,"sizeBytes":2048}]}`},
+		"GET /v1/buckets": {Body: bucketList},
+		"GET /v1/buckets/b-1/objects/metadata": {Body: `{"key":"reports/q3.pdf","versionId":"v2","sizeBytes":2048,"etag":"abc",` +
+			`"contentType":"application/pdf","lastModified":"` + stamp + `","retentionMode":"GOVERNANCE","retainUntil":"2027-01-01T00:00:00Z","legalHold":true}`},
+		"GET /v1/buckets/b-1/objects/versions": {Body: `{"data":[{"key":"reports/q3.pdf","versionId":"v2","latest":true,"deleteMarker":false,"sizeBytes":2048,"lastModified":"` + stamp + `"}]}`},
+		"GET /v1/buckets/b-1/objects/deleted":  {Body: `{"data":[{"key":"gone.txt","versionId":"dm-9","latest":true,"deleteMarker":true,"sizeBytes":0,"lastModified":"` + stamp + `"}]}`},
 	})
 	for _, sub := range []string{"get", "versions"} {
 		if code := h.run("bucket", "object", sub, "logs-7f3a"); code != ExitUsage {
@@ -360,12 +380,31 @@ func TestBucketObjectGetAndVersionsNeedAKey(t *testing.T) {
 		}
 	}
 	head, rows := table(h, "bucket", "object", "get", "logs-7f3a", "--key", "reports/q3.pdf")
-	if head != "KEY VERSION SIZE TYPE ETAG MODIFIED RETENTION RETAIN UNTIL" || !strings.HasPrefix(rows, "[[reports/q3.pdf v2 2.0 KiB application/pdf abc") {
-		t.Errorf("get table %q %s", head, rows)
+	wantGet := rowOf("reports/q3.pdf v2 2.0 KiB application/pdf abc", localTime(t, stamp), "GOVERNANCE", localTime(t, "2027-01-01T00:00:00Z"), "yes")
+	if head != "KEY VERSION SIZE TYPE ETAG MODIFIED RETENTION RETAIN UNTIL LEGAL HOLD" || rows != wantGet {
+		t.Errorf("get table %q %s, want %s", head, rows, wantGet)
 	}
 	head, rows = table(h, "bucket", "object", "versions", "logs-7f3a", "--key", "reports/q3.pdf")
-	if head != "KEY VERSION LATEST DELETE MARKER SIZE MODIFIED" || !strings.HasPrefix(rows, "[[reports/q3.pdf v2 yes no 2.0 KiB") {
-		t.Errorf("versions table %q %s", head, rows)
+	wantVersions := rowOf("reports/q3.pdf v2 yes no 2.0 KiB", localTime(t, stamp))
+	if head != "KEY VERSION LATEST DELETE MARKER SIZE MODIFIED" || rows != wantVersions {
+		t.Errorf("versions table %q %s, want %s", head, rows, wantVersions)
+	}
+	head, rows = table(h, "bucket", "object", "list-deleted", "logs-7f3a")
+	wantDeleted := rowOf("gone.txt dm-9 yes yes 0 B", localTime(t, stamp))
+	if head != "KEY VERSION LATEST DELETE MARKER SIZE MODIFIED" || rows != wantDeleted {
+		t.Errorf("list-deleted table %q %s, want %s", head, rows, wantDeleted)
+	}
+	h.mustRun("bucket", "object", "list-deleted", "logs-7f3a", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "dm-9" {
+		t.Errorf("list-deleted -q = %q, want the version id", got)
+	}
+	for _, want := range []string{
+		"GET /v1/buckets/b-1/objects/metadata?key=reports%2Fq3.pdf",
+		"GET /v1/buckets/b-1/objects/versions?key=reports%2Fq3.pdf&limit=200",
+	} {
+		if !slices.Contains(h.fake.ReadURLs, want) {
+			t.Errorf("reads lack %q: %v", want, h.fake.ReadURLs)
+		}
 	}
 }
 
@@ -378,6 +417,10 @@ func TestBucketObjectURLMintsCarryNoIdempotencyKey(t *testing.T) {
 		"POST /v1/buckets/b-1/objects/download-url": {Body: `{"url":"https://s3.example/get?sig=1","expiresAt":"2026-11-24T10:01:00Z"}`},
 		"POST /v1/buckets/b-1/objects/upload-url":   {Body: `{"url":"https://s3.example/put?sig=2","expiresAt":"2026-11-24T10:01:00Z","headers":{"Content-Type":"application/pdf"}}`},
 	})
+	head, rows := table(h, "bucket", "object", "download-url", "logs-7f3a", "--key", "reports/q3.pdf", "--yes")
+	if want := rowOf("https://s3.example/get?sig=1", localTime(t, "2026-11-24T10:01:00Z")); head != "URL EXPIRES" || rows != want {
+		t.Errorf("download table %q %s, want %s", head, rows, want)
+	}
 	h.mustRun("bucket", "object", "download-url", "logs-7f3a", "--key", "reports/q3.pdf", "--version-id", "v1", "--yes", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "https://s3.example/get?sig=1" {
 		t.Errorf("-q = %q", got)
@@ -385,37 +428,92 @@ func TestBucketObjectURLMintsCarryNoIdempotencyKey(t *testing.T) {
 	h.mustRun("bucket", "object", "upload-url", "logs-7f3a", "--key", "reports/q3.pdf", "--content-type", "application/pdf",
 		"--content-length", "2048", "-o", "json")
 	contains(t, h.stdout.String(), `"Content-Type": "application/pdf"`)
-	if len(h.fake.IdemKeys) != 2 || h.fake.IdemKeys[0] != "" || h.fake.IdemKeys[1] != "" {
+	head, rows = table(h, "bucket", "object", "upload-url", "logs-7f3a", "--key", "reports/q3.pdf", "--content-type", "application/pdf", "--content-length", "2048")
+	if want := rowOf("https://s3.example/put?sig=2", localTime(t, "2026-11-24T10:01:00Z")); head != "URL EXPIRES" || rows != want {
+		t.Errorf("upload table %q %s, want %s", head, rows, want)
+	}
+	contains(t, h.stderr.String(), "-o json lists them")
+	if len(h.fake.IdemKeys) != 4 || slices.ContainsFunc(h.fake.IdemKeys, func(k string) bool { return k != "" }) {
 		t.Errorf("idempotency keys = %q", h.fake.IdemKeys)
 	}
-	if b := h.fake.Bodies[0]; b["key"] != "reports/q3.pdf" || b["versionId"] != "v1" || len(b) != 2 {
+	if b := h.fake.Bodies[0]; b["key"] != "reports/q3.pdf" || len(b) != 1 {
 		t.Errorf("download body = %v", b)
 	}
-	if b := h.fake.Bodies[1]; b["contentType"] != "application/pdf" || b["contentLength"] != float64(2048) || len(b) != 3 {
+	if b := h.fake.Bodies[1]; b["key"] != "reports/q3.pdf" || b["versionId"] != "v1" || len(b) != 2 {
+		t.Errorf("download body = %v", b)
+	}
+	if b := h.fake.Bodies[2]; b["contentType"] != "application/pdf" || b["contentLength"] != float64(2048) || len(b) != 3 {
 		t.Errorf("upload body = %v", b)
 	}
-	if code := h.run("bucket", "object", "upload-url", "logs-7f3a", "--key", "x"); code != ExitUsage || len(h.fake.Writes) != 2 {
+	if code := h.run("bucket", "object", "upload-url", "logs-7f3a", "--key", "x"); code != ExitUsage || len(h.fake.Writes) != 4 {
 		t.Errorf("upload without type and length: exit %d, writes %d", code, len(h.fake.Writes))
 	}
 }
 
-// Lifecycle and CORS rules print one row per rule, and a replace sends the body as given,
-// including basedOn, which has no flag.
+// A URL is the mint's deliverable: a response without one, empty or not, exits non-zero with
+// nothing on stdout, so `curl "$(ca ... -q)"` never runs against an empty string.
+func TestBucketObjectURLMintsFailWithoutAURL(t *testing.T) {
+	for name, args := range map[string][]string{
+		"download-url": {"bucket", "object", "download-url", "logs-7f3a", "--key", "k", "--yes"},
+		"upload-url":   {"bucket", "object", "upload-url", "logs-7f3a", "--key", "k", "--content-type", "text/plain", "--content-length", "1"},
+	} {
+		route := "POST /v1/buckets/b-1/objects/" + name
+		for body, c := range map[string]fakeapi.Canned{
+			"empty object": {Body: `{}`},
+			"expiry only":  {Body: `{"expiresAt":"2026-11-24T10:01:00Z"}`},
+			"empty 200":    {},
+			"204":          {Status: 204},
+		} {
+			for _, extra := range [][]string{nil, {"-q"}, {"-o", "json"}} {
+				h := s3Harness(t)
+				canned(h, map[string]fakeapi.Canned{"GET /v1/buckets": {Body: bucketList}, route: c})
+				code := h.run(append(slices.Clone(args), extra...)...)
+				if code == 0 || strings.TrimSpace(h.stdout.String()) != "" {
+					t.Errorf("%s %s %v: exit %d, stdout %q", name, body, extra, code, h.stdout)
+				}
+				contains(t, h.stderr.String(), "no URL", "mints a new URL")
+			}
+		}
+	}
+	h := s3Harness(t)
+	h.failStdout = true
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets": {Body: bucketList},
+		"POST /v1/buckets/b-1/objects/download-url": {Body: `{"url":"https://s3.example/get"}`},
+		"POST /v1/buckets/b-1/objects/upload-url":   {Body: `{"url":"https://s3.example/put"}`},
+	})
+	if code := h.run("bucket", "object", "download-url", "logs-7f3a", "--key", "k", "--yes"); code == 0 {
+		t.Error("download-url: exit 0 with stdout failing")
+	}
+	if code := h.run("bucket", "object", "upload-url", "logs-7f3a", "--key", "k", "--content-type", "text/plain", "--content-length", "1"); code == 0 {
+		t.Error("upload-url: exit 0 with stdout failing")
+	}
+}
+
+const lifecycleRules = `{"rules":[{"prefix":"tmp/","enabled":true,"expirationDays":30,"noncurrentExpirationDays":7,` +
+	`"abortIncompleteUploadDays":2,"expireDeleteMarker":true}]}`
+
+// Lifecycle and CORS rules print one row per rule with every column, and a replace sends the body as
+// given, including basedOn, which has no flag; lifecycle set sends replaceUnsupported only when asked.
 func TestBucketLifecycleAndCorsReadAndReplace(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/buckets":               {Body: bucketList},
-		"GET /v1/buckets/b-1/lifecycle": {Body: `{"rules":[{"prefix":"tmp/","enabled":true,"expirationDays":30,"expireDeleteMarker":false}]}`},
+		"GET /v1/buckets/b-1/lifecycle": {Body: lifecycleRules},
 		"PUT /v1/buckets/b-1/lifecycle": {Body: `{"rules":[]}`},
-		"GET /v1/buckets/b-1/cors":      {Body: `{"rules":[{"allowedOrigins":["https://example.com"],"allowedMethods":["GET","PUT"],"maxAgeSeconds":300}]}`},
-		"PUT /v1/buckets/b-1/cors":      {Body: `{"rules":[]}`},
+		"GET /v1/buckets/b-1/cors": {Body: `{"rules":[{"allowedOrigins":["https://a.example","https://b.example"],` +
+			`"allowedMethods":["GET","PUT"],"allowedHeaders":["x-amz-meta-a"],"exposeHeaders":["etag"],"maxAgeSeconds":300}]}`},
+		"PUT /v1/buckets/b-1/cors": {Body: `{"rules":[]}`},
 	})
 	head, rows := table(h, "bucket", "lifecycle", "get", "logs-7f3a")
-	if head != "PREFIX ENABLED EXPIRE DAYS NONCURRENT DAYS ABORT UPLOAD DAYS DELETE MARKERS" || !strings.HasPrefix(rows, "[[tmp/ yes 30") {
+	if head != "PREFIX ENABLED EXPIRE DAYS NONCURRENT DAYS ABORT UPLOAD DAYS DELETE MARKERS" || rows != "[[tmp/ yes 30 7 2 yes]]" {
 		t.Errorf("lifecycle table %q %s", head, rows)
 	}
+	if strings.Contains(h.stderr.String(), "cannot show") {
+		t.Errorf("a supported lifecycle carries the unsupported notice: %s", h.stderr)
+	}
 	head, rows = table(h, "bucket", "cors", "get", "logs-7f3a")
-	if head != "ORIGINS METHODS HEADERS EXPOSE MAX AGE" || !strings.Contains(rows, "https://example.com") || !strings.Contains(rows, "300") {
+	if head != "ORIGINS METHODS HEADERS EXPOSE MAX AGE" || rows != "[[https://a.example, https://b.example GET, PUT x-amz-meta-a etag 300]]" {
 		t.Errorf("cors table %q %s", head, rows)
 	}
 	h.mustRun("bucket", "lifecycle", "set", "logs-7f3a", "--yes", "-d",
@@ -429,5 +527,33 @@ func TestBucketLifecycleAndCorsReadAndReplace(t *testing.T) {
 		if basedOn, ok := b["basedOn"].([]any); !ok || len(basedOn) != 1 {
 			t.Errorf("body %d lost basedOn: %v", i, b)
 		}
+		if _, ok := b["replaceUnsupported"]; ok {
+			t.Errorf("body %d carries replaceUnsupported without the flag: %v", i, b)
+		}
+	}
+	h.mustRun("bucket", "lifecycle", "set", "logs-7f3a", "--yes", "--replace-unsupported", "-d", `{"rules":[]}`)
+	if b := h.fake.Bodies[2]; b["replaceUnsupported"] != true {
+		t.Errorf("--replace-unsupported not sent: %v", b)
+	} else if _, ok := b["basedOn"]; ok {
+		t.Errorf("unexpected basedOn: %v", b)
+	}
+	if code := h.run("bucket", "cors", "set", "logs-7f3a", "--yes", "--replace-unsupported", "-d", `{"rules":[]}`); code != ExitUsage {
+		t.Errorf("cors set has no --replace-unsupported: exit %d", code)
+	}
+}
+
+// A lifecycle holding only rules the API cannot represent reads as empty, so the table says so on
+// stderr rather than printing a bare header that looks like "no policy".
+func TestBucketLifecycleGetNamesUnsupportedRules(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets":               {Body: bucketList},
+		"GET /v1/buckets/b-1/lifecycle": {Body: `{"rules":[],"unsupported":true}`},
+	})
+	h.mustRun("bucket", "lifecycle", "get", "logs-7f3a", "-o", "table")
+	contains(t, h.stderr.String(), "cannot show", "--replace-unsupported")
+	h.mustRun("bucket", "lifecycle", "get", "logs-7f3a", "-q")
+	if strings.Contains(h.stderr.String(), "cannot show") {
+		t.Errorf("-q printed the notice: %s", h.stderr)
 	}
 }

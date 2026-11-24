@@ -218,7 +218,7 @@ operations:
     example: |
       ca bucket object download-url logs-7f3a --key reports/q3.pdf
       # -q prints the URL, which expires in about a minute
-      curl -o q3.pdf "$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q)"
+      curl -fsS -o q3.pdf "$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q)"
   createObjectUploadUrl:
     path: bucket object upload-url
     positional: id
@@ -536,6 +536,7 @@ columns:
       - {header: MODIFIED, path: lastModified, format: time}
       - {header: RETENTION, path: retentionMode}
       - {header: RETAIN UNTIL, path: retainUntil, format: time}
+      - {header: LEGAL HOLD, path: legalHold, format: bool}
   PublicObjectDownloadUrlDto:
     id: url
     columns:
