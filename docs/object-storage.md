@@ -31,16 +31,17 @@ The API moves an object's bytes through a short-lived URL, not through itself.
 
 ```bash
 # Download: the URL works for about a minute and needs no credentials. Protected: elevate first.
-curl -fsS -o q3.pdf "$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q)"
+URL=$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q) &&
+  curl -fsS -o q3.pdf "$URL"
 
 # Upload one new object of at most 25 MiB. The PUT must send every header the API returns, and exactly
 # --content-length bytes.
 SIZE=$(wc -c < q3.pdf | tr -d ' ')
-SPEC=$(ca bucket object upload-url logs-7f3a --key reports/q3.pdf --content-type application/pdf \
-  --content-length "$SIZE" -o json)
-curl -fsS -X PUT "$(jq -r .url <<<"$SPEC")" \
-  -K <(jq -r '.headers | to_entries[] | "header = \"\(.key): \(.value)\""' <<<"$SPEC") \
-  --data-binary @q3.pdf
+SPEC=$(ca bucket object upload-url logs-7f3a --key reports/q3-copy.pdf --content-type application/pdf \
+  --content-length "$SIZE" -o json) &&
+  curl -fsS -X PUT "$(jq -r .url <<<"$SPEC")" \
+    -K <(jq -r '.headers | to_entries[] | "header = \"\(.key): \(.value)\""' <<<"$SPEC") \
+    --data-binary @q3.pdf
 ```
 
 An upload to a key that already exists is refused. Overwriting, deleting or restoring an object, and any
