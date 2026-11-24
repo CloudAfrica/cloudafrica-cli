@@ -557,3 +557,16 @@ func TestBucketLifecycleGetNamesUnsupportedRules(t *testing.T) {
 		t.Errorf("-q printed the notice: %s", h.stderr)
 	}
 }
+
+// Protection prints object lock and the default encryption.
+func TestBucketProtectionTable(t *testing.T) {
+	h := s3Harness(t)
+	canned(h, map[string]fakeapi.Canned{
+		"GET /v1/buckets":                {Body: bucketList},
+		"GET /v1/buckets/b-1/protection": {Body: `{"objectLock":true,"defaultEncryption":"AES256"}`},
+	})
+	head, rows := table(h, "bucket", "protection", "logs-7f3a")
+	if head != "OBJECT LOCK DEFAULT ENCRYPTION" || rows != "[[yes AES256]]" {
+		t.Errorf("protection table %q %s", head, rows)
+	}
+}
