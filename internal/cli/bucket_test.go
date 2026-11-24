@@ -380,6 +380,7 @@ func TestBucketObjectGetVersionsAndListDeleted(t *testing.T) {
 		}
 	}
 	head, rows := table(h, "bucket", "object", "get", "logs-7f3a", "--key", "reports/q3.pdf")
+	contains(t, h.stderr.String(), "-o json")
 	wantGet := rowOf("reports/q3.pdf v2 2.0 KiB application/pdf abc", localTime(t, stamp), "GOVERNANCE", localTime(t, "2027-01-01T00:00:00Z"), "yes")
 	if head != "KEY VERSION SIZE TYPE ETAG MODIFIED RETENTION RETAIN UNTIL LEGAL HOLD" || rows != wantGet {
 		t.Errorf("get table %q %s, want %s", head, rows, wantGet)
@@ -388,6 +389,10 @@ func TestBucketObjectGetVersionsAndListDeleted(t *testing.T) {
 	wantVersions := rowOf("reports/q3.pdf v2 yes no 2.0 KiB", localTime(t, stamp))
 	if head != "KEY VERSION LATEST DELETE MARKER SIZE MODIFIED" || rows != wantVersions {
 		t.Errorf("versions table %q %s, want %s", head, rows, wantVersions)
+	}
+	h.mustRun("bucket", "object", "versions", "logs-7f3a", "--key", "reports/q3.pdf", "-q")
+	if got := strings.TrimSpace(h.stdout.String()); got != "v2" {
+		t.Errorf("versions -q = %q, want the version id", got)
 	}
 	head, rows = table(h, "bucket", "object", "list-deleted", "logs-7f3a")
 	wantDeleted := rowOf("gone.txt dm-9 yes yes 0 B", localTime(t, stamp))

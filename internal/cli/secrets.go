@@ -67,6 +67,8 @@ func tableNote(operationID string, resp []byte) string {
 		if field(v, "unsupported") == "true" {
 			return "This bucket also holds lifecycle rules ca cannot show. -o json shows the flag; replace them only with --replace-unsupported."
 		}
+	case "getBucketObjectMetadata":
+		return "Tags and user metadata are in -o json."
 	case "createObjectUploadUrl":
 		return "The PUT must send the signed headers too: -o json lists them."
 	}

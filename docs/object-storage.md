@@ -25,7 +25,7 @@ ca bucket object versions logs-7f3a --key reports/q3.pdf
 ca bucket object list-deleted logs-7f3a
 ```
 
-`list` and `list-deleted` follow every page; `--limit N` prints one page. `-q` prints keys for `list` and delete-marker version ids for `list-deleted` and `versions`.
+`list` and `list-deleted` follow every page; `--limit N` prints one page. `-q` prints keys for `list`, every version id for `versions`, and the delete markers' version ids for `list-deleted`.
 
 The API moves an object's bytes through a short-lived URL, not through itself.
 
