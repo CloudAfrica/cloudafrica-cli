@@ -28,6 +28,9 @@ groups:
   ip-address: List IP addresses
   bucket: Manage object storage buckets
   bucket versioning: Read and change a bucket's versioning
+  bucket object: List a bucket's objects and get short-lived upload and download URLs
+  bucket lifecycle: Read and replace a bucket's lifecycle rules
+  bucket cors: Read and replace a bucket's CORS rules
   bucket-key: Manage object storage access keys
   datacenter: List datacenters and check placement feasibility
   os-image: List OS images
@@ -185,6 +188,71 @@ operations:
     path: bucket versioning set
     positional: id
     example: ca bucket versioning set logs-7f3a --mode enabled
+  getBucketProtection:
+    path: bucket protection
+    positional: id
+    example: ca bucket protection logs-7f3a
+  listBucketObjects:
+    path: bucket object list
+    positional: id
+    example: |
+      ca bucket object list logs-7f3a
+      ca bucket object list logs-7f3a --prefix reports/2026/ --limit 50
+  listBucketDeletedObjects:
+    path: bucket object list-deleted
+    positional: id
+    example: ca bucket object list-deleted logs-7f3a --prefix reports/
+  listBucketObjectVersions:
+    path: bucket object versions
+    positional: id
+    example: ca bucket object versions logs-7f3a --key reports/q3.pdf
+  getBucketObjectMetadata:
+    path: bucket object get
+    positional: id
+    example: ca bucket object get logs-7f3a --key reports/q3.pdf
+  createObjectDownloadUrl:
+    path: bucket object download-url
+    positional: id
+    flags:
+      versionId: {help: "an earlier version to download (ca bucket object versions lists them); omit for the current one"}
+    example: |
+      ca bucket object download-url logs-7f3a --key reports/q3.pdf
+      # -q prints the URL, which expires in about a minute
+      curl -fsS -o q3.pdf "$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q)"
+  createObjectUploadUrl:
+    path: bucket object upload-url
+    positional: id
+    flags:
+      key: {help: "the new object's key, such as reports/q3.pdf; a key that already exists is refused"}
+      contentType: {help: "the Content-Type the upload will send"}
+      contentLength: {help: "the exact size of the upload in bytes, at most 25 MiB"}
+    example: |
+      ca bucket object upload-url logs-7f3a --key reports/q3.pdf --content-type application/pdf \
+        --content-length 2048 -o json
+  getBucketLifecycle:
+    path: bucket lifecycle get
+    positional: id
+    example: ca bucket lifecycle get logs-7f3a
+  replaceBucketLifecycle:
+    path: bucket lifecycle set
+    positional: id
+    example: |
+      # Expire current versions after 30 days; basedOn is the rules as you read them
+      ca bucket lifecycle get logs-7f3a -o json \
+        | jq '{rules: (.rules | map(.expirationDays = 30)), basedOn: .rules}' \
+        | ca bucket lifecycle set logs-7f3a -d @- --yes
+  getBucketCors:
+    path: bucket cors get
+    positional: id
+    example: ca bucket cors get logs-7f3a
+  replaceBucketCors:
+    path: bucket cors set
+    positional: id
+    example: |
+      # Remove every rule; basedOn is the rules as you read them
+      ca bucket cors get logs-7f3a -o json \
+        | jq '{rules: [], basedOn: .rules}' \
+        | ca bucket cors set logs-7f3a -d @- --yes
   createBucketKey:
     flags:
       bucketResourceId: {help: "the id of the bucket to attach the key to (ca bucket get NAME -q prints it), not its name; omit for an account-level key"}
@@ -441,6 +509,66 @@ columns:
       - {header: ON DISK, path: sizeActualBytes, format: bytes}
       - {header: OBJECTS, path: objectCount}
       - {header: CREATED, path: createdAt, format: time}
+  PublicBucketObjectDto:
+    id: key
+    columns:
+      - {header: KEY, path: key}
+      - {header: SIZE, path: sizeBytes, format: bytes}
+      - {header: TYPE, path: contentType}
+      - {header: MODIFIED, path: lastModified, format: time}
+  PublicBucketObjectVersionDto:
+    id: versionId
+    columns:
+      - {header: KEY, path: key}
+      - {header: VERSION, path: versionId}
+      - {header: LATEST, path: latest, format: bool}
+      - {header: DELETE MARKER, path: deleteMarker, format: bool}
+      - {header: SIZE, path: sizeBytes, format: bytes}
+      - {header: MODIFIED, path: lastModified, format: time}
+  PublicBucketObjectMetadataDto:
+    id: key
+    columns:
+      - {header: KEY, path: key}
+      - {header: VERSION, path: versionId}
+      - {header: SIZE, path: sizeBytes, format: bytes}
+      - {header: TYPE, path: contentType}
+      - {header: ETAG, path: etag}
+      - {header: MODIFIED, path: lastModified, format: time}
+      - {header: RETENTION, path: retentionMode}
+      - {header: RETAIN UNTIL, path: retainUntil, format: time}
+      - {header: LEGAL HOLD, path: legalHold, format: bool}
+  PublicObjectDownloadUrlDto:
+    id: url
+    columns:
+      - {header: URL, path: url}
+      - {header: EXPIRES, path: expiresAt, format: time}
+  PublicObjectUploadUrlDto:
+    id: url
+    columns:
+      - {header: URL, path: url}
+      - {header: EXPIRES, path: expiresAt, format: time}
+  PublicBucketProtectionDto:
+    id: defaultEncryption
+    columns:
+      - {header: OBJECT LOCK, path: objectLock, format: bool}
+      - {header: DEFAULT ENCRYPTION, path: defaultEncryption}
+  PublicBucketLifecycleDto:
+    rows: rules
+    columns:
+      - {header: PREFIX, path: prefix}
+      - {header: ENABLED, path: enabled, format: bool}
+      - {header: EXPIRE DAYS, path: expirationDays}
+      - {header: NONCURRENT DAYS, path: noncurrentExpirationDays}
+      - {header: ABORT UPLOAD DAYS, path: abortIncompleteUploadDays}
+      - {header: DELETE MARKERS, path: expireDeleteMarker, format: bool}
+  PublicBucketCorsDto:
+    rows: rules
+    columns:
+      - {header: ORIGINS, path: allowedOrigins, format: list}
+      - {header: METHODS, path: allowedMethods, format: list}
+      - {header: HEADERS, path: allowedHeaders, format: list}
+      - {header: EXPOSE, path: exposeHeaders, format: list}
+      - {header: MAX AGE, path: maxAgeSeconds}
   PublicBucketKeyDto:
     columns:
       - {header: ID, path: id}

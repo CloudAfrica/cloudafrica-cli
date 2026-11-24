@@ -40,3 +40,37 @@ func missingSecret(operationID, name string, resp []byte) error {
 		hint: fmt.Sprintf("A replayed create omits the secret. Read it with: ca bucket-key reveal-secret %[1]s", name),
 	}
 }
+
+// urlDeliverables lists the mints whose stdout is a URL a script feeds to curl.
+var urlDeliverables = map[string]bool{
+	"createObjectDownloadUrl": true,
+	"createObjectUploadUrl":   true,
+}
+
+// missingURL is the error for a URL mint whose response holds no url, so
+// `curl "$(ca ... -q)"` does not run against an empty string.
+func missingURL(operationID string, resp []byte) error {
+	if !urlDeliverables[operationID] || field(decode(resp), "url") != "" {
+		return nil
+	}
+	return &hintedError{
+		err:  errors.New("the response carried no URL"),
+		hint: "Run the command again: each run mints a new URL",
+	}
+}
+
+// tableNote is the stderr line a table owes for what its columns leave out.
+func tableNote(operationID string, resp []byte) string {
+	v := decode(resp)
+	switch operationID {
+	case "getBucketLifecycle":
+		if field(v, "unsupported") == "true" {
+			return "This bucket also holds lifecycle rules ca cannot show. -o json shows the flag; replace them only with --replace-unsupported."
+		}
+	case "getBucketObjectMetadata":
+		return "Tags and user metadata are in -o json."
+	case "createObjectUploadUrl":
+		return "The PUT must send the signed headers too: -o json lists them."
+	}
+	return ""
+}

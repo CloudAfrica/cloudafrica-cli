@@ -109,7 +109,7 @@ ca completion powershell | Out-String | Invoke-Expression   # PowerShell
 - Commands by domain:
   - [Compute](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/compute.md): VMs, disks, backups, placement groups, SSH keys, images
   - [Networking](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/networking.md): VPCs, reserved IPs, VIPs, firewall rules
-  - [Object storage](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/object-storage.md): buckets and access keys
+  - [Object storage](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/object-storage.md): buckets, objects and access keys
   - [Account, team and billing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/account.md)
   - [Support](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/support.md)
   - [Kubernetes](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/kubernetes.md) (not yet available in production)
