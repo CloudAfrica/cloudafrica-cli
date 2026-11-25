@@ -113,6 +113,5 @@ ca completion powershell | Out-String | Invoke-Expression   # PowerShell
   - [Account, team and billing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/account.md)
   - [Support](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/support.md)
 - [Command reference](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/reference/ca.md): every command and flag, generated from `ca` itself
-- [Contributing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/CONTRIBUTING.md)
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/LICENSE).

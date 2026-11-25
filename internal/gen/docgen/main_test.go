@@ -17,7 +17,7 @@ func handWritten(t *testing.T) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pages = append(pages, "../../../README.md", "../../../CONTRIBUTING.md")
+	pages = append(pages, "../../../README.md")
 	var kept []string
 	for _, p := range pages {
 		if filepath.Base(p) != "traps.md" {
