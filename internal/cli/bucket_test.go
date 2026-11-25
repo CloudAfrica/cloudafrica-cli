@@ -204,7 +204,7 @@ func TestBucketKeyCreatePrintsSecret(t *testing.T) {
 		t.Error("a replay without a secret exited 0")
 	}
 	contains(t, h.stdout.String(), "AKCI2")
-	contains(t, h.stderr.String(), "no secret key", "ca bucket-key reveal-secret ci2")
+	contains(t, h.stderr.String(), "no secret key", "ca bucket-keys reveal-secret ci2")
 	if strings.Contains(h.stdout.String(), "s3cr3t") {
 		t.Errorf("a replay printed a secret: %s", h.stdout)
 	}
@@ -266,7 +266,7 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 	if got := strings.Join(strings.Fields(h.stdout.String()), " "); got != "KEY ID AVAILABLE SECRET KEY k-0 no" {
 		t.Errorf("unavailable row %q", got)
 	}
-	contains(t, h.stderr.String(), "holds no secret", "ca bucket-key create")
+	contains(t, h.stderr.String(), "holds no secret", "ca bucket-keys create")
 	if strings.Contains(h.stderr.String(), "delete") {
 		t.Errorf("the hint advises a delete: %s", h.stderr)
 	}
@@ -278,7 +278,7 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 	if code := h.run("bucket-key", "reveal-secret", "ci", "--yes", "-q"); code == 0 || strings.TrimSpace(h.stdout.String()) != "" {
 		t.Errorf("an available key with no secret: exit %d, stdout %q", code, h.stdout)
 	}
-	contains(t, h.stderr.String(), "no secret key", "ca bucket-key reveal-secret ci")
+	contains(t, h.stderr.String(), "no secret key", "ca bucket-keys reveal-secret ci")
 	for _, status := range []int{200, 201, 204} {
 		canned(h, map[string]fakeapi.Canned{
 			"GET /v1/bucket-keys":                            {Body: keyList},
@@ -287,7 +287,7 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 		if code := h.run("bucket-key", "reveal-secret", "ci", "--yes"); code == 0 {
 			t.Errorf("an empty %d exited 0", status)
 		}
-		contains(t, h.stderr.String(), "ca bucket-key reveal-secret ci")
+		contains(t, h.stderr.String(), "ca bucket-keys reveal-secret ci")
 	}
 	canned(h, map[string]fakeapi.Canned{
 		"GET /v1/bucket-keys":        {Body: keyList},

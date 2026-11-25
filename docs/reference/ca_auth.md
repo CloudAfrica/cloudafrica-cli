@@ -23,7 +23,7 @@ ca auth [flags]
 ### SEE ALSO
 
 * [ca](ca.md)	 - The CloudAfrica command-line interface
-* [ca auth elevate](ca_auth_elevate.md)	 - Allow protected actions (such as vm delete) for this sign-in or API token
+* [ca auth elevate](ca_auth_elevate.md)	 - Allow protected actions (such as vms delete) for this sign-in or API token
 * [ca auth list](ca_auth_list.md)	 - List profiles
 * [ca auth login](ca_auth_login.md)	 - Sign in through the browser
 * [ca auth logout](ca_auth_logout.md)	 - Revoke the selected profile's session and delete the profile

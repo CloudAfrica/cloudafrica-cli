@@ -2,6 +2,8 @@
 // (internal/gen) writes it and the executor (internal/cli) runs it.
 package cmdspec
 
+import "strings"
+
 // Async is how a command's 202 names the operation to wait on.
 type Async string
 
@@ -119,8 +121,43 @@ type Column struct {
 
 // Group is a command group's help.
 type Group struct {
-	Path  []string
-	Short string
+	Path    []string
+	Short   string
+	Aliases []string
+	// GroupID is the help section of a top-level group ("" below the top level).
+	GroupID string
+}
+
+// Section is a heading `ca --help` lists top-level commands under.
+type Section struct {
+	ID    string
+	Title string
+}
+
+// Sections are the help sections, in the order `ca --help` prints them.
+var Sections = []Section{
+	{"compute", "Compute:"},
+	{"networking", "Networking:"},
+	{"storage", "Storage:"},
+	{"kubernetes", "Kubernetes:"},
+	{"account", "Account:"},
+	{"support", "Support:"},
+	{"cli", "CLI:"},
+}
+
+// Singular singularises a kebab-case noun: vms is vm, policies is policy.
+func Singular(s string) string {
+	switch {
+	case strings.HasSuffix(s, "ies"):
+		return strings.TrimSuffix(s, "ies") + "y"
+	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"):
+		return strings.TrimSuffix(s, "es")
+	case strings.HasSuffix(s, "ss"):
+		return s
+	case strings.HasSuffix(s, "s"):
+		return strings.TrimSuffix(s, "s")
+	}
+	return s
 }
 
 // Covered lists an operation a hand-written command covers or an excluded one, with why.

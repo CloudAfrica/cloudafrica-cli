@@ -583,7 +583,7 @@ func TestUnrepeatableWriteIsNotRetriedOn503(t *testing.T) {
 		t.Errorf("writes %v", h.fake.WriteURLs)
 	}
 	s := h.stderr.String()
-	for _, want := range []string{"not retried", "ca vpc reserved-ip list --vpc web"} {
+	for _, want := range []string{"not retried", "ca vpcs reserved-ips list --vpc web"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("stderr lacks %q: %s", want, s)
 		}

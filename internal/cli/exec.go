@@ -31,7 +31,7 @@ import (
 
 // conflictHints add a remedy to a 409 from one operation; %[1]s is the positional value.
 var conflictHints = map[string]string{
-	"deleteVm": "If the VM is running, stop it with `ca vm shutdown %[1]s` (or `ca vm force-stop %[1]s`), " +
+	"deleteVm": "If the VM is running, stop it with `ca vms shutdown %[1]s` (or `ca vms force-stop %[1]s`), " +
 		"then delete it; otherwise the message above gives the reason.",
 }
 
@@ -40,11 +40,20 @@ var conflictHints = map[string]string{
 func (a *App) addGenerated(root *cobra.Command) {
 	for _, g := range genGroups {
 		parent := ensureGroup(root, g.Path[:len(g.Path)-1])
-		if c := child(parent, g.Path[len(g.Path)-1]); c != nil {
-			c.Short = g.Short
-			continue
+		c := child(parent, g.Path[len(g.Path)-1])
+		if c == nil {
+			c = group(g.Path[len(g.Path)-1], "")
+			parent.AddCommand(c)
 		}
-		parent.AddCommand(group(g.Path[len(g.Path)-1], g.Short))
+		c.Short = g.Short
+		for _, al := range g.Aliases {
+			if !c.HasAlias(al) {
+				c.Aliases = append(c.Aliases, al)
+			}
+		}
+		if g.GroupID != "" {
+			c.GroupID = g.GroupID
+		}
 	}
 	for _, op := range genOps {
 		parent := ensureGroup(root, op.Path[:len(op.Path)-1])
@@ -77,14 +86,14 @@ func ensureGroup(root *cobra.Command, path []string) *cobra.Command {
 	return cur
 }
 
-// argName is how a positional shows in usage: VM, SSH_KEY, OPERATION_ID, RULE_ID.
+// argName is how a positional shows in usage: VM, SSH_KEY, OPERATION_ID, RULE_ID; nouns are singular.
 func argName(op cmdspec.Op) string {
 	p := op.Positional
 	if p.Resource != "" {
 		return strings.ToUpper(strings.ReplaceAll(p.Resource, "-", "_"))
 	}
 	if p.Name == "id" {
-		return strings.ToUpper(strings.ReplaceAll(op.Path[len(op.Path)-2], "-", "_")) + "_ID"
+		return strings.ToUpper(strings.ReplaceAll(cmdspec.Singular(op.Path[len(op.Path)-2]), "-", "_")) + "_ID"
 	}
 	return strings.ToUpper(strings.ReplaceAll(kebab(p.Name), "-", "_"))
 }
@@ -102,6 +111,9 @@ func kebab(s string) string {
 	}
 	return b.String()
 }
+
+// operationIDKey annotates a generated command with the operation it runs.
+const operationIDKey = "operationId"
 
 // genRun holds one generated command's executor flags.
 type genRun struct {
@@ -122,11 +134,12 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		nargs = 1
 	}
 	cmd := &cobra.Command{
-		Use:     use,
-		Short:   op.Short,
-		Long:    longHelp(op),
-		Example: indent(op.Example),
-		Args:    exactArgs(nargs, strings.TrimPrefix(use, op.Path[len(op.Path)-1]+" ")),
+		Use:         use,
+		Short:       op.Short,
+		Annotations: map[string]string{operationIDKey: op.OperationID},
+		Long:        longHelp(op),
+		Example:     indent(op.Example),
+		Args:        exactArgs(nargs, strings.TrimPrefix(use, op.Path[len(op.Path)-1]+" ")),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.runGenerated(cmd, op, r, args)
 		},
@@ -523,7 +536,7 @@ func (a *App) bodyFrom(op cmdspec.Op, f *pflag.FlagSet, data string) (map[string
 func confirmQuestion(op cmdspec.Op, targets []target) string {
 	verb := op.Path[len(op.Path)-1]
 	verb = strings.ToUpper(verb[:1]) + strings.ReplaceAll(verb[1:], "-", " ")
-	noun := strings.ReplaceAll(op.Path[len(op.Path)-2], "-", " ")
+	noun := strings.ReplaceAll(cmdspec.Singular(op.Path[len(op.Path)-2]), "-", " ")
 	if r, ok := genResources[op.Positional.Resource]; ok && op.Positional.Name != "" {
 		noun = r.Noun
 	}

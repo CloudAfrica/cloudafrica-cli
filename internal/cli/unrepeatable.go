@@ -11,7 +11,7 @@ import (
 // can repeat them (a second reserved address, say), with the hint printed when
 // one gets a 503; %[1]s is the first path parameter's given value.
 var unrepeatable = map[string]string{
-	"createVpcReservedIp": "The address may have been reserved anyway; check `ca vpc reserved-ip list --vpc %[1]s` " +
+	"createVpcReservedIp": "The address may have been reserved anyway; check `ca vpcs reserved-ips list --vpc %[1]s` " +
 		"before trying again.",
 }
 

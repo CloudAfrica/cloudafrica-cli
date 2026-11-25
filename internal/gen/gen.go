@@ -24,7 +24,11 @@ import (
 
 // Overlay is commands.yaml.
 type Overlay struct {
-	Groups      map[string]string            `json:"groups"`
+	Groups map[string]string `json:"groups"`
+	// Sections puts each top-level group under a `ca --help` heading (a cmdspec.Sections id).
+	Sections map[string]string `json:"sections"`
+	// Aliases replaces a group's aliases, which default to its singular; [] means none.
+	Aliases     map[string][]string          `json:"aliases"`
 	Nouns       map[string]string            `json:"nouns"`
 	Resources   map[string]cmdspec.Resource  `json:"resources"`
 	Params      map[string]ParamOverlay      `json:"params"`
@@ -269,20 +273,70 @@ func (g *generator) run() *Output {
 			groups[strings.Join(parts[:i], " ")] = true
 		}
 	}
+	sections := map[string]bool{}
+	for _, sec := range cmdspec.Sections {
+		sections[sec.ID] = true
+	}
+	// names holds every name and alias under a parent, to refuse two siblings answering to one word.
+	names := map[string]map[string]string{}
+	answer := func(path []string, word, what string) {
+		parent := strings.Join(path[:len(path)-1], " ")
+		if names[parent] == nil {
+			names[parent] = map[string]string{}
+		}
+		if prev, ok := names[parent][word]; ok && prev != what {
+			g.fail("%q answers to both %s and %s: a path: left singular? (commands.yaml)", strings.TrimSpace(parent+" "+word), prev, what)
+		}
+		names[parent][word] = what
+	}
+	for _, o := range owners {
+		parts := strings.Fields(o.path)
+		answer(parts, parts[len(parts)-1], "command "+o.path)
+	}
 	for _, p := range sortedKeys(groups) {
 		if op, ok := byPath[p]; ok {
 			g.fail("command %q (%s) is also a group: rename it in commands.yaml", p, op)
 		}
+		parts := strings.Fields(p)
+		name := parts[len(parts)-1]
 		short := g.ov.Groups[p]
 		if short == "" {
-			parts := strings.Fields(p)
-			short = "Manage " + parts[len(parts)-1] + "s"
+			short = "Manage " + name
 		}
-		out.Groups = append(out.Groups, cmdspec.Group{Path: strings.Fields(p), Short: short})
+		grp := cmdspec.Group{Path: parts, Short: short}
+		if a, ok := g.ov.Aliases[p]; ok {
+			grp.Aliases = a
+		} else if s := cmdspec.Singular(name); s != name {
+			grp.Aliases = []string{s}
+		}
+		answer(parts, name, "group "+p)
+		for _, a := range grp.Aliases {
+			answer(parts, a, "group "+p)
+		}
+		if len(parts) == 1 {
+			grp.GroupID = g.ov.Sections[p]
+			if grp.GroupID == "" {
+				g.fail("commands.yaml sections: top-level group %q has no section", p)
+			}
+		}
+		out.Groups = append(out.Groups, grp)
 	}
 	for _, p := range sortedKeys(g.ov.Groups) {
 		if !groups[p] {
 			g.fail("commands.yaml groups: %q is not a group of generated commands", p)
+		}
+	}
+	for _, p := range sortedKeys(g.ov.Aliases) {
+		if !groups[p] {
+			g.fail("commands.yaml aliases: %q is not a group of generated commands", p)
+		}
+	}
+	for _, p := range sortedKeys(g.ov.Sections) {
+		if !groups[p] || strings.Contains(p, " ") {
+			g.fail("commands.yaml sections: %q is not a top-level group of generated commands", p)
+		}
+		if !sections[g.ov.Sections[p]] {
+			g.fail("commands.yaml sections %s: no section %q", p, g.ov.Sections[p])
 		}
 	}
 
@@ -398,26 +452,12 @@ func (g *generator) match(rules []Rule, id, url string) (Rule, bool) {
 
 func isParam(seg string) bool { return strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") }
 
-// Singular singularises a kebab-case path segment.
-func Singular(s string) string {
-	switch {
-	case strings.HasSuffix(s, "ies"):
-		return strings.TrimSuffix(s, "ies") + "y"
-	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"):
-		return strings.TrimSuffix(s, "es")
-	case strings.HasSuffix(s, "ss"):
-		return s
-	case strings.HasSuffix(s, "s"):
-		return strings.TrimSuffix(s, "s")
-	}
-	return s
-}
-
+// noun is a path segment's command name: the overlay's rename, else the segment.
 func (g *generator) noun(seg string) string {
 	if a, ok := g.ov.Nouns[seg]; ok {
 		return a
 	}
-	return Singular(seg)
+	return seg
 }
 
 func (g *generator) resolve(s *schema) *schema {
@@ -597,7 +637,7 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 			g.fail("%s: parameter %s has no noun to name its flag", op.OperationID, name)
 			continue
 		}
-		p.Flag = g.noun(segs[i-1])
+		p.Flag = cmdspec.Singular(g.noun(segs[i-1]))
 		claim(p.Flag, "path parameter "+name)
 		c.Params = append(c.Params, p)
 	}

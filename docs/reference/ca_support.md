@@ -23,5 +23,5 @@ ca support [flags]
 ### SEE ALSO
 
 * [ca](ca.md)	 - The CloudAfrica command-line interface
-* [ca support ticket](ca_support_ticket.md)	 - Manage support tickets
+* [ca support tickets](ca_support_tickets.md)	 - Manage support tickets
 

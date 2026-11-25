@@ -98,6 +98,9 @@ func resolve(root *cobra.Command, line string) ([]*cobra.Command, []string, stri
 		for _, c := range cmds {
 			for _, alt := range strings.Split(w, "|") {
 				if s := sub(c, alt); s != nil {
+					if s.Name() != alt {
+						return nil, nil, alt + " is an alias: write ca " + strings.TrimPrefix(s.CommandPath(), "ca ")
+					}
 					next = append(next, s)
 				} else if strings.Contains(w, "|") {
 					return nil, nil, "no command " + alt + " under " + c.CommandPath()

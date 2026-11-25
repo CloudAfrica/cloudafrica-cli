@@ -1,0 +1,142 @@
+account backup-retention	getAccountDeletedVmBackupRetention	0	
+account get	getAccount	0	
+account limits	getAccountLimits	0	
+activity list	listActivity	0	cursor,limit,subject-id,subject-type,types
+api	-	1	data
+auth elevate	-	0	
+auth list	-	0	
+auth login	-	0	account,scope
+auth logout	-	0	
+auth status	-	0	
+backup-policy list	listBackupPolicies	0	cursor,limit
+backup-window list	listBackupWindows	0	
+billing accrual	getBillingAccrual	0	as-of
+billing balance	getBillingBalance	0	
+billing details get	getBillingDetails	0	
+billing details set	updateBillingDetails	0	billing-email,company-number,country-code,data,postal-address1,postal-address2,postal-address3,postal-address4,postal-address5,vat-number,yes
+bucket cors get	getBucketCors	1	
+bucket cors set	replaceBucketCors	1	data,yes
+bucket create	createBucket	0	data,display-name,no-wait,object-lock,timeout,versioning
+bucket delete	deleteBucket	1	confirm-bucket-name,data,no-wait,timeout,yes
+bucket get	getBucket	1	
+bucket lifecycle get	getBucketLifecycle	1	
+bucket lifecycle set	replaceBucketLifecycle	1	data,replace-unsupported,yes
+bucket list	listBuckets	0	cursor,limit
+bucket object download-url	createObjectDownloadUrl	1	data,key,version-id,yes
+bucket object get	getBucketObjectMetadata	1	key
+bucket object list	listBucketObjects	1	cursor,limit,prefix
+bucket object list-deleted	listBucketDeletedObjects	1	cursor,limit,prefix
+bucket object upload-url	createObjectUploadUrl	1	content-length,content-type,data,key
+bucket object versions	listBucketObjectVersions	1	cursor,key,limit
+bucket protection	getBucketProtection	1	
+bucket usage	getBucketUsage	1	hours
+bucket versioning get	getBucketVersioning	1	
+bucket versioning set	updateBucketVersioning	1	data,mode,yes
+bucket-key create	createBucketKey	0	access-type,bucket-resource-id,data,name,yes
+bucket-key delete	deleteBucketKey	1	yes
+bucket-key grant	grantBucketKeyBucketAccess	1	bucket,yes
+bucket-key list	listBucketKeys	0	cursor,limit
+bucket-key reveal-secret	revealBucketKeySecret	1	yes
+bucket-key revoke	revokeBucketKeyBucketAccess	1	bucket,yes
+datacenter feasibility	getPlacementFeasibility	0	boot-disk-gib,count,datacenter,extra-disks-gib,placement-group-id,ram-gib,vcpu
+datacenter list	listPlacementGroupDatacenters	0	
+ip-address list	listIpAddresses	0	cursor,limit
+k8s get	-	1	
+k8s kubeconfig	-	1	managed-vpn
+k8s list	-	0	
+k8s token	-	1	
+k8s upgrade-workers	-	1	no-wait,timeout,version
+member cancel-invitation	cancelMemberInvitation	1	
+member create	createMember	0	data,email,first-name,last-name,role,yes
+member delete	deleteMember	1	yes
+member list	listMembers	0	cursor,limit
+member resend-invitation	resendMemberInvitation	1	
+member role set	updateMemberRole	1	data,role,yes
+operation cancel	cancelOperation	1	no-wait,timeout
+operation get	getOperation	1	
+operation wait	-	1	timeout
+os-image list	listOsImages	0	cursor,limit
+placement-group create	createPlacementGroup	0	data,datacenter-id,name,strategy
+placement-group delete	deletePlacementGroup	1	yes
+placement-group get	getPlacementGroup	1	
+placement-group list	listPlacementGroups	0	cursor,limit
+placement-group member add	addPlacementGroupMember	1	placement-group
+placement-group member remove	removePlacementGroupMember	1	placement-group,yes
+project create	createProject	0	data,name,slug
+project delete	deleteProject	1	yes
+project get	getProject	1	
+project list	listProjects	0	cursor,limit
+project resource list	listProjectResources	0	cursor,limit,project
+project resource move	moveProjectResource	1	project
+project update	updateProject	1	data,name
+ssh-key create	createSshKey	0	data,name,public-key
+ssh-key delete	deleteSshKey	1	yes
+ssh-key list	listSshKeys	0	cursor,limit
+ssh-key update	updateSshKey	1	data,name
+support ticket create	createSupportTicket	0	data,description,requester-email,resource-id,subject
+support ticket get	getSupportTicket	1	
+support ticket list	listSupportTickets	0	cursor,limit,search,status
+support ticket reply	createSupportTicketReply	1	author-email,body,data
+support ticket resolve	resolveSupportTicket	1	
+transaction list	listTransactions	0	cursor,limit
+update	-	0	check
+version	-	0	
+vip list	listVips	0	cursor,limit
+vm add-disk	addVmDisk	1	data,no-wait,size-gib,timeout
+vm apply-pending-restart	applyVmPendingRestart	1	guest-timeout,no-wait,timeout
+vm backup create	backupVm	0	compress,data,mode,no-wait,notes,timeout,vm
+vm backup delete	deleteVmBackup	1	vm,yes
+vm backup list	listVmBackups	0	cursor,limit,vm
+vm backup restore-site list	listVmBackupRestoreSites	0	backup,vm
+vm backup restore-to-new-vm	restoreVmBackupToNewVm	1	data,datacenter-slug,name,no-wait,public-ip,terms-accepted,timeout,vm,vpc-resource-id,yes
+vm backup set-protection	updateVmBackupProtection	1	data,protected,vm,yes
+vm backup-policy delete	deleteVmBackupPolicy	0	vm,yes
+vm backup-policy get	getVmBackupPolicy	0	vm
+vm backup-policy preview-rotation	previewVmBackupPolicyRotation	0	cadence-day,cadence-kind,data,paused,plan-id,vm,window-preference
+vm backup-policy set	updateVmBackupPolicy	0	cadence-day,cadence-kind,data,paused,plan-id,vm,window-preference
+vm create	-	0	accept-terms,boot-disk-gib,datacenter,extra-disk-gib,image,name,no-wait,placement-group,public-ip,ram-gib,reserved-ip,ssh-key,timeout,vcpu,vpc
+vm delete	deleteVm	1	no-wait,timeout,yes
+vm disk list	listVmDisks	0	cursor,limit,vm
+vm firewall-rule create	createVmFirewallRule	0	data,description,from-port,no-wait,protocol,source,timeout,to-port,vm
+vm firewall-rule delete	deleteVmFirewallRule	1	no-wait,timeout,vm,yes
+vm firewall-rule list	listVmFirewallRules	0	vm
+vm firewall-rule update	updateVmFirewallRule	1	data,description,from-port,no-wait,protocol,source,timeout,to-port,vm
+vm force-stop	forceStopVm	1	no-wait,timeout
+vm get	getVm	1	
+vm list	listVms	0	cursor,limit,slug
+vm nic attach	attachVmNetworkInterface	0	data,no-wait,timeout,vm,vpc-resource-id,yes
+vm nic detach	detachVmNetworkInterface	1	no-wait,timeout,vm,yes
+vm nic list	listVmNetworkInterfaces	0	cursor,limit,vm
+vm private-ip create	createVmPrivateIp	0	data,nic-id,no-wait,timeout,vm
+vm private-ip list	listVmPrivateIps	0	cursor,limit,vm
+vm public-ip attach	attachVmPublicIp	0	no-wait,private-lease-id,reserved-ip-id,timeout,vm,yes
+vm public-ip detach	detachVmPublicIp	1	no-wait,timeout,vm,yes
+vm public-ip list	listVmPublicIps	0	cursor,limit,vm
+vm reboot	rebootVm	1	no-wait,timeout
+vm rename	renameVm	1	data,name,no-wait,timeout
+vm resize	resizeVm	1	data,no-wait,ram-gib,timeout,vcpu
+vm restore	restoreVm	1	data,no-wait,started-at,timeout,yes
+vm shutdown	shutdownVm	1	guest-timeout,no-wait,timeout
+vm ssh-key attach	attachVmSshKey	1	vm
+vm ssh-key detach	detachVmSshKey	1	vm,yes
+vm ssh-key list	listVmSshKeys	0	cursor,limit,vm
+vm start	startVm	1	no-wait,timeout
+vm vip add	addVmToVip	1	no-wait,timeout,vm,yes
+vm vip remove	removeVmFromVip	1	no-wait,timeout,vm,yes
+vpc create	createVpc	0	data,description,name
+vpc delete	deleteVpc	1	yes
+vpc firewall-rule list	listVpcFirewallRules	0	vpc
+vpc get	getVpc	1	
+vpc list	listVpcs	0	cursor,limit
+vpc reserved-ip create	createVpcReservedIp	0	vpc
+vpc reserved-ip delete	deleteVpcReservedIp	1	vpc,yes
+vpc reserved-ip list	listVpcReservedIps	0	cursor,limit,vpc
+vpc update	updateVpc	1	data,name
+vpc vip create	createVpcVip	0	no-wait,timeout,vpc
+vpc vip delete	deleteVpcVip	1	no-wait,timeout,vpc,yes
+vpc vip firewall-rule create	createVpcVipFirewallRule	0	data,description,from-port,no-wait,protocol,source,timeout,to-port,vip,vpc
+vpc vip firewall-rule delete	deleteVpcVipFirewallRule	1	no-wait,timeout,vip,vpc,yes
+vpc vip firewall-rule list	listVpcVipFirewallRules	0	vip,vpc
+vpc vip firewall-rule set-description	setVpcVipFirewallRuleDescription	1	data,description,no-wait,timeout,vip,vpc
+vpc vip public-ip attach	attachVpcVipPublicIp	0	vip,vpc,yes
+vpc vip public-ip detach	detachVpcVipPublicIp	0	vip,vpc,yes

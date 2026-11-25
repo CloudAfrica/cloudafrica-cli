@@ -1,6 +1,6 @@
 ## ca auth elevate
 
-Allow protected actions (such as vm delete) for this sign-in or API token
+Allow protected actions (such as vms delete) for this sign-in or API token
 
 ### Synopsis
 

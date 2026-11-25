@@ -9,20 +9,20 @@ or [Scripts and CI](auth.md#scripts-and-ci) when you sign in with a token.
 ## Buckets
 
 ```sh
-ca bucket list|get|create|delete
-ca bucket usage logs-7f3a --hours 168
-ca bucket versioning get|set logs-7f3a
+ca buckets list|get|create|delete
+ca buckets usage logs-7f3a --hours 168
+ca buckets versioning get|set logs-7f3a
 ```
 
-`ca bucket delete` deletes the bucket and everything in it.
+`ca buckets delete` deletes the bucket and everything in it.
 
 ## Objects
 
 ```sh
-ca bucket object list logs-7f3a --prefix reports/2026/
-ca bucket object get logs-7f3a --key reports/q3.pdf
-ca bucket object versions logs-7f3a --key reports/q3.pdf
-ca bucket object list-deleted logs-7f3a
+ca buckets objects list logs-7f3a --prefix reports/2026/
+ca buckets objects get logs-7f3a --key reports/q3.pdf
+ca buckets objects versions logs-7f3a --key reports/q3.pdf
+ca buckets objects list-deleted logs-7f3a
 ```
 
 `list` and `list-deleted` follow every page; `--limit N` prints one page. `-q` prints keys for `list`, every version id for `versions`, and the delete markers' version ids for `list-deleted`.
@@ -31,13 +31,13 @@ The API moves an object's bytes through a short-lived URL, not through itself.
 
 ```bash
 # Download: the URL works for about a minute and needs no credentials. Protected: elevate first.
-URL=$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q) &&
+URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) &&
   curl -fsS -o q3.pdf "$URL"
 
 # Upload one new object of at most 25 MiB. The PUT must send every header the API returns, and exactly
 # --content-length bytes.
 SIZE=$(wc -c < q3.pdf | tr -d ' ')
-SPEC=$(ca bucket object upload-url logs-7f3a --key reports/q3-copy.pdf --content-type application/pdf \
+SPEC=$(ca buckets objects upload-url logs-7f3a --key reports/q3-copy.pdf --content-type application/pdf \
   --content-length "$SIZE" -o json) &&
   curl -fsS -X PUT "$(jq -r .url <<<"$SPEC")" \
     -K <(jq -r '.headers | to_entries[] | "header = \"\(.key): \(.value)\""' <<<"$SPEC") \
@@ -50,18 +50,18 @@ file over 25 MiB, go through an S3 client with a [bucket key](#access-keys): poi
 ## Lifecycle, CORS and protection
 
 ```sh
-ca bucket lifecycle get|set logs-7f3a
-ca bucket cors get|set logs-7f3a
-ca bucket protection logs-7f3a
+ca buckets lifecycle get|set logs-7f3a
+ca buckets cors get|set logs-7f3a
+ca buckets protection logs-7f3a
 ```
 
 `set` replaces every rule. Send the rules `get` returned as `basedOn`, or the API refuses the change with
 a 409 when the stored rules differ: the request body has no flags for rules, so pass it with `-d`.
 
 ```sh
-ca bucket lifecycle get logs-7f3a -o json \
+ca buckets lifecycle get logs-7f3a -o json \
   | jq '{rules: (.rules | map(.expirationDays = 30)), basedOn: .rules}' \
-  | ca bucket lifecycle set logs-7f3a -d @- --yes
+  | ca buckets lifecycle set logs-7f3a -d @- --yes
 ```
 
 `protection` is read-only: object lock is chosen when the bucket is ordered.
@@ -69,9 +69,9 @@ ca bucket lifecycle get logs-7f3a -o json \
 ## Access keys
 
 ```sh
-ca bucket-key list|create|delete
-ca bucket-key reveal-secret ci
-ca bucket-key grant|revoke ci --bucket logs-7f3a
+ca bucket-keys list|create|delete
+ca bucket-keys reveal-secret ci
+ca bucket-keys grant|revoke ci --bucket logs-7f3a
 ```
 
-`-q` on `bucket-key create` and `reveal-secret` prints only the secret key, for a script to capture.
+`-q` on `bucket-keys create` and `reveal-secret` prints only the secret key, for a script to capture.

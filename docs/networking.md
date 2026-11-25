@@ -11,34 +11,34 @@ or [Scripts and CI](auth.md#scripts-and-ci) when you sign in with a token.
 ## VPCs
 
 ```sh
-ca vpc list
-ca vpc get web
-ca vpc create --name web
-ca vpc update web ...
-ca vpc delete web
-ca vpc firewall-rule list --vpc web
+ca vpcs list
+ca vpcs get web
+ca vpcs create --name web
+ca vpcs update web ...
+ca vpcs delete web
+ca vpcs firewall-rules list --vpc web
 ```
 
 ## Reserved public IPs
 
 ```sh
-ca vpc reserved-ip list|create|delete --vpc web
+ca vpcs reserved-ips list|create|delete --vpc web
 ```
 
-`ca vm create --reserved-ip` builds a VM onto a reserved IP.
+`ca vms create --reserved-ip` builds a VM onto a reserved IP.
 
 ## Virtual IPs
 
 ```sh
-ca vpc vip create|delete --vpc web
-ca vpc vip public-ip attach|detach --vpc web --vip lb1
-ca vpc vip firewall-rule list|create|delete|set-description --vpc web --vip lb1
-ca vm vip add|remove lb1 --vm web-01  # membership
-ca vip list                            # every VIP in the account
+ca vpcs vips create|delete --vpc web
+ca vpcs vips public-ip attach|detach --vpc web --vip lb1
+ca vpcs vips firewall-rules list|create|delete|set-description --vpc web --vip lb1
+ca vms vips add|remove lb1 --vm web-01  # membership
+ca vips list                            # every VIP in the account
 ```
 
 ## Every address
 
 ```sh
-ca ip-address list
+ca ips list
 ```
