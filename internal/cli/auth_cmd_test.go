@@ -320,6 +320,29 @@ func TestLoginRefusesASessionForAnotherAccount(t *testing.T) {
 	}
 }
 
+// When the account cannot be read back, a named account cannot be confirmed,
+// so nothing is saved and the stored account is not wiped.
+func TestLoginRefusesASessionItCannotConfirm(t *testing.T) {
+	h := newHarness(t)
+	before := h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.Canned = map[string]fakeapi.Canned{"GET /v1/account": {Status: 500}}
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "could not confirm the session is for account acc-9") ||
+		strings.Contains(s, "Signed in") {
+		t.Errorf("stderr: %s", s)
+	}
+	if p, _ := h.store.Load("default"); p.AccountID != "acc-1" || p.AccessToken != before.AccessToken {
+		t.Errorf("the profile changed: %+v", p)
+	}
+	// With no account named there is nothing to confirm: the sign-in is kept, as before.
+	h.mustRun("auth", "login", "--profile", "fresh")
+	if p, _ := h.store.Load("fresh"); p == nil || p.AccessToken == "" || p.AccountID != "" {
+		t.Errorf("an unnamed sign-in was not kept as before: %+v", p)
+	}
+}
+
 // When the consent page refuses the account a profile reuses, the error names
 // the way out instead of repeating the command that just failed.
 func TestLoginRefusedStoredAccountNamesTheWayOut(t *testing.T) {
@@ -329,7 +352,7 @@ func TestLoginRefusedStoredAccountNamesTheWayOut(t *testing.T) {
 	if code := h.run("auth", "login"); code != ExitAuth {
 		t.Fatalf("exit %d, stderr %s", code, h.stderr)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "the consent page refused account acc-1") ||
+	if s := h.stderr.String(); !strings.Contains(s, "sign-in was declined for account acc-1") ||
 		!strings.Contains(s, "`ca auth login --account <id>`") || !strings.Contains(s, "`ca auth logout`") {
 		t.Errorf("stderr: %s", s)
 	}

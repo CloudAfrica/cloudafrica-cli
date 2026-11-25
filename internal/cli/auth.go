@@ -156,9 +156,10 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	if err != nil {
 		if reused && strings.Contains(err.Error(), "access_denied") {
 			return &hintedError{
-				err: fmt.Errorf("%w: the consent page refused account %s", auth.ErrLoginRequired, accountID),
+				err: fmt.Errorf("%w: sign-in was declined for account %s (the page refused it, or you pressed Deny)",
+					auth.ErrLoginRequired, accountID),
 				hint: "That is the account this profile is signed in to. Sign in to another with " +
-					"`ca auth login --account <id>`, or run `ca auth logout` first.",
+					"`ca auth login --account <id>`; `ca auth logout` removes this profile.",
 			}
 		}
 		return &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
@@ -171,23 +172,19 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 		Expiry:       tok.Expiry(time.Now()),
 		RefreshToken: tok.RefreshToken,
 	}
-	if acct, err := a.fetchAccount(ctx, endpoint, tok.AccessToken); err != nil {
-		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", err)
-	} else {
-		if accountID != "" && acct.id != accountID {
-			if p.RefreshToken != "" {
-				if rerr := a.revokeOld(ctx, p); rerr != nil {
-					fmt.Fprintf(a.Stderr, "Warning: the new session could not be revoked (%v); "+
-						"remove it under Connected apps in the portal.\n", rerr)
-				}
-			}
-			return &hintedError{
-				err: fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; nothing was saved",
-					auth.ErrLoginRequired, accountID, orUnknown(acct.id)),
-				hint: "One profile holds one account: use `ca auth login --profile <name> --account <id>` " +
-					"for each account. An older gateway ignores --account.",
-			}
-		}
+	acct, aerr := a.fetchAccount(ctx, endpoint, tok.AccessToken)
+	switch {
+	case aerr != nil && accountID != "":
+		return a.rejectSession(ctx, p, fmt.Errorf("%w: could not confirm the session is for account %s (%v); "+
+			"nothing was saved", auth.ErrLoginRequired, accountID, aerr), "Sign in again once the API is reachable.")
+	case aerr != nil:
+		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", aerr)
+	case accountID != "" && acct.id != accountID:
+		return a.rejectSession(ctx, p, fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; "+
+			"nothing was saved", auth.ErrLoginRequired, accountID, orUnknown(acct.id)),
+			"One profile holds one account: use `ca auth login --profile <name> --account <id>` "+
+				"for each account. An older gateway ignores --account.")
+	default:
 		p.AccountID, p.AccountName = acct.id, acct.name
 	}
 	// Under the profile lock, so a refresh in another process cannot
@@ -221,6 +218,18 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
 	return nil
+}
+
+// rejectSession revokes the grant just issued for p, which login will not
+// save, and returns err with hint.
+func (a *App) rejectSession(ctx context.Context, p *profile.Profile, err error, hint string) error {
+	if p.RefreshToken != "" {
+		if rerr := a.revokeOld(ctx, p); rerr != nil {
+			fmt.Fprintf(a.Stderr, "Warning: the new session could not be revoked (%v); "+
+				"remove it under Connected apps in the portal.\n", rerr)
+		}
+	}
+	return &hintedError{err: err, hint: hint}
 }
 
 // elevate pairs s's grant for protected actions: it asks for a pairing,
