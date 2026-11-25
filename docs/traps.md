@@ -104,3 +104,14 @@ Author misses the PR review caught. Check these before opening a PR.
 - **A `$(ca …)` capture of a confirm command needs `--yes`**, since a capture is not a terminal (#15).
 - **`git add -N .` stages deletions**, so `git diff --exit-code` after it misses a removed file; check
   `git status --porcelain` instead (#15).
+- **A guard on a value read back from the API must also cover the read failing.** The `--account` mismatch check sat
+  in the success arm of `fetchAccount`, so a 503 saved the profile with its account wiped and exited 0 (#18).
+  Test the guard with the lookup failing, not only with it disagreeing.
+- **Compare endpoints with `sameOrigin`, never `==`.** A raw string compare dropped the stored account when the
+  host was spelled in another case (Copilot, #18).
+- **A hint that names a command names the selected profile too** (`--profile <name>`), or following it acts on
+  `default` (Copilot, #18).
+- **`access_denied` is also a user pressing Deny**; word a refusal neutrally rather than as "the page refused" (#18).
+- **A test of a rejected sign-in asserts which grant was revoked** (the new one, not the profile's), and the
+  warning when the revoke fails (Copilot, #18).
+- **`git add -A` in the shared main checkout is blocked by a hook**; work in a worktree and `git add` explicit paths (#18).
