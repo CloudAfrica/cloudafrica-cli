@@ -225,3 +225,25 @@ func TestResolveRefusesAnAlias(t *testing.T) {
 		t.Errorf("ca vm list: got %q, want an alias refusal naming ca vms", problem)
 	}
 }
+
+var referenceLink = regexp.MustCompile(`reference/(ca[A-Za-z0-9_.-]*\.md)`)
+
+// Every link from a hand-written page to a generated reference page names a page that exists.
+func TestReferenceLinksExist(t *testing.T) {
+	links := 0
+	for _, p := range handWritten(t) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range referenceLink.FindAllStringSubmatch(string(b), -1) {
+			links++
+			if _, err := os.Stat(filepath.Join("../../../docs/reference", m[1])); err != nil {
+				t.Errorf("%s links reference/%s, which does not exist", filepath.Base(p), m[1])
+			}
+		}
+	}
+	if links == 0 {
+		t.Fatal("found no reference links: the pattern or the page list is wrong")
+	}
+}
