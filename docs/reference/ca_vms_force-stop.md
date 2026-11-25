@@ -6,6 +6,8 @@ Force a virtual machine off
 
 Cuts power without asking the guest; unflushed writes may be lost. Asynchronous: returns 202 with the operation to poll.
 
+Waits for the operation to finish; --no-wait prints it and returns.
+
 ```
 ca vms force-stop VM [flags]
 ```

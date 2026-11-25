@@ -4,7 +4,7 @@ List a virtual machine's backups
 
 ### Synopsis
 
-Newest first. Cursor-paginated: follow nextCursor via `?cursor=`.
+Newest first.
 
 ```
 ca vms backups list [flags]

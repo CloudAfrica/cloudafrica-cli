@@ -4,7 +4,7 @@ List the resources in a project
 
 ### Synopsis
 
-Every live resource the project holds, including kinds that cannot be moved out of it: they still count toward the project's resourceCount and its delete guard. Ordered by name. Cursor-paginated: follow nextCursor via `?cursor=`.
+Every live resource the project holds, including kinds that cannot be moved out of it: they still count toward the project's resourceCount and its delete guard. Ordered by name.
 
 ```
 ca projects resources list [flags]

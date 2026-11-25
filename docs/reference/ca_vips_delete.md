@@ -4,7 +4,9 @@ Release a VIP
 
 ### Synopsis
 
-Requires protected:network. Returns the private address to the VPC's network; it may be given to someone else. Refuses with 409 while the VIP has a public IP: detach it first. Asynchronous: returns 202 with the operation to poll at Location.
+Requires protected:network. Returns the private address to the VPC's network; it may be given to someone else. Refuses with 409 while the VIP has a public IP: detach it first.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vips delete VIP [flags]

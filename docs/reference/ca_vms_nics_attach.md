@@ -4,7 +4,9 @@ Attach a network interface to a virtual machine
 
 ### Synopsis
 
-Adds an interface in one of the account's VPCs; the platform picks its address. Requires protected:network. Must carry an Idempotency-Key header. Asynchronous: returns 202 with the operation to poll at Location. 202 does not mean the interface is up inside the guest: it is hot-plugged, and the guest's OS must configure it. Refuses with 404 for an unknown VM or VPC.
+Adds an interface in one of the account's VPCs; the platform picks its address. Requires protected:network. 202 does not mean the interface is up inside the guest: it is hot-plugged, and the guest's OS must configure it. Refuses with 404 for an unknown VM or VPC.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms nics attach [flags]

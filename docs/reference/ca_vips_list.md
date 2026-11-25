@@ -4,7 +4,7 @@ List the account's virtual IPs
 
 ### Synopsis
 
-One entry per VIP, with its private address, its public overlay address if it has one, and the VMs declared to serve it. In the order /v1/ip-addresses lists their first row. Cursor-paginated: follow nextCursor via `?cursor=`.
+One entry per VIP, with its private address, its public overlay address if it has one, and the VMs declared to serve it. In the order /v1/ip-addresses lists their first row.
 
 ```
 ca vips list [flags]

@@ -4,7 +4,7 @@ List every IP address the account holds
 
 ### Synopsis
 
-Attached or not, public and private alike. Ordered public-before-private, then by owner name, then by address. Cursor-paginated: follow nextCursor via `?cursor=`.
+Attached or not, public and private alike. Ordered public-before-private, then by owner name, then by address.
 
 ```
 ca ips list [flags]

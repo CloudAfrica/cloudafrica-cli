@@ -4,7 +4,7 @@ List object storage access keys in the account
 
 ### Synopsis
 
-Includes the account's master key, which is attached to no bucket. Never carries a secret. Cursor-paginated: follow nextCursor via `?cursor=`.
+Includes the account's master key, which is attached to no bucket. Never carries a secret.
 
 ```
 ca bucket-keys list [flags]

@@ -4,7 +4,9 @@ Resize a virtual machine
 
 ### Synopsis
 
-Only the fields you send change. A disk is named by the id the disk list returns, and disks only grow. Billing-affecting. Asynchronous: returns 202 with the operation to poll at Location.
+Only the fields you send change. A disk is named by the id the disk list returns, and disks only grow. Billing-affecting.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 Some fields of the request body have no flag; set them with --data.
 

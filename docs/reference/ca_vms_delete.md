@@ -6,6 +6,8 @@ Delete a virtual machine
 
 Destroys the VM and its disks. Irreversible. Requires protected:compute. The VM must be stopped: a running VM is refused with 409. Asynchronous: returns 202 with the operation to poll.
 
+Waits for the operation to finish; --no-wait prints it and returns.
+
 ```
 ca vms delete VM [flags]
 ```

@@ -4,7 +4,7 @@ List projects
 
 ### Synopsis
 
-The account's projects, the default project first and then by name. Cursor-paginated: follow nextCursor via `?cursor=`.
+The account's projects, the default project first and then by name.
 
 ```
 ca projects list [flags]

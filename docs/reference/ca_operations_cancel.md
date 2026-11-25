@@ -6,6 +6,8 @@ Request cancellation of an operation
 
 202 when the request was accepted; the operation reaches its terminal state later.
 
+Waits for the operation to finish; --no-wait prints it and returns.
+
 ```
 ca operations cancel OPERATION_ID [flags]
 ```

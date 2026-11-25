@@ -4,7 +4,9 @@ Restore a virtual machine from one of its backups
 
 ### Synopsis
 
-Requires protected:backup. Overwrites everything written since the named backup. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409. Asynchronous: returns 202 with the operation to poll at Location.
+Requires protected:backup. Overwrites everything written since the named backup. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms restore VM [flags]

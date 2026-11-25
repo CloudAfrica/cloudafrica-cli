@@ -4,7 +4,7 @@ Update a firewall rule on a virtual machine
 
 ### Synopsis
 
-Asynchronous: returns 202 with the operation to poll at Location.
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms firewall-rules update RULE_ID [flags]

@@ -4,7 +4,7 @@ List a virtual machine's network interfaces
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List a virtual machine's network interfaces
 
 ```
 ca vms nics list [flags]

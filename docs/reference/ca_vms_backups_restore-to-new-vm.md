@@ -4,7 +4,9 @@ Restore a backup onto a new virtual machine
 
 ### Synopsis
 
-Creates a new, billable VM from the named backup and leaves the source VM untouched. Requires protected:backup, and the token must also hold write:compute, plus protected:network when `publicIp` is set; a token without them is refused with 403. `termsAccepted` must be true. Choose `datacenterSlug` from GET …/restore-sites. A VM with no `vpcResourceId` is public-only and needs `publicIp`. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409. Must carry an Idempotency-Key header. Asynchronous: returns 202 with the operation to poll at Location.
+Creates a new, billable VM from the named backup and leaves the source VM untouched. Requires protected:backup, and the token must also hold write:compute, plus protected:network when `publicIp` is set; a token without them is refused with 403. `termsAccepted` must be true. Choose `datacenterSlug` from GET …/restore-sites. A VM with no `vpcResourceId` is public-only and needs `publicIp`. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms backups restore-to-new-vm STARTED_AT [flags]

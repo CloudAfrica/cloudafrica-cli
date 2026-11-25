@@ -4,7 +4,9 @@ Attach a data disk to a virtual machine
 
 ### Synopsis
 
-Billing-affecting: the new volume raises the VM's disk charge. Requires write:compute. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request. That matters most here: a blind retry without one adds a SECOND billable volume. Asynchronous: returns 202 with the operation to poll at Location.
+Billing-affecting: the new volume raises the VM's disk charge. Requires write:compute. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request. That matters most here: a blind retry without one adds a SECOND billable volume.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms disks create [flags]

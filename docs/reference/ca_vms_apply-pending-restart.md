@@ -4,7 +4,9 @@ Apply a pending configuration change by restarting the virtual machine
 
 ### Synopsis
 
-For a change (such as a resize) that takes effect only after a power cycle: shuts the guest down, then starts it again, as one operation. Asynchronous: returns 202 with the operation to poll at Location.
+For a change (such as a resize) that takes effect only after a power cycle: shuts the guest down, then starts it again, as one operation.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms apply-pending-restart VM [flags]

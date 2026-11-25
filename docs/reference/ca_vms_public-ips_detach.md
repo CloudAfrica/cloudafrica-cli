@@ -4,7 +4,9 @@ Detach a public IP from a virtual machine
 
 ### Synopsis
 
-Requires protected:network. Asynchronous: returns 202 with the operation to poll at Location. Refuses with a transitional 409 while THAT ADDRESS already has a release in flight — keyed on the address, not the VM.
+Requires protected:network. Refuses with a transitional 409 while THAT ADDRESS already has a release in flight — keyed on the address, not the VM.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms public-ips detach PUBLIC_IP_ID [flags]

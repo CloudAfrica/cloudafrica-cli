@@ -4,7 +4,7 @@ List the account's team members
 
 ### Synopsis
 
-Includes pending invitees, as the Users section of the portal's Account page does. Ordered by name, or by email where there is none. Cursor-paginated: follow nextCursor via `?cursor=`.
+Includes pending invitees, as the Users section of the portal's Account page does. Ordered by name, or by email where there is none.
 
 ```
 ca members list [flags]

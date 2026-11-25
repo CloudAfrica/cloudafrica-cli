@@ -4,7 +4,7 @@ List a virtual machine's disks
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List a virtual machine's disks
 
 ```
 ca vms disks list [flags]

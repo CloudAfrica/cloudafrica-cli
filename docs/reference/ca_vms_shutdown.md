@@ -6,6 +6,8 @@ Shut down a virtual machine gracefully
 
 Asks the guest OS to shut down. Asynchronous: returns 202 with the operation to poll.
 
+Waits for the operation to finish; --no-wait prints it and returns.
+
 ```
 ca vms shutdown VM [flags]
 ```
