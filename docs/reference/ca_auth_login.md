@@ -4,7 +4,7 @@ Sign in through the browser
 
 ### Synopsis
 
-Sign in through the browser and store the session in a profile. One profile holds one account: to use several accounts, sign in once per account with --profile and name the account with --account. Signing in again to a profile stays in the account it is signed in to. Signing in never allows protected actions such as vm delete; `ca auth elevate` does.
+Sign in through the browser and store the session in a profile. One profile holds one account: to use several accounts, sign in once per account with --profile and name the account with --account. Signing in again to a profile stays in the account it is signed in to. Signing in never allows protected actions such as vms delete; `ca auth elevate` does.
 
 ```
 ca auth login [flags]

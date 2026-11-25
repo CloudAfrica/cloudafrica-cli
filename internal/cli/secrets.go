@@ -27,17 +27,17 @@ func missingSecret(operationID, name string, resp []byte) error {
 		if field(v, "available") == "false" {
 			return &hintedError{
 				err:  errors.New("the backend holds no secret for this key"),
-				hint: "A key created now carries a secret: ca bucket-key create --name NAME --access-type read|full",
+				hint: "A key created now carries a secret: ca bucket-keys create --name NAME --access-type read|full",
 			}
 		}
 		return &hintedError{
 			err:  errors.New("the response carried no secret key"),
-			hint: fmt.Sprintf("Run it again: ca bucket-key reveal-secret %[1]s", name),
+			hint: fmt.Sprintf("Run it again: ca bucket-keys reveal-secret %[1]s", name),
 		}
 	}
 	return &hintedError{
 		err:  errors.New("the key was created, but the response carried no secret key"),
-		hint: fmt.Sprintf("A replayed create omits the secret. Read it with: ca bucket-key reveal-secret %[1]s", name),
+		hint: fmt.Sprintf("A replayed create omits the secret. Read it with: ca bucket-keys reveal-secret %[1]s", name),
 	}
 }
 

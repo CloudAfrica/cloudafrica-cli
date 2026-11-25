@@ -1,0 +1,35 @@
+## ca vpcs vips firewall-rules delete
+
+Remove a firewall rule from a VIP
+
+### Synopsis
+
+Requires write:network. Asynchronous: returns 202 with the operation to poll at Location.
+
+```
+ca vpcs vips firewall-rules delete RULE_ID [flags]
+```
+
+### Options
+
+```
+  -h, --help               help for delete
+      --no-wait            print the operation and return without waiting for it
+      --timeout duration   how long to wait for the operation (default 10m0s)
+      --vip string         the vip id or name (required)
+      --vpc string         the vpc id or name (required)
+  -y, --yes                do not ask for confirmation
+```
+
+### Options inherited from parent commands
+
+```
+  -o, --output string    output format: table, json or yaml (default table on a terminal, json otherwise)
+      --profile string   profile to use (default $CLOUDAFRICA_PROFILE, then "default")
+  -q, --quiet            print ids only
+```
+
+### SEE ALSO
+
+* [ca vpcs vips firewall-rules](ca_vpcs_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
+

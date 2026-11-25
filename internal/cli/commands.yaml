@@ -3,53 +3,84 @@
 # here is generated, and generation fails if it cannot be (no column set, say).
 
 nouns:
-  network-interfaces: nic
+  network-interfaces: nics
+  ip-addresses: ips
   kubernetes: k8s
 
 groups:
-  vm: Manage virtual machines
-  vm backup: Manage a VM's backups
-  vm backup-policy: Manage a VM's backup policy
-  vm disk: Manage a VM's disks
-  vm firewall-rule: Manage a VM's firewall rules
-  vm nic: Manage a VM's network interfaces
-  vm private-ip: Manage a VM's private IP addresses
-  vm public-ip: Manage a VM's public IP addresses
-  vm ssh-key: Manage the SSH keys on a VM
-  vm vip: Manage a VM's virtual IP membership
-  ssh-key: Manage SSH keys
-  vpc: Manage VPCs
-  vpc firewall-rule: List a VPC's firewall rules
-  vpc reserved-ip: Manage a VPC's reserved public IP addresses
-  vpc vip: Manage a VPC's virtual IPs
-  vpc vip firewall-rule: Manage a virtual IP's firewall rules
-  vpc vip public-ip: Attach and detach a virtual IP's public address
-  vip: List virtual IPs
-  ip-address: List IP addresses
-  bucket: Manage object storage buckets
-  bucket versioning: Read and change a bucket's versioning
-  bucket object: List a bucket's objects and get short-lived upload and download URLs
-  bucket lifecycle: Read and replace a bucket's lifecycle rules
-  bucket cors: Read and replace a bucket's CORS rules
-  bucket-key: Manage object storage access keys
-  datacenter: List datacenters and check placement feasibility
-  os-image: List OS images
-  operation: Inspect and cancel asynchronous operations
-  placement-group: Manage placement groups
-  placement-group member: Manage a placement group's members
+  vms: Manage virtual machines
+  vms backups: Manage a VM's backups
+  vms backup-policy: Manage a VM's backup policy
+  vms disks: Manage a VM's disks
+  vms firewall-rules: Manage a VM's firewall rules
+  vms nics: Manage a VM's network interfaces
+  vms private-ips: Manage a VM's private IP addresses
+  vms public-ips: Manage a VM's public IP addresses
+  vms ssh-keys: Manage the SSH keys on a VM
+  vms vips: Manage a VM's virtual IP membership
+  ssh-keys: Manage SSH keys
+  vpcs: Manage VPCs
+  vpcs firewall-rules: List a VPC's firewall rules
+  vpcs reserved-ips: Manage a VPC's reserved public IP addresses
+  vpcs vips: Manage a VPC's virtual IPs
+  vpcs vips firewall-rules: Manage a virtual IP's firewall rules
+  vpcs vips public-ip: Attach and detach a virtual IP's public address
+  vips: List virtual IPs
+  ips: List IP addresses
+  buckets: Manage object storage buckets
+  buckets versioning: Read and change a bucket's versioning
+  buckets objects: List a bucket's objects and get short-lived upload and download URLs
+  buckets lifecycle: Read and replace a bucket's lifecycle rules
+  buckets cors: Read and replace a bucket's CORS rules
+  bucket-keys: Manage object storage access keys
+  datacenters: List datacenters and check placement feasibility
+  os-images: List OS images
+  operations: Inspect and cancel asynchronous operations
+  placement-groups: Manage placement groups
+  placement-groups members: Manage a placement group's members
   account: Show the account and its limits
   activity: List account activity
-  backup-policy: List the backup policy of every VM
-  backup-window: List the backup windows
+  backup-policies: List the backup policy of every VM
+  backup-windows: List the backup windows
   billing: Read the balance and accrual, and manage the billing details
   billing details: Read and change the billing details
-  member: Manage the account's members
-  member role: Change a member's role
-  project: Manage projects
-  project resource: Manage the resources in a project
+  members: Manage the account's members
+  members role: Change a member's role
+  projects: Manage projects
+  projects resources: Manage the resources in a project
   support: Raise and follow support tickets
-  support ticket: Manage support tickets
-  transaction: List invoices and credit notes
+  support tickets: Manage support tickets
+  transactions: List invoices and credit notes
+
+# The `ca --help` heading of each top-level group (cmdspec.Sections); hand-written ones set theirs in Go.
+sections:
+  vms: compute
+  os-images: compute
+  placement-groups: compute
+  datacenters: compute
+  ssh-keys: compute
+  backup-policies: compute
+  backup-windows: compute
+  vpcs: networking
+  vips: networking
+  ips: networking
+  buckets: storage
+  bucket-keys: storage
+  account: account
+  members: account
+  projects: account
+  billing: account
+  transactions: account
+  activity: account
+  support: support
+  operations: cli
+
+# A group answers to its singular too, so a v0.9.0 name still runs; these replace that default
+# where the singular was never a command name.
+aliases:
+  billing details: []
+  buckets cors: []
+  ips: [ip-address]
 
 resources:
   vm: {noun: VM, list: /v1/vms, match: name, idPattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'}
@@ -77,12 +108,12 @@ params:
   /v1/bucket-keys/{keyId}/buckets/{bucketId}: {resource: bucket, help: "the bucket name or id"}
   /v1/placement-groups/{id}/members/{vmId}: {resource: vm}
   /v1/projects/{id}: {resource: project}
-  /v1/projects/{id}/resources/{resourceId}: {help: "the resource's id (ca project resource list shows it)"}
+  /v1/projects/{id}/resources/{resourceId}: {help: "the resource's id (ca projects resources list shows it)"}
   /v1/members/{userId}: {resource: member, help: "the member's email or user id"}
   /v1/support/tickets/{id}: {resource: support-ticket, help: "the ticket's reference number or id"}
 
 handwritten:
-  createVm: vm create
+  createVm: vms create
   listKubernetesClusters: k8s list
   getKubernetesCluster: k8s get
   upgradeKubernetesClusterWorkers: k8s upgrade-workers
@@ -105,12 +136,12 @@ operations:
     flags:
       slug: {help: only the VM with this slug}
     example: |
-      ca vm list
-      ca vm list -o json
+      ca vms list
+      ca vms list -o json
   getVm:
-    example: ca vm get web-01
+    example: ca vms get web-01
   startVm:
-    example: ca vm start web-01
+    example: ca vms start web-01
   shutdownVm:
     flags:
       timeout: {name: guest-timeout}
@@ -123,156 +154,156 @@ operations:
       ramMib: {name: ram-gib, scale: 1024, help: the new RAM in GiB}
       empty: {hide: true}
     atLeastOne: [vcpu, ram-gib]
-    example: ca vm resize web-01 --vcpu 4 --ram-gib 8
+    example: ca vms resize web-01 --vcpu 4 --ram-gib 8
   renameVm:
-    example: ca vm rename web-01 --name db-01
+    example: ca vms rename web-01 --name db-01
   backupVm:
-    path: vm backup create
+    path: vms backups create
   attachVmNetworkInterface:
-    path: vm nic attach
+    path: vms nics attach
   detachVmNetworkInterface:
-    path: vm nic detach
+    path: vms nics detach
   attachVmPublicIp:
-    path: vm public-ip attach
+    path: vms public-ips attach
   detachVmPublicIp:
-    path: vm public-ip detach
+    path: vms public-ips detach
   attachVmSshKey:
-    path: vm ssh-key attach
+    path: vms ssh-keys attach
   detachVmSshKey:
-    path: vm ssh-key detach
+    path: vms ssh-keys detach
   addVmToVip:
-    path: vm vip add
+    path: vms vips add
   removeVmFromVip:
-    path: vm vip remove
+    path: vms vips remove
   addPlacementGroupMember:
-    path: placement-group member add
+    path: placement-groups members add
   removePlacementGroupMember:
-    path: placement-group member remove
+    path: placement-groups members remove
   updateVmBackupProtection:
-    path: vm backup set-protection
+    path: vms backups set-protection
   previewVmBackupPolicyRotation:
-    path: vm backup-policy preview-rotation
+    path: vms backup-policy preview-rotation
   cancelOperation:
-    path: operation cancel
+    path: operations cancel
     wait: self
   listVpcVipFirewallRules:
-    path: vpc vip firewall-rule list
+    path: vpcs vips firewall-rules list
   attachVpcVipPublicIp:
-    path: vpc vip public-ip attach
+    path: vpcs vips public-ip attach
   detachVpcVipPublicIp:
-    path: vpc vip public-ip detach
+    path: vpcs vips public-ip detach
   createVpc:
-    example: ca vpc create --name web
+    example: ca vpcs create --name web
   listIpAddresses:
     example: |
-      ca ip-address list
-      ca ip-address list -o json
+      ca ips list
+      ca ips list -o json
   listPlacementGroupDatacenters:
-    path: datacenter list
+    path: datacenters list
   createBucket:
     example: |
-      ca bucket create --display-name backups
-      ca bucket create --display-name audit --object-lock --versioning enabled
+      ca buckets create --display-name backups
+      ca buckets create --display-name audit --object-lock --versioning enabled
   deleteBucket:
     flags:
-      confirmBucketName: {help: "the bucket's name, spelled exactly as ca bucket list shows it"}
-    example: ca bucket delete logs-7f3a --confirm-bucket-name logs-7f3a
+      confirmBucketName: {help: "the bucket's name, spelled exactly as ca buckets list shows it"}
+    example: ca buckets delete logs-7f3a --confirm-bucket-name logs-7f3a
   getBucketUsage:
-    path: bucket usage
+    path: buckets usage
     positional: id
-    example: ca bucket usage logs-7f3a --hours 168
+    example: ca buckets usage logs-7f3a --hours 168
   getBucketVersioning:
-    path: bucket versioning get
+    path: buckets versioning get
     positional: id
   updateBucketVersioning:
-    path: bucket versioning set
+    path: buckets versioning set
     positional: id
-    example: ca bucket versioning set logs-7f3a --mode enabled
+    example: ca buckets versioning set logs-7f3a --mode enabled
   getBucketProtection:
-    path: bucket protection
+    path: buckets protection
     positional: id
-    example: ca bucket protection logs-7f3a
+    example: ca buckets protection logs-7f3a
   listBucketObjects:
-    path: bucket object list
+    path: buckets objects list
     positional: id
     example: |
-      ca bucket object list logs-7f3a
-      ca bucket object list logs-7f3a --prefix reports/2026/ --limit 50
+      ca buckets objects list logs-7f3a
+      ca buckets objects list logs-7f3a --prefix reports/2026/ --limit 50
   listBucketDeletedObjects:
-    path: bucket object list-deleted
+    path: buckets objects list-deleted
     positional: id
-    example: ca bucket object list-deleted logs-7f3a --prefix reports/
+    example: ca buckets objects list-deleted logs-7f3a --prefix reports/
   listBucketObjectVersions:
-    path: bucket object versions
+    path: buckets objects versions
     positional: id
-    example: ca bucket object versions logs-7f3a --key reports/q3.pdf
+    example: ca buckets objects versions logs-7f3a --key reports/q3.pdf
   getBucketObjectMetadata:
-    path: bucket object get
+    path: buckets objects get
     positional: id
-    example: ca bucket object get logs-7f3a --key reports/q3.pdf
+    example: ca buckets objects get logs-7f3a --key reports/q3.pdf
   createObjectDownloadUrl:
-    path: bucket object download-url
+    path: buckets objects download-url
     positional: id
     flags:
-      versionId: {help: "an earlier version to download (ca bucket object versions lists them); omit for the current one"}
+      versionId: {help: "an earlier version to download (ca buckets objects versions lists them); omit for the current one"}
     example: |
-      ca bucket object download-url logs-7f3a --key reports/q3.pdf
+      ca buckets objects download-url logs-7f3a --key reports/q3.pdf
       # -q prints the URL, which expires in about a minute
-      URL=$(ca bucket object download-url logs-7f3a --key reports/q3.pdf --yes -q) && curl -fsS -o q3.pdf "$URL"
+      URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) && curl -fsS -o q3.pdf "$URL"
   createObjectUploadUrl:
-    path: bucket object upload-url
+    path: buckets objects upload-url
     positional: id
     flags:
       key: {help: "the new object's key, such as reports/q3.pdf; a key that already exists is refused"}
       contentType: {help: "the Content-Type the upload will send"}
       contentLength: {help: "the exact size of the upload in bytes, at most 25 MiB"}
     example: |
-      ca bucket object upload-url logs-7f3a --key reports/q3.pdf --content-type application/pdf \
+      ca buckets objects upload-url logs-7f3a --key reports/q3.pdf --content-type application/pdf \
         --content-length 2048 -o json
   getBucketLifecycle:
-    path: bucket lifecycle get
+    path: buckets lifecycle get
     positional: id
-    example: ca bucket lifecycle get logs-7f3a
+    example: ca buckets lifecycle get logs-7f3a
   replaceBucketLifecycle:
-    path: bucket lifecycle set
+    path: buckets lifecycle set
     positional: id
     example: |
       # Expire current versions after 30 days; basedOn is the rules as you read them
-      ca bucket lifecycle get logs-7f3a -o json \
+      ca buckets lifecycle get logs-7f3a -o json \
         | jq '{rules: (.rules | map(.expirationDays = 30)), basedOn: .rules}' \
-        | ca bucket lifecycle set logs-7f3a -d @- --yes
+        | ca buckets lifecycle set logs-7f3a -d @- --yes
   getBucketCors:
-    path: bucket cors get
+    path: buckets cors get
     positional: id
-    example: ca bucket cors get logs-7f3a
+    example: ca buckets cors get logs-7f3a
   replaceBucketCors:
-    path: bucket cors set
+    path: buckets cors set
     positional: id
     example: |
       # Remove every rule; basedOn is the rules as you read them
-      ca bucket cors get logs-7f3a -o json \
+      ca buckets cors get logs-7f3a -o json \
         | jq '{rules: [], basedOn: .rules}' \
-        | ca bucket cors set logs-7f3a -d @- --yes
+        | ca buckets cors set logs-7f3a -d @- --yes
   createBucketKey:
     flags:
-      bucketResourceId: {help: "the id of the bucket to attach the key to (ca bucket get NAME -q prints it), not its name; omit for an account-level key"}
+      bucketResourceId: {help: "the id of the bucket to attach the key to (ca buckets get NAME -q prints it), not its name; omit for an account-level key"}
     example: |
-      ca bucket-key create --name ci --access-type read --bucket-resource-id "$(ca bucket get logs-7f3a -q)"
+      ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)"
       # -q prints the secret key, not the id
-      SECRET=$(ca bucket-key create --name ci2 --access-type full --yes -q)
+      SECRET=$(ca bucket-keys create --name ci2 --access-type full --yes -q)
   revealBucketKeySecret:
     example: |
-      ca bucket-key reveal-secret ci
+      ca bucket-keys reveal-secret ci
       # -q prints the secret key, not the id
-      SECRET=$(ca bucket-key reveal-secret ci --yes -q)
+      SECRET=$(ca bucket-keys reveal-secret ci --yes -q)
   grantBucketKeyBucketAccess:
-    path: bucket-key grant
+    path: bucket-keys grant
     positional: keyId
-    example: ca bucket-key grant ci --bucket logs-7f3a
+    example: ca bucket-keys grant ci --bucket logs-7f3a
   revokeBucketKeyBucketAccess:
-    path: bucket-key revoke
+    path: bucket-keys revoke
     positional: keyId
-    example: ca bucket-key revoke ci --bucket logs-7f3a
+    example: ca bucket-keys revoke ci --bucket logs-7f3a
 
   getAccount:
     example: ca account get
@@ -286,11 +317,11 @@ operations:
     example: |
       ca activity list --limit 20
       ca activity list --types vm,vpc
-      ca activity list --subject-type vm --subject-id "$(ca vm get web-01 -q)"
+      ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
   listBackupPolicies:
-    path: backup-policy list
+    path: backup-policies list
   listBackupWindows:
-    path: backup-window list
+    path: backup-windows list
   getBillingBalance:
     path: billing balance
     example: ca billing balance
@@ -304,49 +335,49 @@ operations:
     atLeastOne: [billing-email, vat-number, company-number, postal-address1, postal-address2, postal-address3, postal-address4, postal-address5, country-code]
     example: ca billing details set --billing-email accounts@example.com
   listTransactions:
-    example: ca transaction list
+    example: ca transactions list
   createMember:
-    example: ca member create --email jo@example.com --role operator
+    example: ca members create --email jo@example.com --role operator
   deleteMember:
-    example: ca member delete jo@example.com
+    example: ca members delete jo@example.com
   cancelMemberInvitation:
-    example: ca member cancel-invitation jo@example.com
+    example: ca members cancel-invitation jo@example.com
   resendMemberInvitation:
-    example: ca member resend-invitation jo@example.com
+    example: ca members resend-invitation jo@example.com
   updateMemberRole:
-    path: member role set
+    path: members role set
     positional: userId
-    example: ca member role set jo@example.com --role admin
+    example: ca members role set jo@example.com --role admin
   getPlacementFeasibility:
-    path: datacenter feasibility
+    path: datacenters feasibility
     flags:
       datacenterSlug: {name: datacenter}
       ramMib: {name: ram-gib, scale: 1024, help: the VM's RAM in GiB}
-    example: ca datacenter feasibility --datacenter jnb --vcpu 4 --ram-gib 8 --boot-disk-gib 40
+    example: ca datacenters feasibility --datacenter jnb --vcpu 4 --ram-gib 8 --boot-disk-gib 40
   createProject:
-    example: ca project create --name Production --slug PRD
+    example: ca projects create --name Production --slug PRD
   updateProject:
-    example: ca project update prod --name Production
+    example: ca projects update prod --name Production
   moveProjectResource:
-    path: project resource move
+    path: projects resources move
     positional: resourceId
-    example: ca project resource move "$(ca vm get web-01 -q)" --project prod
+    example: ca projects resources move "$(ca vms get web-01 -q)" --project prod
   listSupportTickets:
     flags:
       q: {name: search}
     example: |
-      ca support ticket list
-      ca support ticket list --status open,waiting-on-you
+      ca support tickets list
+      ca support tickets list --status open,waiting-on-you
   getSupportTicket:
-    example: ca support ticket get 1234
+    example: ca support tickets get 1234
   createSupportTicket:
-    example: ca support ticket create --subject "Backup failed" --description "The nightly backup of web-01 failed"
+    example: ca support tickets create --subject "Backup failed" --description "The nightly backup of web-01 failed"
   createSupportTicketReply:
-    path: support ticket reply
+    path: support tickets reply
     positional: id
-    example: ca support ticket reply 1234 --body "That fixed it"
+    example: ca support tickets reply 1234 --body "That fixed it"
   resolveSupportTicket:
-    example: ca support ticket resolve 1234
+    example: ca support tickets resolve 1234
 
 columns:
   PublicVmDto:

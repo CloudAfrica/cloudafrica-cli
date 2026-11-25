@@ -25,7 +25,7 @@ profile. A command that needs a scope the sign-in lacks says which, and how to a
 
 ## Protected actions
 
-Signing in grants scopes but never allows protected actions, such as `vm delete` or
+Signing in grants scopes but never allows protected actions, such as `vms delete` or
 `k8s upgrade-workers`. `ca auth elevate` opens a portal page where you step up and confirm the code it
 prints; the sign-in may then use protected actions for the account's elevation window. Connected apps →
 "Allow protected actions" in the portal does the same. A sign-in made before `ca auth login` requested

@@ -1,0 +1,33 @@
+## ca ssh-keys create
+
+Register an SSH public key
+
+### Synopsis
+
+The key belongs to the token's own person. The owner is taken from the token and cannot be named in the request; an ACCOUNT_SERVICE token has no person and is refused. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request.
+
+```
+ca ssh-keys create [flags]
+```
+
+### Options
+
+```
+  -d, --data string         the JSON request body: a literal, @file or @- (stdin); flags override its fields
+  -h, --help                help for create
+      --name string         Display name for the key. (required)
+      --public-key string   The public key body, e.g. ssh-ed25519 AAAA…. (required)
+```
+
+### Options inherited from parent commands
+
+```
+  -o, --output string    output format: table, json or yaml (default table on a terminal, json otherwise)
+      --profile string   profile to use (default $CLOUDAFRICA_PROFILE, then "default")
+  -q, --quiet            print ids only
+```
+
+### SEE ALSO
+
+* [ca ssh-keys](ca_ssh-keys.md)	 - Manage SSH keys
+

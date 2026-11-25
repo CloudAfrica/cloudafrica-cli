@@ -72,22 +72,22 @@ cosign signature. To go back to an earlier release, rerun the install script wit
 
 ```sh
 ca auth login
-ca datacenter list
-ca os-image list
-ca vpc create --name main
-ca ssh-key create --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)"
-ca vm create --name web-01 --datacenter <dc-slug> --image <image-id> --vpc main \
+ca datacenters list
+ca os-images list
+ca vpcs create --name main
+ca ssh-keys create --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)"
+ca vms create --name web-01 --datacenter <dc-slug> --image <image-id> --vpc main \
   --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key laptop --public-ip --accept-terms
-ca vm public-ip list --vm web-01
+ca vms public-ips list --vm web-01
 ```
 
-`vm create` waits until the VM is built. When you are done, shut it down and delete it. Deleting is a
+`vms create` waits until the VM is built. When you are done, shut it down and delete it. Deleting is a
 [protected action](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md#protected-actions), so run `ca auth elevate` first:
 
 ```sh
-ca vm shutdown web-01
+ca vms shutdown web-01
 ca auth elevate
-ca vm delete web-01
+ca vms delete web-01
 ```
 
 ## Shell completion

@@ -18,6 +18,7 @@ import (
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/auth"
+	"github.com/CloudAfrica/cloudafrica-cli/internal/cmdspec"
 	"github.com/CloudAfrica/cloudafrica-cli/internal/output"
 	"github.com/CloudAfrica/cloudafrica-cli/internal/profile"
 )
@@ -265,7 +266,16 @@ func (a *App) Root() *cobra.Command {
 	pf.StringVarP(&a.outputFlag, "output", "o", "", "output format: table, json or yaml (default table on a terminal, json otherwise)")
 	pf.BoolVarP(&a.quiet, "quiet", "q", false, "print ids only")
 
-	root.AddCommand(a.authCmd(), a.vmCmd(), a.k8sCmd(), a.operationCmd(), a.apiCmd(), a.updateCmd(), a.versionCmd())
+	for _, s := range cmdspec.Sections {
+		root.AddGroup(&cobra.Group{ID: s.ID, Title: s.Title})
+	}
+	root.SetHelpCommandGroupID("cli")
+	root.SetCompletionCommandGroupID("cli")
+	for _, c := range []*cobra.Command{a.authCmd(), a.apiCmd(), a.updateCmd(), a.versionCmd()} {
+		c.GroupID = "cli"
+		root.AddCommand(c)
+	}
+	root.AddCommand(a.vmCmd(), a.k8sCmd(), a.operationCmd())
 	a.addGenerated(root)
 	return root
 }

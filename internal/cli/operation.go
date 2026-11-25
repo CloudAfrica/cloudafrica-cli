@@ -21,7 +21,7 @@ const defaultWaitTimeout = 10 * time.Minute
 type waitFlags struct {
 	noWait  bool
 	timeout time.Duration
-	// cancelled makes a cancelled operation the outcome waited for (`operation cancel`).
+	// cancelled makes a cancelled operation the outcome waited for (`operations cancel`).
 	cancelled bool
 }
 
@@ -33,8 +33,8 @@ func (w *waitFlags) bind(cmd *cobra.Command, withNoWait bool) {
 }
 
 func (a *App) operationCmd() *cobra.Command {
-	cmd := group("operation", "Inspect and cancel asynchronous operations")
-	cmd.Aliases = []string{"op"}
+	cmd := group("operations", "Inspect and cancel asynchronous operations")
+	cmd.Aliases = []string{"operation", "op"}
 	var wf waitFlags
 	wait := &cobra.Command{
 		Use:   "wait OPERATION_ID",
@@ -133,7 +133,7 @@ func (a *App) waitAndPrint(ctx context.Context, s *session, id string, wf waitFl
 			return err
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("operation %s did not finish within %s (check it with `ca operation get %s`): %w",
+			return fmt.Errorf("operation %s did not finish within %s (check it with `ca operations get %s`): %w",
 				id, timeout, id, context.DeadlineExceeded)
 		}
 		return err

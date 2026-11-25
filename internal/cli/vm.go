@@ -13,9 +13,9 @@ import (
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
 )
 
-// vmCmd is the hand-written part of `ca vm`; the generated commands join it.
+// vmCmd is the hand-written part of `ca vms`; the generated commands join it.
 func (a *App) vmCmd() *cobra.Command {
-	cmd := group("vm", "Manage virtual machines")
+	cmd := group("vms", "Manage virtual machines")
 	cmd.AddCommand(a.vmCreate())
 	return cmd
 }
@@ -128,14 +128,14 @@ func (a *App) vmCreate() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&req.Name, "name", "", "DNS-style name, unique in the account (required)")
-	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug, from `ca datacenter list` (required)")
+	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug, from `ca datacenters list` (required)")
 	f.StringVar(&req.OsImageId, "image", "", "OS image id (required)")
-	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id or name the VM joins, from `ca vpc list` (required)")
+	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id or name the VM joins, from `ca vpcs list` (required)")
 	f.Int32Var(&req.Vcpu, "vcpu", 0, "vCPU count, even (required)")
 	f.Int64Var(&ramGib, "ram-gib", 0, "RAM in GiB, even (required)")
 	f.Int64Var(&req.BootDiskGib, "boot-disk-gib", 0, "boot disk size in GiB (required)")
 	f.Int64SliceVar(&extraDisks, "extra-disk-gib", nil, "extra data disk in GiB (repeatable, max 8)")
-	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id or name to install, from `ca ssh-key list` (repeatable)")
+	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id or name to install, from `ca ssh-keys list` (repeatable)")
 	f.BoolVar(&publicIP, "public-ip", false, "attach a public IP")
 	f.StringVar(&reservedIP, "reserved-ip", "", "build onto this reserved public IP id")
 	f.StringVar(&placementGroup, "placement-group", "", "placement group id or name")

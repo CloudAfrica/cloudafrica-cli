@@ -286,7 +286,7 @@ func TestDeleteRunningVMHintsStopFirst(t *testing.T) {
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitAPI {
 		t.Fatalf("exit %d", code)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "conflict") || !strings.Contains(s, "ca vm shutdown vm-1`") {
+	if s := h.stderr.String(); !strings.Contains(s, "conflict") || !strings.Contains(s, "ca vms shutdown vm-1`") {
 		t.Errorf("stderr = %s", s)
 	}
 	h.fake.VMs[0]["status"] = "stopped"

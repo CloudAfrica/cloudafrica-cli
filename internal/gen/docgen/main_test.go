@@ -98,6 +98,9 @@ func resolve(root *cobra.Command, line string) ([]*cobra.Command, []string, stri
 		for _, c := range cmds {
 			for _, alt := range strings.Split(w, "|") {
 				if s := sub(c, alt); s != nil {
+					if s.Name() != alt {
+						return nil, nil, alt + " is an alias: write ca " + strings.TrimPrefix(s.CommandPath(), "ca ")
+					}
 					next = append(next, s)
 				} else if strings.Contains(w, "|") {
 					return nil, nil, "no command " + alt + " under " + c.CommandPath()
@@ -205,5 +208,42 @@ func TestCommandLinesFindsCapturedInvocations(t *testing.T) {
 	want := "ca auth elevate\nca auth elevate\nca vm list -o json"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A documented line that reaches a command through an alias is refused and names the canonical path.
+func TestResolveRefusesAnAlias(t *testing.T) {
+	root := &cobra.Command{Use: "ca"}
+	vms := &cobra.Command{Use: "vms", Aliases: []string{"vm"}}
+	vms.AddCommand(&cobra.Command{Use: "list", Run: func(*cobra.Command, []string) {}})
+	root.AddCommand(vms)
+	if _, _, problem := resolve(root, "ca vms list"); problem != "" {
+		t.Fatalf("ca vms list: %s", problem)
+	}
+	_, _, problem := resolve(root, "ca vm list")
+	if !strings.Contains(problem, "vm is an alias") || !strings.Contains(problem, "write ca vms") {
+		t.Errorf("ca vm list: got %q, want an alias refusal naming ca vms", problem)
+	}
+}
+
+var referenceLink = regexp.MustCompile(`reference/(ca[A-Za-z0-9_.-]*\.md)`)
+
+// Every link from a hand-written page to a generated reference page names a page that exists.
+func TestReferenceLinksExist(t *testing.T) {
+	links := 0
+	for _, p := range handWritten(t) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range referenceLink.FindAllStringSubmatch(string(b), -1) {
+			links++
+			if _, err := os.Stat(filepath.Join("../../../docs/reference", m[1])); err != nil {
+				t.Errorf("%s links reference/%s, which does not exist", filepath.Base(p), m[1])
+			}
+		}
+	}
+	if links == 0 {
+		t.Fatal("found no reference links: the pattern or the page list is wrong")
 	}
 }

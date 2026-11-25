@@ -81,7 +81,10 @@ func fixtureDoc() map[string]any {
 
 const fixtureOverlay = `
 groups:
-  widget: Manage widgets
+  widgets: Manage widgets
+sections:
+  widgets: compute
+  jobs: cli
 resources:
   widget: {noun: widget, list: /v1/widgets, match: name}
 params:
@@ -145,9 +148,9 @@ func TestGenerateDerivesTheFixture(t *testing.T) {
 		paths[op.OperationID] = strings.Join(op.Path, " ")
 	}
 	want := map[string]string{
-		"listWidgets": "widget list", "createWidget": "widget create", "getWidget": "widget get",
-		"updateWidget": "widget update", "deleteWidget": "widget delete", "spinWidget": "widget spin",
-		"setWidgetGear": "widget gear update", "getJob": "job get",
+		"listWidgets": "widgets list", "createWidget": "widgets create", "getWidget": "widgets get",
+		"updateWidget": "widgets update", "deleteWidget": "widgets delete", "spinWidget": "widgets spin",
+		"setWidgetGear": "widgets gears update", "getJob": "jobs get",
 	}
 	for id, p := range want {
 		if paths[id] != p {
@@ -200,6 +203,25 @@ func TestGenerateDerivesTheFixture(t *testing.T) {
 	}
 	if !reflect.DeepEqual(out.Scopes, []string{"read:later", "read:w", "write:w"}) {
 		t.Errorf("scopes = %v (pending operations' count, protected: ones do not)", out.Scopes)
+	}
+	wantGroups := []cmdspec.Group{
+		{Path: []string{"jobs"}, Short: "Manage jobs", Aliases: []string{"job"}, GroupID: "cli"},
+		{Path: []string{"widgets"}, Short: "Manage widgets", Aliases: []string{"widget"}, GroupID: "compute"},
+		{Path: []string{"widgets", "gears"}, Short: "Manage gears", Aliases: []string{"gear"}},
+	}
+	if !reflect.DeepEqual(out.Groups, wantGroups) {
+		t.Errorf("groups = %+v\nwant %+v", out.Groups, wantGroups)
+	}
+	if job := opByID(t, out, "getJob"); job.Positional.Name != "id" {
+		t.Errorf("a plural noun lost its positional: %+v", job)
+	}
+
+	replaced, _, err := generate(t, fixtureDoc(), fixtureOverlay+"aliases:\n  widgets gears: []\n  jobs: [task, work]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := replaced.Groups; g[0].Aliases[0] != "task" || len(g[0].Aliases) != 2 || len(g[2].Aliases) != 0 {
+		t.Errorf("aliases: did not replace the singular: %+v", g)
 	}
 }
 
@@ -265,13 +287,13 @@ func TestGenerateRefuses(t *testing.T) {
 		},
 		"duplicate command": {
 			overlay: func(o string) string {
-				return o + "  getJob:\n    path: widget get\n"
+				return o + "  getJob:\n    path: widgets get\n"
 			},
-			want: `command "widget get": both`,
+			want: `command "widgets get": both`,
 		},
 		"leaf that is a group": {
-			overlay: func(o string) string { return o + "  getJob:\n    path: widget gear\n" },
-			want:    `command "widget gear" (getJob) is also a group`,
+			overlay: func(o string) string { return o + "  getJob:\n    path: widgets gears\n" },
+			want:    `command "widgets gears" (getJob) is also a group`,
 		},
 		"stale operation": {
 			overlay: func(o string) string { return o + "  goneOp:\n    path: x y\n" },
@@ -320,6 +342,38 @@ func TestGenerateRefuses(t *testing.T) {
 		"stale noun": {
 			overlay: func(o string) string { return strings.Replace(o, "groups:\n", "nouns:\n  gone: g\ngroups:\n", 1) },
 			want:    "commands.yaml nouns: no path has a segment gone",
+		},
+		"path left singular beside its plural group": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "  jobs: cli\n", "  jobs: cli\n  widget: cli\n", 1) + "  getJob:\n    path: widget get\n"
+			},
+			want: `"widget" answers to both group widget and group widgets`,
+		},
+		"alias that is a sibling's name": {
+			overlay: func(o string) string { return o + "aliases:\n  widgets: [jobs]\n" },
+			want:    `"jobs" answers to both group jobs and group widgets`,
+		},
+		"alias that is a sibling command's name": {
+			overlay: func(o string) string { return o + "aliases:\n  widgets gears: [spin]\n" },
+			want:    `"widgets spin" answers to both command widgets spin and group widgets gears`,
+		},
+		"stale alias": {
+			overlay: func(o string) string { return o + "aliases:\n  gone: []\n" },
+			want:    `commands.yaml aliases: "gone" is not a group`,
+		},
+		"top-level group with no section": {
+			overlay: func(o string) string { return strings.Replace(o, "  jobs: cli\n", "", 1) },
+			want:    `commands.yaml sections: top-level group "jobs" has no section`,
+		},
+		"section naming no heading": {
+			overlay: func(o string) string { return strings.Replace(o, "  jobs: cli\n", "  jobs: clu\n", 1) },
+			want:    `commands.yaml sections jobs: no section "clu"`,
+		},
+		"section for a subgroup": {
+			overlay: func(o string) string {
+				return strings.Replace(o, "  jobs: cli\n", "  jobs: cli\n  widgets gears: cli\n", 1)
+			},
+			want: `commands.yaml sections: "widgets gears" is not a top-level group`,
 		},
 		"stale group": {
 			overlay: func(o string) string { return strings.Replace(o, "groups:\n", "groups:\n  gone: Gone\n", 1) },
@@ -504,13 +558,7 @@ func TestCommittedTableIsCurrent(t *testing.T) {
 	}
 }
 
-func TestSingularAndKebab(t *testing.T) {
-	for in, want := range map[string]string{"vms": "vm", "policies": "policy", "addresses": "address", "boxes": "box",
-		"access": "access", "ssh-keys": "ssh-key", "nic": "nic"} {
-		if got := Singular(in); got != want {
-			t.Errorf("Singular(%q) = %q, want %q", in, got, want)
-		}
-	}
+func TestKebab(t *testing.T) {
 	for in, want := range map[string]string{"ramMib": "ram-mib", "name": "name", "datacenterSlug": "datacenter-slug"} {
 		if got := Kebab(in); got != want {
 			t.Errorf("Kebab(%q) = %q, want %q", in, got, want)

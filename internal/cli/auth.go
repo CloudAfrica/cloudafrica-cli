@@ -46,7 +46,7 @@ func (a *App) authCmd() *cobra.Command {
 		Long: "Sign in through the browser and store the session in a profile. One profile holds one account: " +
 			"to use several accounts, sign in once per account with --profile and name the account with " +
 			"--account. Signing in again to a profile stays in the account it is signed in to. Signing in " +
-			"never allows protected actions such as vm delete; `ca auth elevate` does.",
+			"never allows protected actions such as vms delete; `ca auth elevate` does.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			name, err := a.profileName()
@@ -62,7 +62,7 @@ func (a *App) authCmd() *cobra.Command {
 		"profile is already signed in to)")
 	elevate := &cobra.Command{
 		Use:   "elevate",
-		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
+		Short: "Allow protected actions (such as vms delete) for this sign-in or API token",
 		Long: "Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you " +
 			"step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. " +
 			"The pairing lasts for the account's elevation window.\n\n" +
