@@ -143,7 +143,7 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	scopes := append(slices.Clone(defaultScopes), extras...)
 	accountID = strings.TrimSpace(accountID)
 	reused := false
-	if accountID == "" && old != nil && old.Endpoint == endpoint && old.AccountID != "" {
+	if accountID == "" && old != nil && sameOrigin(old.Endpoint, endpoint) && old.AccountID != "" {
 		accountID, reused = old.AccountID, true
 	}
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
@@ -158,8 +158,9 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 			return &hintedError{
 				err: fmt.Errorf("%w: sign-in was declined for account %s (the page refused it, or you pressed Deny)",
 					auth.ErrLoginRequired, accountID),
-				hint: "That is the account this profile is signed in to. Sign in to another with " +
-					"`ca auth login --account <id>`; `ca auth logout` removes this profile.",
+				hint: "That is the account this profile is signed in to. Sign in to another with `" +
+					profileCmd("ca auth login", name) + " --account <id>`; `" + profileCmd("ca auth logout", name) +
+					"` removes this profile.",
 			}
 		}
 		return &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
@@ -218,6 +219,14 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
 	return nil
+}
+
+// profileCmd is cmd with --profile name, unless name is the default profile.
+func profileCmd(cmd, name string) string {
+	if name == profile.Default {
+		return cmd
+	}
+	return cmd + " --profile " + name
 }
 
 // rejectSession revokes the grant just issued for p, which login will not

@@ -287,6 +287,34 @@ func TestLoginNamesTheAccountOnTheAuthorizeRequest(t *testing.T) {
 	}
 }
 
+// The hint names the selected profile, so following it cannot touch another one.
+func TestLoginRefusedStoredAccountHintNamesTheProfile(t *testing.T) {
+	h := newHarness(t)
+	h.seed("globex", protected(), time.Now().Add(time.Hour))
+	h.fake.DenyConsent = true
+	if code := h.run("auth", "login", "--profile", "globex"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "`ca auth login --profile globex --account <id>`") ||
+		!strings.Contains(s, "`ca auth logout --profile globex`") {
+		t.Errorf("stderr: %s", s)
+	}
+}
+
+// The same endpoint spelled differently is the same endpoint.
+func TestLoginReusesTheProfileAccountForTheSameOriginSpelledDifferently(t *testing.T) {
+	h := newHarness(t)
+	p := h.seed("default", protected(), time.Now().Add(time.Hour))
+	p.Endpoint = strings.Replace(p.Endpoint, "http://", "HTTP://", 1)
+	if err := h.store.Save("default", p); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRun("auth", "login")
+	if got := h.fake.Authorizations[0].Get("account"); got != "acc-1" {
+		t.Errorf("asked for account %q, want acc-1", got)
+	}
+}
+
 // A profile's account is not carried to another endpoint, where it is unknown.
 func TestLoginDoesNotReuseTheProfileAccountOnAnotherEndpoint(t *testing.T) {
 	h := newHarness(t)
@@ -318,6 +346,15 @@ func TestLoginRefusesASessionForAnotherAccount(t *testing.T) {
 	if p, _ := h.store.Load("default"); p.AccountID != "acc-1" || p.AccessToken != before.AccessToken {
 		t.Errorf("the profile changed: %+v", p)
 	}
+	if n := len(h.fake.Revoked); n != 1 || h.fake.Revoked[0] == before.RefreshToken {
+		t.Errorf("revoked %v: want only the grant just issued, not the profile's %s", h.fake.Revoked, before.RefreshToken)
+	}
+	h.fake.RevokeFails = true
+	h.stderr.Reset()
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth ||
+		!strings.Contains(h.stderr.String(), "the new session could not be revoked") {
+		t.Errorf("exit %d, a failed cleanup was not reported: %s", code, h.stderr)
+	}
 }
 
 // When the account cannot be read back, a named account cannot be confirmed,
@@ -335,6 +372,9 @@ func TestLoginRefusesASessionItCannotConfirm(t *testing.T) {
 	}
 	if p, _ := h.store.Load("default"); p.AccountID != "acc-1" || p.AccessToken != before.AccessToken {
 		t.Errorf("the profile changed: %+v", p)
+	}
+	if n := len(h.fake.Revoked); n != 1 || h.fake.Revoked[0] == before.RefreshToken {
+		t.Errorf("revoked %v: want only the grant just issued, not the profile's %s", h.fake.Revoked, before.RefreshToken)
 	}
 	// With no account named there is nothing to confirm: the sign-in is kept, as before.
 	h.mustRun("auth", "login", "--profile", "fresh")
