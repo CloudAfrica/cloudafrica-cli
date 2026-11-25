@@ -11,7 +11,8 @@ ca k8s kubeconfig <id> [--managed-vpn] > prod.kubeconfig
 ca k8s token <id>         # the 15-minute credential kubectl reads; the kubeconfig runs it
 ```
 
-The group also answers to `kubernetes`. `upgrade-workers` is a protected action. Each worker drains and
+The group also answers to `kubernetes`. Its commands take flags only, not `--data`. `upgrade-workers` is a
+protected action and does not ask for confirmation. Each worker drains and
 restarts in turn, so a workload with one replica is down while its node restarts. Without `--version`
 it takes the newest worker target. If there is none, it says so on stderr. With `--no-wait` it then
 exits 0 when the workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE (worker targets never go past the
