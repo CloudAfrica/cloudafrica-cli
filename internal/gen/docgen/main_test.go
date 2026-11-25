@@ -210,3 +210,18 @@ func TestCommandLinesFindsCapturedInvocations(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A documented line that reaches a command through an alias is refused and names the canonical path.
+func TestResolveRefusesAnAlias(t *testing.T) {
+	root := &cobra.Command{Use: "ca"}
+	vms := &cobra.Command{Use: "vms", Aliases: []string{"vm"}}
+	vms.AddCommand(&cobra.Command{Use: "list", Run: func(*cobra.Command, []string) {}})
+	root.AddCommand(vms)
+	if _, _, problem := resolve(root, "ca vms list"); problem != "" {
+		t.Fatalf("ca vms list: %s", problem)
+	}
+	_, _, problem := resolve(root, "ca vm list")
+	if !strings.Contains(problem, "vm is an alias") || !strings.Contains(problem, "write ca vms") {
+		t.Errorf("ca vm list: got %q, want an alias refusal naming ca vms", problem)
+	}
+}

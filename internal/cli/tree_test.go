@@ -173,3 +173,47 @@ func TestPositionalNamesAreSingular(t *testing.T) {
 		}
 	}
 }
+
+// A prompt names the group by its v0.9.0 singular, and a singleton group by its own name.
+func TestConfirmQuestionNamesTheGroupInTheSingular(t *testing.T) {
+	ops := map[string]string{
+		"updateBillingDetails": "Set details?",
+	}
+	for _, op := range genOps {
+		want, ok := ops[op.OperationID]
+		if !ok {
+			continue
+		}
+		delete(ops, op.OperationID)
+		if got := confirmQuestion(op, nil); got != want {
+			t.Errorf("%s asks %q, want %q", op.OperationID, got, want)
+		}
+	}
+	for id := range ops {
+		t.Errorf("no operation %s", id)
+	}
+	for path, want := range map[string]string{"vms": "vm", "ips": "ip-address", "billing details": "details"} {
+		if got := groupNoun(strings.Fields(path)); got != want {
+			t.Errorf("groupNoun(%s) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// help and completion are created on first use, so this runs the root before looking.
+func TestHelpAndCompletionAreInTheCLISection(t *testing.T) {
+	root := treeRoot()
+	root.SetArgs([]string{"--help"})
+	root.SetOut(io.Discard)
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"help", "completion"} {
+		c, _, err := root.Find([]string{name})
+		if err != nil || c.Name() != name {
+			t.Fatalf("no %s command: %v", name, err)
+		}
+		if c.GroupID != "cli" {
+			t.Errorf("ca %s is in section %q, want cli", name, c.GroupID)
+		}
+	}
+}

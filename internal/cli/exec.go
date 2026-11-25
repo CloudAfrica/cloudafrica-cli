@@ -86,6 +86,17 @@ func ensureGroup(root *cobra.Command, path []string) *cobra.Command {
 	return cur
 }
 
+// groupNoun is the singular of a group's name: its v0.9.0 name when it has one (vms is vm), otherwise
+// the name itself, which a singleton group such as `billing details` already is.
+func groupNoun(path []string) string {
+	for _, g := range genGroups {
+		if slices.Equal(g.Path, path) && len(g.Aliases) > 0 {
+			return g.Aliases[0]
+		}
+	}
+	return path[len(path)-1]
+}
+
 // argName is how a positional shows in usage: VM, SSH_KEY, OPERATION_ID, RULE_ID; nouns are singular.
 func argName(op cmdspec.Op) string {
 	p := op.Positional
@@ -93,7 +104,7 @@ func argName(op cmdspec.Op) string {
 		return strings.ToUpper(strings.ReplaceAll(p.Resource, "-", "_"))
 	}
 	if p.Name == "id" {
-		return strings.ToUpper(strings.ReplaceAll(cmdspec.Singular(op.Path[len(op.Path)-2]), "-", "_")) + "_ID"
+		return strings.ToUpper(strings.ReplaceAll(groupNoun(op.Path[:len(op.Path)-1]), "-", "_")) + "_ID"
 	}
 	return strings.ToUpper(strings.ReplaceAll(kebab(p.Name), "-", "_"))
 }
@@ -536,7 +547,7 @@ func (a *App) bodyFrom(op cmdspec.Op, f *pflag.FlagSet, data string) (map[string
 func confirmQuestion(op cmdspec.Op, targets []target) string {
 	verb := op.Path[len(op.Path)-1]
 	verb = strings.ToUpper(verb[:1]) + strings.ReplaceAll(verb[1:], "-", " ")
-	noun := strings.ReplaceAll(cmdspec.Singular(op.Path[len(op.Path)-2]), "-", " ")
+	noun := strings.ReplaceAll(groupNoun(op.Path[:len(op.Path)-1]), "-", " ")
 	if r, ok := genResources[op.Positional.Resource]; ok && op.Positional.Name != "" {
 		noun = r.Noun
 	}
