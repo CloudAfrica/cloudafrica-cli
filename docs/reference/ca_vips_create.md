@@ -1,24 +1,22 @@
-## ca vpcs vips firewall-rules delete
+## ca vips create
 
-Remove a firewall rule from a VIP
+Reserve a VIP in a VPC
 
 ### Synopsis
 
-Requires write:network. Asynchronous: returns 202 with the operation to poll at Location.
+Requires write:network. Must carry an Idempotency-Key header. Takes a free private address from the VPC's network; the address is not a parameter. Asynchronous: returns 202 with the operation to poll at Location; a succeeded operation's createdResource names the new VIP, whose id the other /v1/vpcs/{id}/vips routes take.
 
 ```
-ca vpcs vips firewall-rules delete RULE_ID [flags]
+ca vips create [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help               help for delete
+  -h, --help               help for create
       --no-wait            print the operation and return without waiting for it
       --timeout duration   how long to wait for the operation (default 10m0s)
-      --vip string         the vip id or name (required)
       --vpc string         the vpc id or name (required)
-  -y, --yes                do not ask for confirmation
 ```
 
 ### Options inherited from parent commands
@@ -31,5 +29,5 @@ ca vpcs vips firewall-rules delete RULE_ID [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips firewall-rules](ca_vpcs_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
+* [ca vips](ca_vips.md)	 - Manage virtual IPs
 

@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -404,18 +406,18 @@ func TestVipFirewallRuleListReadsRules(t *testing.T) {
 			"fromPort":80,"toPort":443,"status":"applied","description":"web"}],
 			"writable":false,"readOnlyReason":"managed"}`},
 	})
-	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "table")
+	h.mustRun("vips", "firewall-rules", "list", "--vip", "lb1", "--vpc", "web", "-o", "table")
 	out := h.stdout.String()
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) != 2 || !strings.Contains(lines[0], "DIRECTION") ||
 		strings.Join(strings.Fields(lines[1]), " ") != "r1 INGRESS ACCEPT TCP 0.0.0.0/0 80 443 applied web" {
 		t.Errorf("table:\n%s", out)
 	}
-	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-q")
+	h.mustRun("vips", "firewall-rules", "list", "--vip", "lb1", "--vpc", "web", "-q")
 	if got := strings.TrimSpace(h.stdout.String()); got != "r1" {
 		t.Errorf("-q = %q", got)
 	}
-	h.mustRun("vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web", "-o", "json")
+	h.mustRun("vips", "firewall-rules", "list", "--vip", "lb1", "--vpc", "web", "-o", "json")
 	if !strings.Contains(h.stdout.String(), `"readOnlyReason": "managed"`) {
 		t.Errorf("json is not the body: %s", h.stdout)
 	}
@@ -432,7 +434,7 @@ func TestVpcVipDeleteResolvesBothNames(t *testing.T) {
 		"GET /v1/vips":                     {Body: `{"data":[{"id":"vip-1","name":"lb1","vpcId":"vpc-1"}]}`},
 		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
 	})
-	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	h.mustRun("vips", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
 	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
 		t.Errorf("writes %v", h.fake.WriteURLs)
 	}
@@ -500,7 +502,7 @@ func TestVipFirewallRuleListEmptyAndMissingRules(t *testing.T) {
 		"GET /v1/vpcs/vpc-1/vips/vip-1/firewall-rules": {Body: `{"rules":[],"writable":true}`},
 	}
 	canned(h, routes)
-	args := []string{"vpc", "vip", "firewall-rule", "list", "--vip", "lb1", "--vpc", "web"}
+	args := []string{"vips", "firewall-rules", "list", "--vip", "lb1", "--vpc", "web"}
 	h.mustRun(append(args, "-q")...)
 	if got := h.stdout.String(); got != "" {
 		t.Errorf("-q on no rules = %q", got)
@@ -533,7 +535,7 @@ func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
 			{"id":"vip-4","name":"twin","vpcId":"vpc-1"},{"id":"vip-5","name":"twin","vpcId":"vpc-1"}]}`},
 		"DELETE /v1/vpcs/vpc-1/vips/vip-1": {Status: 202, Body: `{"operationId":"op/vip-del"}`},
 	})
-	h.mustRun("vpc", "vip", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
+	h.mustRun("vips", "delete", "lb1", "--vpc", "web", "--yes", "--no-wait")
 	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "DELETE /v1/vpcs/vpc-1/vips/vip-1" {
 		t.Fatalf("writes %v", h.fake.WriteURLs)
 	}
@@ -544,14 +546,14 @@ func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
 		{"nope", `no VIP with id or name "nope" in --vpc web`},
 	} {
 		h.stderr.Reset()
-		if code := h.run("vpc", "vip", "delete", c.vip, "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
+		if code := h.run("vips", "delete", c.vip, "--vpc", "web", "--yes", "--no-wait"); code != ExitUsage {
 			t.Errorf("%s: exit %d", c.vip, code)
 		}
 		if s := h.stderr.String(); !strings.Contains(s, c.want) {
 			t.Errorf("%s: stderr = %s", c.vip, s)
 		}
 	}
-	if code := h.run("vpc", "vip", "firewall-rule", "list", "--vip", "only-db", "--vpc", "web"); code != ExitUsage {
+	if code := h.run("vips", "firewall-rules", "list", "--vip", "only-db", "--vpc", "web"); code != ExitUsage {
 		t.Errorf("firewall-rule list on another VPC's VIP: exit %d", code)
 	}
 	if len(h.fake.WriteURLs) != 1 {
@@ -560,7 +562,7 @@ func TestVpcVipResolvesWithinItsVpc(t *testing.T) {
 	// Unable to list VIPs, a VPC-scoped command cannot check the VIP is in the
 	// VPC, so it stops rather than sending the value as an id.
 	h.fake.Canned["GET /v1/vips"] = fakeapi.Canned{Status: 500, Body: `{"title":"down"}`}
-	if code := h.run("vpc", "vip", "delete", "vip-3", "--vpc", "web", "--yes", "--no-wait"); code == ExitOK {
+	if code := h.run("vips", "delete", "vip-3", "--vpc", "web", "--yes", "--no-wait"); code == ExitOK {
 		t.Errorf("an unlistable VIP was used as an id")
 	}
 	if len(h.fake.WriteURLs) != 1 {
@@ -604,5 +606,36 @@ func TestUnrepeatableCoversEveryOperationThatWarns(t *testing.T) {
 		if !ops[id] {
 			t.Errorf("unrepeatable names %s, which is not a generated operation", id)
 		}
+	}
+}
+
+// --data takes a literal, @file or @- (stdin), and refuses a blank literal or a missing file.
+func TestDataForms(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "body.json")
+	if err := os.WriteFile(file, []byte(`{"name":"from-file"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		data, stdin, want string
+	}{
+		{`{"name":"literal"}`, "", "literal"},
+		{"@" + file, "", "from-file"},
+		{"@-", `{"name":"from-stdin"}`, "from-stdin"},
+	} {
+		h := signedIn(t)
+		h.stdin = c.stdin
+		h.mustRun("vms", "rename", "vm-1", "--data", c.data, "--no-wait")
+		if got := h.fake.Bodies[0]["name"]; got != c.want {
+			t.Errorf("--data %s: body name = %v", c.data, got)
+		}
+	}
+	h := signedIn(t)
+	for _, d := range []string{"  ", "@/does/not/exist"} {
+		if code := h.run("vms", "rename", "vm-1", "--data", d, "--no-wait"); code != ExitUsage {
+			t.Errorf("--data %q: exit %d, want %d", d, code, ExitUsage)
+		}
+	}
+	if len(h.fake.Writes) != 0 {
+		t.Errorf("writes = %d", len(h.fake.Writes))
 	}
 }

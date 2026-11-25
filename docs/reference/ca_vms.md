@@ -23,7 +23,6 @@ ca vms [flags]
 ### SEE ALSO
 
 * [ca](ca.md)	 - The CloudAfrica command-line interface
-* [ca vms add-disk](ca_vms_add-disk.md)	 - Attach a data disk to a virtual machine
 * [ca vms apply-pending-restart](ca_vms_apply-pending-restart.md)	 - Apply a pending configuration change by restarting the virtual machine
 * [ca vms backup-policy](ca_vms_backup-policy.md)	 - Manage a VM's backup policy
 * [ca vms backups](ca_vms_backups.md)	 - Manage a VM's backups

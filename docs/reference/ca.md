@@ -19,7 +19,6 @@ ca [flags]
 
 * [ca account](ca_account.md)	 - Show the account and its limits
 * [ca activity](ca_activity.md)	 - List account activity
-* [ca api](ca_api.md)	 - Make an authenticated API call
 * [ca auth](ca_auth.md)	 - Sign in, sign out and list profiles
 * [ca backup-policies](ca_backup-policies.md)	 - List the backup policy of every VM
 * [ca backup-windows](ca_backup-windows.md)	 - List the backup windows
@@ -40,7 +39,7 @@ ca [flags]
 * [ca transactions](ca_transactions.md)	 - List invoices and credit notes
 * [ca update](ca_update.md)	 - Update ca to the latest release
 * [ca version](ca_version.md)	 - Print the version
-* [ca vips](ca_vips.md)	 - List virtual IPs
+* [ca vips](ca_vips.md)	 - Manage virtual IPs
 * [ca vms](ca_vms.md)	 - Manage virtual machines
 * [ca vpcs](ca_vpcs.md)	 - Manage VPCs
 

@@ -23,7 +23,7 @@ Every operation in `openapi.json` must be one of:
 
 - **generated**: the default, shaped by `operations:` and `columns:` in the overlay;
 - **hand-written** (`handwritten:`): a command written in Go, such as `vms create`;
-- **excluded** (`exclude:`), with a reason; `ca api` still reaches it.
+- **excluded** (`exclude:`), with a reason.
 
 Generation fails for an operation it cannot generate, so a new API operation can't be missed. To pick
 up API changes, bump `cloudafrica-go` and run `go generate ./...`.

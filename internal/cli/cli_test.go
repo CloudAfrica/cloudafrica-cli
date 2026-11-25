@@ -477,19 +477,6 @@ func TestAPIErrorExits1AndUsageExits2(t *testing.T) {
 	}
 }
 
-func TestRawAPICall(t *testing.T) {
-	h := newHarness(t)
-	h.seed("default", compute(), time.Now().Add(time.Hour))
-	h.mustRun("api", "GET", "/v1/account")
-	if !strings.Contains(h.stdout.String(), "Globex") {
-		t.Errorf("stdout = %s", h.stdout)
-	}
-	h.mustRun("api", "post", "/v1/vms/vm-1/actions/reboot")
-	if len(h.fake.IdemKeys) != 1 || h.fake.IdemKeys[0] == "" {
-		t.Errorf("raw write had no idempotency key: %q", h.fake.IdemKeys)
-	}
-}
-
 func TestLogoutRevokesAndDeletes(t *testing.T) {
 	h := newHarness(t)
 	p := h.seed("default", compute(), time.Now().Add(time.Hour))

@@ -1,4 +1,4 @@
-## ca vpcs vips public-ip detach
+## ca vips public-ip detach
 
 Take a VIP's public IP off
 
@@ -7,7 +7,7 @@ Take a VIP's public IP off
 Requires protected:network. Returns the address to the pool. Synchronous: returns 200 with the VIP; a VIP with no public IP answers 200 unchanged. Refuses with 409 while firewall rules on the VIP remain (remove them with /v1/vpcs/{id}/vips/{vipId}/firewall-rules first), and for a VIP the platform manages.
 
 ```
-ca vpcs vips public-ip detach [flags]
+ca vips public-ip detach [flags]
 ```
 
 ### Options
@@ -29,5 +29,5 @@ ca vpcs vips public-ip detach [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips public-ip](ca_vpcs_vips_public-ip.md)	 - Attach and detach a virtual IP's public address
+* [ca vips public-ip](ca_vips_public-ip.md)	 - Attach and detach a virtual IP's public address
 

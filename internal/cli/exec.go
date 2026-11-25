@@ -14,6 +14,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -506,6 +507,26 @@ func fieldValue(f *pflag.FlagSet, fl cmdspec.Field) (v any, set bool, err error)
 		return nil, true, fmt.Errorf("--%s %q: use one of %s", fl.Flag, s, strings.Join(fl.Enum, ", "))
 	}
 	return s, true, nil
+}
+
+// readData reads --data: a literal JSON body, @file, or @- for stdin.
+func (a *App) readData(d string) ([]byte, error) {
+	switch {
+	case d == "":
+		return nil, nil
+	case d == "@-":
+		return io.ReadAll(a.Stdin)
+	case strings.HasPrefix(d, "@"):
+		b, err := os.ReadFile(d[1:])
+		if err != nil {
+			return nil, fmt.Errorf("reading --data: %w", err)
+		}
+		return b, nil
+	}
+	if strings.TrimSpace(d) == "" {
+		return nil, errors.New("--data is empty")
+	}
+	return []byte(d), nil
 }
 
 // bodyFrom merges --data with the body flags; flags win.

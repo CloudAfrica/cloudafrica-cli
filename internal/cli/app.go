@@ -271,7 +271,7 @@ func (a *App) Root() *cobra.Command {
 	}
 	root.SetHelpCommandGroupID("cli")
 	root.SetCompletionCommandGroupID("cli")
-	for _, c := range []*cobra.Command{a.authCmd(), a.apiCmd(), a.updateCmd(), a.versionCmd()} {
+	for _, c := range []*cobra.Command{a.authCmd(), a.updateCmd(), a.versionCmd()} {
 		c.GroupID = "cli"
 		root.AddCommand(c)
 	}

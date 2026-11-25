@@ -1,22 +1,23 @@
-## ca vpcs vips create
+## ca vips delete
 
-Reserve a VIP in a VPC
+Release a VIP
 
 ### Synopsis
 
-Requires write:network. Must carry an Idempotency-Key header. Takes a free private address from the VPC's network; the address is not a parameter. Asynchronous: returns 202 with the operation to poll at Location; a succeeded operation's createdResource names the new VIP, whose id the other /v1/vpcs/{id}/vips routes take.
+Requires protected:network. Returns the private address to the VPC's network; it may be given to someone else. Refuses with 409 while the VIP has a public IP: detach it first. Asynchronous: returns 202 with the operation to poll at Location.
 
 ```
-ca vpcs vips create [flags]
+ca vips delete VIP [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help               help for create
+  -h, --help               help for delete
       --no-wait            print the operation and return without waiting for it
       --timeout duration   how long to wait for the operation (default 10m0s)
       --vpc string         the vpc id or name (required)
+  -y, --yes                do not ask for confirmation
 ```
 
 ### Options inherited from parent commands
@@ -29,5 +30,5 @@ ca vpcs vips create [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips](ca_vpcs_vips.md)	 - Manage a VPC's virtual IPs
+* [ca vips](ca_vips.md)	 - Manage virtual IPs
 

@@ -30,5 +30,4 @@ ca vpcs [flags]
 * [ca vpcs list](ca_vpcs_list.md)	 - List VPCs in the account
 * [ca vpcs reserved-ips](ca_vpcs_reserved-ips.md)	 - Manage a VPC's reserved public IP addresses
 * [ca vpcs update](ca_vpcs_update.md)	 - Rename a VPC
-* [ca vpcs vips](ca_vpcs_vips.md)	 - Manage a VPC's virtual IPs
 
