@@ -639,3 +639,25 @@ func TestDataForms(t *testing.T) {
 		t.Errorf("writes = %d", len(h.fake.Writes))
 	}
 }
+
+// vms disks create takes the VM as --vm (v0.9.0's `vm add-disk` took it as the argument): the name
+// resolves to the id, and without --vm nothing is sent.
+func TestVmDisksCreateTakesTheVmAsAFlag(t *testing.T) {
+	h := signedIn(t)
+	canned(h, map[string]fakeapi.Canned{
+		"POST /v1/vms/vm-1/actions/add-disk": {Status: 202, Body: `{"operationId":"op/add-disk"}`},
+	})
+	if code := h.run("vms", "disks", "create", "--size-gib", "20", "--no-wait"); code != ExitUsage {
+		t.Errorf("without --vm: exit %d, want %d", code, ExitUsage)
+	}
+	if len(h.fake.WriteURLs) != 0 {
+		t.Fatalf("without --vm: writes %v", h.fake.WriteURLs)
+	}
+	h.mustRun("vms", "disks", "create", "--vm", "web-1", "--size-gib", "20", "--no-wait")
+	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "POST /v1/vms/vm-1/actions/add-disk" {
+		t.Errorf("writes %v", h.fake.WriteURLs)
+	}
+	if got := h.fake.Bodies[0]["sizeGib"]; got != float64(20) {
+		t.Errorf("sizeGib = %v (%T)", got, got)
+	}
+}

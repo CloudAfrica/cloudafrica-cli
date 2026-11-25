@@ -79,8 +79,8 @@ func ownFlags(c *cobra.Command) []string {
 }
 
 // moved lists the v0.9.0 commands that no old name reaches (CA-5660 §3): each one's new path ("" for a
-// removed command), and, for addVmDisk, the flag it gained when its argument became one. This is the
-// release notes' list of breaking changes.
+// removed command), and, for addVmDisk, the flag it gained when its argument became one. The release
+// notes' breaking changes are written from this map.
 var moved = map[string]struct {
 	to, addedFlag string
 }{
