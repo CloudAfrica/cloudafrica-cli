@@ -39,23 +39,27 @@ const (
 func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
 	var extra []string
+	var accountID string
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
 		Long: "Sign in through the browser and store the session in a profile. One profile holds one account: " +
-			"to use several accounts, sign in once per account with --profile. Signing in never allows " +
-			"protected actions such as vm delete; `ca auth elevate` does.",
+			"to use several accounts, sign in once per account with --profile and name the account with " +
+			"--account. Signing in again to a profile stays in the account it is signed in to. Signing in " +
+			"never allows protected actions such as vm delete; `ca auth elevate` does.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			name, err := a.profileName()
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name, extra...)
+			return a.login(cmd.Context(), name, accountID, extra...)
 		},
 	}
 	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
 		"(repeatable; kept for every later sign-in of this profile)")
+	login.Flags().StringVar(&accountID, "account", "", "sign in to this account id (default: the account this "+
+		"profile is signed in to; the consent page asks for none)")
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
@@ -103,7 +107,7 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name string, extra ...string) error {
+func (a *App) login(ctx context.Context, name, accountID string, extra ...string) error {
 	old, err := a.loadForReplace(name)
 	if err != nil {
 		return err
@@ -137,8 +141,13 @@ func (a *App) login(ctx context.Context, name string, extra ...string) error {
 		}
 	}
 	scopes := append(slices.Clone(defaultScopes), extras...)
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" && old != nil {
+		accountID = old.AccountID
+	}
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
 		Scopes:  scopes,
+		Account: accountID,
 		Open:    a.OpenBrowser,
 		Out:     a.Stderr,
 		Timeout: a.LoginTimeout,
@@ -158,6 +167,10 @@ func (a *App) login(ctx context.Context, name string, extra ...string) error {
 		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", err)
 	} else {
 		p.AccountID, p.AccountName = acct.id, acct.name
+		if accountID != "" && acct.id != accountID {
+			fmt.Fprintf(a.Stderr, "Warning: asked to sign in to account %s but the session is for %s.\n",
+				accountID, orUnknown(acct.id))
+		}
 	}
 	// Under the profile lock, so a refresh in another process cannot
 	// overwrite this save; re-read, because that refresh may have rotated the

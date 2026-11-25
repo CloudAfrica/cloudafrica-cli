@@ -256,6 +256,31 @@ func TestLoginScopeFlagRequestsAndPersists(t *testing.T) {
 	}
 }
 
+// The account the sign-in is for travels as the authorize request's account
+// parameter: named with --account, else the profile's own account, else absent.
+func TestLoginNamesTheAccountOnTheAuthorizeRequest(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("auth", "login")
+	if _, has := h.fake.Authorizations[0]["account"]; has {
+		t.Errorf("a first sign-in named an account: %v", h.fake.Authorizations[0])
+	}
+	h.mustRun("auth", "login")
+	if got := h.fake.Authorizations[1].Get("account"); got != "acc-1" {
+		t.Errorf("a re-sign-in asked for account %q, want the profile's acc-1", got)
+	}
+	h.mustRun("auth", "login", "--profile", "other", "--account", "acc-9")
+	if got := h.fake.Authorizations[2].Get("account"); got != "acc-9" {
+		t.Errorf("--account sent %q, want acc-9", got)
+	}
+	if !strings.Contains(h.stderr.String(), "asked to sign in to account acc-9 but the session is for acc-1") {
+		t.Errorf("no warning for a session in another account: %s", h.stderr)
+	}
+	h.mustRun("auth", "login", "--account", "acc-1")
+	if got := h.fake.Authorizations[3].Get("account"); got != "acc-1" || strings.Contains(h.stderr.String(), "asked to sign in") {
+		t.Errorf("account %q, stderr %s", got, h.stderr)
+	}
+}
+
 // When the pairing is not confirmed, the step-up refusal is not retried.
 func TestStepUpInteractiveElevateTimeoutStops(t *testing.T) {
 	h := newHarness(t)
