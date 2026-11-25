@@ -4,6 +4,8 @@ Start a virtual machine
 
 ### Synopsis
 
+Start a virtual machine
+
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```

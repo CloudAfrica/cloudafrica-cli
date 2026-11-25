@@ -2,6 +2,12 @@
 
 Create a VM
 
+### Synopsis
+
+Creates a VM from flags; it takes no --data.
+
+Waits for the operation to finish; --no-wait prints it and returns.
+
 ```
 ca vms create [flags]
 ```

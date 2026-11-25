@@ -3,9 +3,13 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/cmdspec"
 )
 
-const waits = "\n\nWaits for the operation to finish; --no-wait prints it and returns."
+const waits = "\n\n" + cmdspec.WaitLine
 
 // The long help is the API description minus exactly the three API-only sentences, plus the wait line
 // where the command starts an operation (CA-5660 §5).
@@ -19,8 +23,8 @@ func TestLongHelpKeepsWhatItShould(t *testing.T) {
 	}
 	for _, op := range genOps {
 		if w, ok := want[op.OperationID]; ok {
-			if op.Long != w {
-				t.Errorf("%s long help:\n got %q\nwant %q", op.OperationID, op.Long, w)
+			if got := longHelp(op); got != w {
+				t.Errorf("%s long help:\n got %q\nwant %q", op.OperationID, got, w)
 			}
 			delete(want, op.OperationID)
 		}
@@ -30,7 +34,7 @@ func TestLongHelpKeepsWhatItShould(t *testing.T) {
 	}
 }
 
-// No long help keeps an API-only sentence, and every command that starts an operation says it waits.
+// No long help keeps an API-only sentence.
 func TestLongHelpDropsTheAPIOnlySentences(t *testing.T) {
 	for _, op := range genOps {
 		for _, s := range []string{
@@ -42,8 +46,21 @@ func TestLongHelpDropsTheAPIOnlySentences(t *testing.T) {
 				t.Errorf("%s long help still says %q", op.OperationID, s)
 			}
 		}
-		if got := strings.HasSuffix(op.Long, strings.TrimSpace(waits)); got != (op.Async != "") {
-			t.Errorf("%s (async %q): ends with the wait line = %v", op.OperationID, op.Async, got)
+	}
+}
+
+// Every command that waits, hand-written ones included, says so: its long help ends with the wait line
+// exactly when it has --no-wait.
+func TestEveryWaitingCommandSaysItWaits(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		waits := c.LocalNonPersistentFlags().Lookup("no-wait") != nil
+		if got := strings.HasSuffix(c.Long, cmdspec.WaitLine); got != waits {
+			t.Errorf("%s (--no-wait %v): long help ends with the wait line = %v", c.CommandPath(), waits, got)
+		}
+		for _, s := range c.Commands() {
+			walk(s)
 		}
 	}
+	walk(treeRoot())
 }

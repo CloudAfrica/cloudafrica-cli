@@ -4,6 +4,8 @@ Update a firewall rule on a virtual machine
 
 ### Synopsis
 
+Update a firewall rule on a virtual machine
+
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```

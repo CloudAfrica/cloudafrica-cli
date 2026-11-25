@@ -16,6 +16,9 @@ const (
 	Self Async = "self"
 )
 
+// WaitLine ends the long help of every command that starts an operation and waits for it.
+const WaitLine = "Waits for the operation to finish; --no-wait prints it and returns."
+
 // Op is one generated command.
 type Op struct {
 	// Path is the command path under `ca`, e.g. ["vm", "nic", "attach"].

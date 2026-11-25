@@ -206,6 +206,9 @@ func longHelp(op cmdspec.Op) string {
 	if op.BodyNested {
 		long += "\n\nSome fields of the request body have no flag; set them with --data."
 	}
+	if op.Async != cmdspec.NotAsync {
+		long += "\n\n" + cmdspec.WaitLine
+	}
 	return long
 }
 

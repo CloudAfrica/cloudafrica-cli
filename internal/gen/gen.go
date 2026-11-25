@@ -519,9 +519,6 @@ var apiOnly = []string{
 	"Asynchronous: returns 202 with the operation to poll at Location.",
 }
 
-// waitLine ends the long help of a command that starts an operation.
-const waitLine = "Waits for the operation to finish; --no-wait prints it and returns."
-
 // cliVoice is an API description without the apiOnly sentences.
 func cliVoice(desc string) string {
 	for _, s := range apiOnly {
@@ -785,9 +782,6 @@ func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdsp
 		}
 	} else if oo.Wait != "" {
 		g.fail("%s: wait: set on an operation with no 202", op.OperationID)
-	}
-	if c.Async != cmdspec.NotAsync {
-		c.Long = strings.TrimSpace(c.Long + "\n\n" + waitLine)
 	}
 
 	// Confirmation: deletes and protected actions.
