@@ -218,7 +218,7 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 			if !a.confirm("Sign in again in the browser now (`ca auth login`)?") {
 				return err
 			}
-			if lerr := a.login(ctx, s.name, refusedScope(err)); lerr != nil {
+			if lerr := a.login(ctx, s.name, "", refusedScope(err)); lerr != nil {
 				return lerr
 			}
 			signedIn = true

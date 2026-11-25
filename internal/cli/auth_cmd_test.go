@@ -211,6 +211,9 @@ func TestStepUpScopeStillMissingAfterLoginOffersLoginOnce(t *testing.T) {
 	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || len(h.fake.Authorizations) != 1 || h.fake.DeleteCalls != 2 {
 		t.Errorf("prompts %d, authorizations %d, delete calls %d", n, len(h.fake.Authorizations), h.fake.DeleteCalls)
 	}
+	if got := h.fake.Authorizations[0].Get("account"); got != "acc-1" {
+		t.Errorf("the step-up sign-in asked for account %q, want the profile's acc-1", got)
+	}
 }
 
 // A refusal for a scope login does not request by default names the
@@ -253,6 +256,150 @@ func TestLoginScopeFlagRequestsAndPersists(t *testing.T) {
 	}
 	if p, _ := h.store.Load("default"); !slices.Equal(p.ExtraScopes, []string{"write:billing"}) {
 		t.Errorf("extra scopes = %v", p.ExtraScopes)
+	}
+}
+
+// The account the sign-in is for travels as the authorize request's account
+// parameter: named with --account, else the profile's own account on the same
+// endpoint, else absent.
+func TestLoginNamesTheAccountOnTheAuthorizeRequest(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("auth", "login")
+	if _, has := h.fake.Authorizations[0]["account"]; has {
+		t.Errorf("a first sign-in named an account: %v", h.fake.Authorizations[0])
+	}
+	h.mustRun("auth", "login")
+	if got := h.fake.Authorizations[1].Get("account"); got != "acc-1" {
+		t.Errorf("a re-sign-in asked for account %q, want the profile's acc-1", got)
+	}
+	// --account wins over the profile's own account, and the profile moves to it.
+	h.fake.AccountID = "acc-9"
+	h.mustRun("auth", "login", "--account", "acc-9")
+	if got := h.fake.Authorizations[2].Get("account"); got != "acc-9" {
+		t.Errorf("--account on a signed-in profile sent %q, want acc-9", got)
+	}
+	if p, _ := h.store.Load("default"); p.AccountID != "acc-9" {
+		t.Errorf("profile account = %q, want acc-9", p.AccountID)
+	}
+	h.mustRun("auth", "login", "--profile", "other", "--account", "acc-9")
+	if got := h.fake.Authorizations[3].Get("account"); got != "acc-9" {
+		t.Errorf("--account on a new profile sent %q, want acc-9", got)
+	}
+}
+
+// The hint names the selected profile, so following it cannot touch another one.
+func TestLoginRefusedStoredAccountHintNamesTheProfile(t *testing.T) {
+	h := newHarness(t)
+	h.seed("globex", protected(), time.Now().Add(time.Hour))
+	h.fake.DenyConsent = true
+	if code := h.run("auth", "login", "--profile", "globex"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "`ca auth login --profile globex --account <id>`") ||
+		!strings.Contains(s, "`ca auth logout --profile globex`") {
+		t.Errorf("stderr: %s", s)
+	}
+}
+
+// The same endpoint spelled differently is the same endpoint.
+func TestLoginReusesTheProfileAccountForTheSameOriginSpelledDifferently(t *testing.T) {
+	h := newHarness(t)
+	p := h.seed("default", protected(), time.Now().Add(time.Hour))
+	p.Endpoint = strings.Replace(p.Endpoint, "http://", "HTTP://", 1)
+	if err := h.store.Save("default", p); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRun("auth", "login")
+	if got := h.fake.Authorizations[0].Get("account"); got != "acc-1" {
+		t.Errorf("asked for account %q, want acc-1", got)
+	}
+}
+
+// A profile's account is not carried to another endpoint, where it is unknown.
+func TestLoginDoesNotReuseTheProfileAccountOnAnotherEndpoint(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	other := fakeapi.New(t)
+	h.env["CLOUDAFRICA_ENDPOINT"] = other.URL
+	h.mustRun("auth", "login")
+	if len(other.Authorizations) != 1 {
+		t.Fatalf("authorizations on the other endpoint: %d", len(other.Authorizations))
+	}
+	if _, has := other.Authorizations[0]["account"]; has {
+		t.Errorf("acc-1 of another endpoint was sent: %v", other.Authorizations[0])
+	}
+}
+
+// A session for another account than the one asked for is a failure that
+// saves nothing, so a script never gets a success bound to the wrong account.
+func TestLoginRefusesASessionForAnotherAccount(t *testing.T) {
+	h := newHarness(t)
+	before := h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.AccountID = "acc-2"
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "asked to sign in to account acc-9 but the session is for acc-2") ||
+		!strings.Contains(s, "--profile <name> --account <id>") || strings.Contains(s, "Signed in") {
+		t.Errorf("stderr: %s", s)
+	}
+	if p, _ := h.store.Load("default"); p.AccountID != "acc-1" || p.AccessToken != before.AccessToken {
+		t.Errorf("the profile changed: %+v", p)
+	}
+	if n := len(h.fake.Revoked); n != 1 || h.fake.Revoked[0] == before.RefreshToken {
+		t.Errorf("revoked %v: want only the grant just issued, not the profile's %s", h.fake.Revoked, before.RefreshToken)
+	}
+	h.fake.RevokeFails = true
+	h.stderr.Reset()
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth ||
+		!strings.Contains(h.stderr.String(), "the new session could not be revoked") {
+		t.Errorf("exit %d, a failed cleanup was not reported: %s", code, h.stderr)
+	}
+}
+
+// When the account cannot be read back, a named account cannot be confirmed,
+// so nothing is saved and the stored account is not wiped.
+func TestLoginRefusesASessionItCannotConfirm(t *testing.T) {
+	h := newHarness(t)
+	before := h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.Canned = map[string]fakeapi.Canned{"GET /v1/account": {Status: 500}}
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "could not confirm the session is for account acc-9") ||
+		strings.Contains(s, "Signed in") {
+		t.Errorf("stderr: %s", s)
+	}
+	if p, _ := h.store.Load("default"); p.AccountID != "acc-1" || p.AccessToken != before.AccessToken {
+		t.Errorf("the profile changed: %+v", p)
+	}
+	if n := len(h.fake.Revoked); n != 1 || h.fake.Revoked[0] == before.RefreshToken {
+		t.Errorf("revoked %v: want only the grant just issued, not the profile's %s", h.fake.Revoked, before.RefreshToken)
+	}
+	// With no account named there is nothing to confirm: the sign-in is kept, as before.
+	h.mustRun("auth", "login", "--profile", "fresh")
+	if p, _ := h.store.Load("fresh"); p == nil || p.AccessToken == "" || p.AccountID != "" {
+		t.Errorf("an unnamed sign-in was not kept as before: %+v", p)
+	}
+}
+
+// When the consent page refuses the account a profile reuses, the error names
+// the way out instead of repeating the command that just failed.
+func TestLoginRefusedStoredAccountNamesTheWayOut(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.DenyConsent = true
+	if code := h.run("auth", "login"); code != ExitAuth {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "sign-in was declined for account acc-1") ||
+		!strings.Contains(s, "`ca auth login --account <id>`") || !strings.Contains(s, "`ca auth logout`") {
+		t.Errorf("stderr: %s", s)
+	}
+	h.stderr.Reset()
+	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth ||
+		strings.Contains(h.stderr.String(), "`ca auth logout`") {
+		t.Errorf("a named account got the stored-account hint: exit %d, %s", code, h.stderr)
 	}
 }
 

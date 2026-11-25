@@ -39,23 +39,27 @@ const (
 func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
 	var extra []string
+	var accountID string
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
 		Long: "Sign in through the browser and store the session in a profile. One profile holds one account: " +
-			"to use several accounts, sign in once per account with --profile. Signing in never allows " +
-			"protected actions such as vm delete; `ca auth elevate` does.",
+			"to use several accounts, sign in once per account with --profile and name the account with " +
+			"--account. Signing in again to a profile stays in the account it is signed in to. Signing in " +
+			"never allows protected actions such as vm delete; `ca auth elevate` does.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			name, err := a.profileName()
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name, extra...)
+			return a.login(cmd.Context(), name, accountID, extra...)
 		},
 	}
 	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
 		"(repeatable; kept for every later sign-in of this profile)")
+	login.Flags().StringVar(&accountID, "account", "", "sign in to this account id (default: the account this "+
+		"profile is already signed in to)")
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
@@ -103,7 +107,7 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name string, extra ...string) error {
+func (a *App) login(ctx context.Context, name, accountID string, extra ...string) error {
 	old, err := a.loadForReplace(name)
 	if err != nil {
 		return err
@@ -137,13 +141,28 @@ func (a *App) login(ctx context.Context, name string, extra ...string) error {
 		}
 	}
 	scopes := append(slices.Clone(defaultScopes), extras...)
+	accountID = strings.TrimSpace(accountID)
+	reused := false
+	if accountID == "" && old != nil && sameOrigin(old.Endpoint, endpoint) && old.AccountID != "" {
+		accountID, reused = old.AccountID, true
+	}
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
 		Scopes:  scopes,
+		Account: accountID,
 		Open:    a.OpenBrowser,
 		Out:     a.Stderr,
 		Timeout: a.LoginTimeout,
 	})
 	if err != nil {
+		if reused && strings.Contains(err.Error(), "access_denied") {
+			return &hintedError{
+				err: fmt.Errorf("%w: sign-in was declined for account %s (the page refused it, or you pressed Deny)",
+					auth.ErrLoginRequired, accountID),
+				hint: "That is the account this profile is signed in to. Sign in to another with `" +
+					profileCmd("ca auth login", name) + " --account <id>`; `" + profileCmd("ca auth logout", name) +
+					"` removes this profile.",
+			}
+		}
 		return &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
 	}
 	p := &profile.Profile{
@@ -154,9 +173,19 @@ func (a *App) login(ctx context.Context, name string, extra ...string) error {
 		Expiry:       tok.Expiry(time.Now()),
 		RefreshToken: tok.RefreshToken,
 	}
-	if acct, err := a.fetchAccount(ctx, endpoint, tok.AccessToken); err != nil {
-		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", err)
-	} else {
+	acct, aerr := a.fetchAccount(ctx, endpoint, tok.AccessToken)
+	switch {
+	case aerr != nil && accountID != "":
+		return a.rejectSession(ctx, p, fmt.Errorf("%w: could not confirm the session is for account %s (%v); "+
+			"nothing was saved", auth.ErrLoginRequired, accountID, aerr), "Sign in again once the API is reachable.")
+	case aerr != nil:
+		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", aerr)
+	case accountID != "" && acct.id != accountID:
+		return a.rejectSession(ctx, p, fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; "+
+			"nothing was saved", auth.ErrLoginRequired, accountID, orUnknown(acct.id)),
+			"One profile holds one account: use `ca auth login --profile <name> --account <id>` "+
+				"for each account. An older gateway ignores --account.")
+	default:
 		p.AccountID, p.AccountName = acct.id, acct.name
 	}
 	// Under the profile lock, so a refresh in another process cannot
@@ -190,6 +219,26 @@ func (a *App) login(ctx context.Context, name string, extra ...string) error {
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
 	return nil
+}
+
+// profileCmd is cmd with --profile name, unless name is the default profile.
+func profileCmd(cmd, name string) string {
+	if name == profile.Default {
+		return cmd
+	}
+	return cmd + " --profile " + name
+}
+
+// rejectSession revokes the grant just issued for p, which login will not
+// save, and returns err with hint.
+func (a *App) rejectSession(ctx context.Context, p *profile.Profile, err error, hint string) error {
+	if p.RefreshToken != "" {
+		if rerr := a.revokeOld(ctx, p); rerr != nil {
+			fmt.Fprintf(a.Stderr, "Warning: the new session could not be revoked (%v); "+
+				"remove it under Connected apps in the portal.\n", rerr)
+		}
+	}
+	return &hintedError{err: err, hint: hint}
 }
 
 // elevate pairs s's grant for protected actions: it asks for a pairing,

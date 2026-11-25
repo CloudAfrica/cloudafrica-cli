@@ -19,6 +19,10 @@ import (
 // LoginOptions configures one browser sign-in.
 type LoginOptions struct {
 	Scopes []string
+	// Account, when set, is the account the sign-in is for: it is sent as the
+	// authorize request's account parameter, so the consent page binds the
+	// token to it. Unset, the server chooses or refuses.
+	Account string
 	// Open opens url in the user's browser; an error means the URL is only printed.
 	Open func(url string) error
 	// Out receives the instructions (the URL to visit).
@@ -60,6 +64,9 @@ func Login(ctx context.Context, hc *http.Client, m *Metadata, o LoginOptions) (*
 		"resource":              {m.Resource},
 		"state":                 {state},
 		"scope":                 {strings.Join(o.Scopes, " ")},
+	}
+	if o.Account != "" {
+		q.Set("account", o.Account)
 	}
 	authURL := m.AuthorizationEndpoint
 	if strings.Contains(authURL, "?") {
