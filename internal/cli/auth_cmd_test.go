@@ -222,21 +222,23 @@ func TestNonDefaultScopeHintsLoginScopeAndIsKept(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", protected(), time.Now().Add(time.Hour))
 	h.fake.Require = map[string]string{"/v1/billing/": "write:billing"}
-	if code := h.run("api", "POST", "/v1/billing/top-ups"); code != ExitAPI {
+	h.fake.Canned = map[string]fakeapi.Canned{"PUT /v1/billing/details": {Body: `{}`}}
+	set := []string{"billing", "details", "set", "--billing-email", "a@example.com", "--yes"}
+	if code := h.run(set...); code != ExitAPI {
 		t.Fatalf("exit %d", code)
 	}
 	if !strings.Contains(h.stderr.String(), "`ca auth login --scope write:billing`") {
 		t.Errorf("hint: %s", h.stderr)
 	}
 	h.mustRun("auth", "login", "--scope", "write:billing")
-	h.mustRun("api", "POST", "/v1/billing/top-ups")
+	h.mustRun(set...)
 	h.mustRun("auth", "login")
 	if !slices.Contains(strings.Fields(h.fake.Authorizations[1].Get("scope")), "write:billing") {
 		t.Errorf("a later sign-in dropped write:billing: %v", h.fake.Authorizations[1])
 	}
 
 	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
-	if code := h.run("api", "POST", "/v1/billing/top-ups"); code != ExitAPI {
+	if code := h.run(set...); code != ExitAPI {
 		t.Fatalf("env token: exit %d", code)
 	}
 	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted write:billing") {

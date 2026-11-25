@@ -39,8 +39,7 @@ IP and `--extra-disk-gib` adds a data disk (repeatable, up to 8).
 ## Disks, network and access
 
 ```sh
-ca vms disks list --vm web-01
-ca vms add-disk web-01 ...
+ca vms disks list|create --vm web-01
 ca vms nics list|attach|detach --vm web-01
 ca vms public-ips list|attach|detach --vm web-01
 ca vms private-ips list|create --vm web-01

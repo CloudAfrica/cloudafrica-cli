@@ -78,14 +78,50 @@ func ownFlags(c *cobra.Command) []string {
 	return fl
 }
 
+// moved lists the v0.9.0 commands that no old name reaches (CA-5660 §3): each one's new path ("" for a
+// removed command), and, for addVmDisk, the flag it gained when its argument became one. The release
+// notes' breaking changes are written from this map.
+var moved = map[string]struct {
+	to, addedFlag string
+}{
+	"api":                                   {},
+	"vm add-disk":                           {"vms disks create", "vm"},
+	"vpc vip create":                        {"vips create", ""},
+	"vpc vip delete":                        {"vips delete", ""},
+	"vpc vip firewall-rule create":          {"vips firewall-rules create", ""},
+	"vpc vip firewall-rule delete":          {"vips firewall-rules delete", ""},
+	"vpc vip firewall-rule list":            {"vips firewall-rules list", ""},
+	"vpc vip firewall-rule set-description": {"vips firewall-rules update", ""},
+	"vpc vip public-ip attach":              {"vips public-ip attach", ""},
+	"vpc vip public-ip detach":              {"vips public-ip detach", ""},
+}
+
 // Every v0.9.0 command still runs under its old name, runs the same operation and takes the same
-// argument and flags.
+// argument and flags; a moved one does so at its new path, and nothing else moved.
 func TestV090NamesStillRunTheSameCommand(t *testing.T) {
 	root := treeRoot()
 	viaAlias := map[*cobra.Command]map[string]bool{}
 	for _, old := range v090Commands(t) {
 		name := strings.Join(old.path, " ")
 		c := resolveOld(root, old.path, viaAlias)
+		if m, ok := moved[name]; ok {
+			if c != nil && !c.HasSubCommands() {
+				t.Errorf("ca %s still resolves; drop it from moved", name)
+			}
+			if m.to == "" {
+				continue
+			}
+			c, _, _ = root.Find(strings.Fields(m.to))
+			if c == nil || c.CommandPath() != "ca "+m.to {
+				t.Errorf("ca %s moved to ca %s, which does not exist", name, m.to)
+				continue
+			}
+			if m.addedFlag != "" {
+				old.flags = append(slices.Clone(old.flags), m.addedFlag)
+				slices.Sort(old.flags)
+				old.args = "0"
+			}
+		}
 		if c == nil || c.HasSubCommands() {
 			t.Errorf("ca %s no longer resolves to a command", name)
 			continue
@@ -161,11 +197,11 @@ func TestEveryTopLevelCommandHasASection(t *testing.T) {
 func TestPositionalNamesAreSingular(t *testing.T) {
 	root := treeRoot()
 	for path, want := range map[string]string{
-		"vms nics detach":                 "detach NIC_ID",
-		"operations get":                  "get OPERATION_ID",
-		"vms firewall-rules delete":       "delete RULE_ID",
-		"vpcs vips firewall-rules delete": "delete RULE_ID",
-		"vms public-ips detach":           "detach PUBLIC_IP_ID",
+		"vms nics detach":            "detach NIC_ID",
+		"operations get":             "get OPERATION_ID",
+		"vms firewall-rules delete":  "delete RULE_ID",
+		"vips firewall-rules delete": "delete RULE_ID",
+		"vms public-ips detach":      "detach PUBLIC_IP_ID",
 	} {
 		c, _, err := root.Find(strings.Fields(path))
 		if err != nil || c.Use != want {

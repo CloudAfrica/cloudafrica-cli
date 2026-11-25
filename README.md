@@ -104,7 +104,7 @@ ca completion powershell | Out-String | Invoke-Expression   # PowerShell
 ## Documentation
 
 - [Signing in and protected actions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md), including scripts and CI
-- [Conventions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/conventions.md): names or ids, waiting, confirmation, output, exit codes, `ca api`
+- [Conventions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/conventions.md): names or ids, waiting, confirmation, output, exit codes
 - [Environment variables](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/environment.md)
 - Commands by domain:
   - [Compute](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/compute.md): VMs, disks, backups, placement groups, SSH keys, images

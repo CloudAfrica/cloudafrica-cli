@@ -23,5 +23,6 @@ ca vms disks [flags]
 ### SEE ALSO
 
 * [ca vms](ca_vms.md)	 - Manage virtual machines
+* [ca vms disks create](ca_vms_disks_create.md)	 - Attach a data disk to a virtual machine
 * [ca vms disks list](ca_vms_disks_list.md)	 - List a virtual machine's disks
 

@@ -22,10 +22,9 @@ groups:
   vpcs: Manage VPCs
   vpcs firewall-rules: List a VPC's firewall rules
   vpcs reserved-ips: Manage a VPC's reserved public IP addresses
-  vpcs vips: Manage a VPC's virtual IPs
-  vpcs vips firewall-rules: Manage a virtual IP's firewall rules
-  vpcs vips public-ip: Attach and detach a virtual IP's public address
-  vips: List virtual IPs
+  vips: Manage virtual IPs
+  vips firewall-rules: Manage a virtual IP's firewall rules
+  vips public-ip: Attach and detach a virtual IP's public address
   ips: List IP addresses
   buckets: Manage object storage buckets
   buckets versioning: Read and change a bucket's versioning
@@ -80,6 +79,7 @@ sections:
 aliases:
   billing details: []
   buckets cors: []
+  vips firewall-rules: []
   ips: [ip-address]
 
 resources:
@@ -126,7 +126,7 @@ exclude:
   - {prefix: /v1/cards, reason: payment cards are managed in the portal; checkout is a browser flow}
   - {operation: createElevationRequest, reason: ca auth elevate}
   - {operation: getMe, reason: ca auth status}
-  - {operation: getSupportTicketAttachment, reason: a binary download; ca api covers it}
+  - {operation: getSupportTicketAttachment, reason: the public API lists no attachment ids}
   - {operation: deleteVmFirewallRules, reason: firewall-rule delete covers one rule}
   - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
 
@@ -186,12 +186,24 @@ operations:
   cancelOperation:
     path: operations cancel
     wait: self
+  createVpcVip:
+    path: vips create
+  deleteVpcVip:
+    path: vips delete
   listVpcVipFirewallRules:
-    path: vpcs vips firewall-rules list
+    path: vips firewall-rules list
+  createVpcVipFirewallRule:
+    path: vips firewall-rules create
+  deleteVpcVipFirewallRule:
+    path: vips firewall-rules delete
+  setVpcVipFirewallRuleDescription:
+    path: vips firewall-rules update
   attachVpcVipPublicIp:
-    path: vpcs vips public-ip attach
+    path: vips public-ip attach
   detachVpcVipPublicIp:
-    path: vpcs vips public-ip detach
+    path: vips public-ip detach
+  addVmDisk:
+    path: vms disks create
   createVpc:
     example: ca vpcs create --name web
   listIpAddresses:

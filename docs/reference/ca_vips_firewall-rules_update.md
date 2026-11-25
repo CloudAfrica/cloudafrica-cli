@@ -1,27 +1,23 @@
-## ca vpcs vips firewall-rules create
+## ca vips firewall-rules update
 
-Add a firewall rule to a VIP
+Set the description of a VIP firewall rule
 
 ### Synopsis
 
 Requires write:network. Asynchronous: returns 202 with the operation to poll at Location.
 
 ```
-ca vpcs vips firewall-rules create [flags]
+ca vips firewall-rules update RULE_ID [flags]
 ```
 
 ### Options
 
 ```
   -d, --data string          the JSON request body: a literal, @file or @- (stdin); flags override its fields
-      --description string   Description / note, if set.
-      --from-port int        First port in the range, if any.
-  -h, --help                 help for create
+      --description string   At most 255 characters; null or blank clears it.
+  -h, --help                 help for update
       --no-wait              print the operation and return without waiting for it
-      --protocol string      tcp, udp or icmp. (required)
-      --source string        An IPv4 address, a CIDR network, or "any". (required)
       --timeout duration     how long to wait for the operation (default 10m0s)
-      --to-port int          Last port in the range, if any.
       --vip string           the vip id or name (required)
       --vpc string           the vpc id or name (required)
 ```
@@ -36,5 +32,5 @@ ca vpcs vips firewall-rules create [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips firewall-rules](ca_vpcs_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
+* [ca vips firewall-rules](ca_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
 

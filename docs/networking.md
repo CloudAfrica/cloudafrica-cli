@@ -30,11 +30,11 @@ ca vpcs reserved-ips list|create|delete --vpc web
 ## Virtual IPs
 
 ```sh
-ca vpcs vips create|delete --vpc web
-ca vpcs vips public-ip attach|detach --vpc web --vip lb1
-ca vpcs vips firewall-rules list|create|delete|set-description --vpc web --vip lb1
-ca vms vips add|remove lb1 --vm web-01  # membership
 ca vips list                            # every VIP in the account
+ca vips create|delete --vpc web
+ca vips public-ip attach|detach --vpc web --vip lb1
+ca vips firewall-rules list|create|delete|update --vpc web --vip lb1
+ca vms vips add|remove lb1 --vm web-01  # membership
 ```
 
 ## Every address

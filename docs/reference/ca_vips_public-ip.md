@@ -1,9 +1,9 @@
-## ca vpcs vips public-ip
+## ca vips public-ip
 
 Attach and detach a virtual IP's public address
 
 ```
-ca vpcs vips public-ip [flags]
+ca vips public-ip [flags]
 ```
 
 ### Options
@@ -22,7 +22,7 @@ ca vpcs vips public-ip [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips](ca_vpcs_vips.md)	 - Manage a VPC's virtual IPs
-* [ca vpcs vips public-ip attach](ca_vpcs_vips_public-ip_attach.md)	 - Give a VIP a public IP
-* [ca vpcs vips public-ip detach](ca_vpcs_vips_public-ip_detach.md)	 - Take a VIP's public IP off
+* [ca vips](ca_vips.md)	 - Manage virtual IPs
+* [ca vips public-ip attach](ca_vips_public-ip_attach.md)	 - Give a VIP a public IP
+* [ca vips public-ip detach](ca_vips_public-ip_detach.md)	 - Take a VIP's public IP off
 

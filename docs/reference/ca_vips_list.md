@@ -28,5 +28,5 @@ ca vips list [flags]
 
 ### SEE ALSO
 
-* [ca vips](ca_vips.md)	 - List virtual IPs
+* [ca vips](ca_vips.md)	 - Manage virtual IPs
 

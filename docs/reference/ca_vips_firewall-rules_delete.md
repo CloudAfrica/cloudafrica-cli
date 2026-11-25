@@ -1,13 +1,13 @@
-## ca vpcs vips delete
+## ca vips firewall-rules delete
 
-Release a VIP
+Remove a firewall rule from a VIP
 
 ### Synopsis
 
-Requires protected:network. Returns the private address to the VPC's network; it may be given to someone else. Refuses with 409 while the VIP has a public IP: detach it first. Asynchronous: returns 202 with the operation to poll at Location.
+Requires write:network. Asynchronous: returns 202 with the operation to poll at Location.
 
 ```
-ca vpcs vips delete VIP [flags]
+ca vips firewall-rules delete RULE_ID [flags]
 ```
 
 ### Options
@@ -16,6 +16,7 @@ ca vpcs vips delete VIP [flags]
   -h, --help               help for delete
       --no-wait            print the operation and return without waiting for it
       --timeout duration   how long to wait for the operation (default 10m0s)
+      --vip string         the vip id or name (required)
       --vpc string         the vpc id or name (required)
   -y, --yes                do not ask for confirmation
 ```
@@ -30,5 +31,5 @@ ca vpcs vips delete VIP [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips](ca_vpcs_vips.md)	 - Manage a VPC's virtual IPs
+* [ca vips firewall-rules](ca_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
 

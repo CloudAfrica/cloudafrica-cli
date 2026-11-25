@@ -1,4 +1,4 @@
-## ca vpcs vips firewall-rules list
+## ca vips firewall-rules list
 
 List firewall rules that apply to a VIP
 
@@ -7,7 +7,7 @@ List firewall rules that apply to a VIP
 The rules addressed to the VIP's public IP that name no VM.
 
 ```
-ca vpcs vips firewall-rules list [flags]
+ca vips firewall-rules list [flags]
 ```
 
 ### Options
@@ -28,5 +28,5 @@ ca vpcs vips firewall-rules list [flags]
 
 ### SEE ALSO
 
-* [ca vpcs vips firewall-rules](ca_vpcs_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
+* [ca vips firewall-rules](ca_vips_firewall-rules.md)	 - Manage a virtual IP's firewall rules
 
