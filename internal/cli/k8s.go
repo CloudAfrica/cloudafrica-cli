@@ -53,7 +53,8 @@ func upgradeStatus(version *string, st *cloudafrica.PublicKubernetesUpgradeStatu
 func (a *App) k8sCmd() *cobra.Command {
 	cmd := group("k8s", "Manage Kubernetes clusters")
 	cmd.Aliases = []string{"kubernetes"}
-	cmd.GroupID = "kubernetes"
+	// Hidden from help and the reference until managed Kubernetes is offered in production; it still runs.
+	cmd.Hidden = true
 	cmd.AddCommand(a.k8sList(), a.k8sGet(), a.k8sUpgradeWorkers(), a.k8sToken(), a.k8sKubeconfig())
 	return cmd
 }

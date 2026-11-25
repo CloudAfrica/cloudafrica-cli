@@ -142,7 +142,6 @@ var Sections = []Section{
 	{"compute", "Compute:"},
 	{"networking", "Networking:"},
 	{"storage", "Storage:"},
-	{"kubernetes", "Kubernetes:"},
 	{"account", "Account:"},
 	{"support", "Support:"},
 	{"cli", "CLI:"},

@@ -12,10 +12,10 @@ Every command follows these, and every command has `--help`.
 - **Waiting.** A command that starts an operation waits for it, printing progress on a terminal, and
   exits 1 if it fails. `--no-wait` prints the operation and returns; `ca operations wait` follows it later.
 - **Confirmation.** Deletes and protected actions ask first on a terminal; off a terminal they need
-  `--yes`. `k8s upgrade-workers` does not ask.
+  `--yes`.
 - **Request bodies.** Flags set the top-level fields; `-d/--data` takes the whole JSON body
-  (`-d @file.json` or `-d @-` for stdin), and flags given with it win. `vms create` and the `k8s` commands
-  take flags only.
+  (`-d @file.json` or `-d @-` for stdin), and flags given with it win. `vms create` takes flags
+  only.
 - **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
   `--limit N --cursor <next>`.
 - **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only (the

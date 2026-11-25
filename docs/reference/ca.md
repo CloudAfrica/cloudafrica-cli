@@ -28,7 +28,6 @@ ca [flags]
 * [ca completion](ca_completion.md)	 - Generate the autocompletion script for the specified shell
 * [ca datacenters](ca_datacenters.md)	 - List datacenters and check placement feasibility
 * [ca ips](ca_ips.md)	 - List IP addresses
-* [ca k8s](ca_k8s.md)	 - Manage Kubernetes clusters
 * [ca members](ca_members.md)	 - Manage the account's members
 * [ca operations](ca_operations.md)	 - Inspect and cancel asynchronous operations
 * [ca os-images](ca_os-images.md)	 - List OS images

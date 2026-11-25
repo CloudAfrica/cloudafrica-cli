@@ -112,7 +112,6 @@ ca completion powershell | Out-String | Invoke-Expression   # PowerShell
   - [Object storage](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/object-storage.md): buckets, objects and access keys
   - [Account, team and billing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/account.md)
   - [Support](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/support.md)
-  - [Kubernetes](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/kubernetes.md) (not yet available in production)
 - [Command reference](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/reference/ca.md): every command and flag, generated from `ca` itself
 - [Contributing](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/CONTRIBUTING.md)
 
