@@ -59,6 +59,8 @@ type Server struct {
 	AlwaysNotPaired bool
 	// ExpiresIn is the access-token lifetime in seconds (default 3600).
 	ExpiresIn int64
+	// AccountID is the account /v1/account reports (default acc-1).
+	AccountID string
 	// Failure switches.
 	DenyConsent        bool   // authorize redirects with error=access_denied
 	RevokeFails        bool   // revoke answers 503
@@ -438,7 +440,11 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	case p == "/v1/placement-groups/datacenters" && r.Method == http.MethodGet:
 		writeJSON(w, 200, map[string]any{"data": orEmpty(s.Datacenters)})
 	case p == "/v1/account":
-		writeJSON(w, 200, map[string]any{"accountId": "acc-1", "accountName": "Globex"})
+		id := s.AccountID
+		if id == "" {
+			id = "acc-1"
+		}
+		writeJSON(w, 200, map[string]any{"accountId": id, "accountName": "Globex"})
 	case p == "/v1/vms" && r.Method == http.MethodGet:
 		s.listVMs(w, r)
 	case p == "/v1/vms" && r.Method == http.MethodPost:

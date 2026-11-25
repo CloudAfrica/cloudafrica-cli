@@ -59,7 +59,7 @@ func (a *App) authCmd() *cobra.Command {
 	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
 		"(repeatable; kept for every later sign-in of this profile)")
 	login.Flags().StringVar(&accountID, "account", "", "sign in to this account id (default: the account this "+
-		"profile is signed in to; the consent page asks for none)")
+		"profile is already signed in to)")
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vm delete) for this sign-in or API token",
@@ -142,8 +142,9 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	}
 	scopes := append(slices.Clone(defaultScopes), extras...)
 	accountID = strings.TrimSpace(accountID)
-	if accountID == "" && old != nil {
-		accountID = old.AccountID
+	reused := false
+	if accountID == "" && old != nil && old.Endpoint == endpoint && old.AccountID != "" {
+		accountID, reused = old.AccountID, true
 	}
 	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
 		Scopes:  scopes,
@@ -153,6 +154,13 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 		Timeout: a.LoginTimeout,
 	})
 	if err != nil {
+		if reused && strings.Contains(err.Error(), "access_denied") {
+			return &hintedError{
+				err: fmt.Errorf("%w: the consent page refused account %s", auth.ErrLoginRequired, accountID),
+				hint: "That is the account this profile is signed in to. Sign in to another with " +
+					"`ca auth login --account <id>`, or run `ca auth logout` first.",
+			}
+		}
 		return &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
 	}
 	p := &profile.Profile{
@@ -166,11 +174,21 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	if acct, err := a.fetchAccount(ctx, endpoint, tok.AccessToken); err != nil {
 		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", err)
 	} else {
-		p.AccountID, p.AccountName = acct.id, acct.name
 		if accountID != "" && acct.id != accountID {
-			fmt.Fprintf(a.Stderr, "Warning: asked to sign in to account %s but the session is for %s.\n",
-				accountID, orUnknown(acct.id))
+			if p.RefreshToken != "" {
+				if rerr := a.revokeOld(ctx, p); rerr != nil {
+					fmt.Fprintf(a.Stderr, "Warning: the new session could not be revoked (%v); "+
+						"remove it under Connected apps in the portal.\n", rerr)
+				}
+			}
+			return &hintedError{
+				err: fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; nothing was saved",
+					auth.ErrLoginRequired, accountID, orUnknown(acct.id)),
+				hint: "One profile holds one account: use `ca auth login --profile <name> --account <id>` " +
+					"for each account. An older gateway ignores --account.",
+			}
 		}
+		p.AccountID, p.AccountName = acct.id, acct.name
 	}
 	// Under the profile lock, so a refresh in another process cannot
 	// overwrite this save; re-read, because that refresh may have rotated the

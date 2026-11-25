@@ -15,9 +15,10 @@ Tokens are stored per profile in the user config directory (`~/.config/cloudafri
 on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE`, else `default`.
 
 The consent page never asks which account: `ca` names it. `--account` sets it for a first sign-in, and a
-later `ca auth login` on the same profile stays in the account that profile is signed in to. With no
-account named and several to choose from, the consent page refuses and the browser reports it; sign in
-again with `--account`. One profile holds one account, so use `--profile` per account.
+later `ca auth login` on the same profile and endpoint stays in the account that profile is signed in to.
+With no account named, the gateway picks one or refuses (see the portal's Connected apps); name the
+account with `--account` to be sure. If the session comes back for another account, `ca` saves nothing
+and exits 4. One profile holds one account, so use `--profile` per account.
 
 Scopes added with `--scope` are kept, and requested again by every later `ca auth login` on that
 profile. A command that needs a scope the sign-in lacks says which, and how to add it.

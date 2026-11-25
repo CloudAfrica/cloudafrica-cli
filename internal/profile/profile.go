@@ -20,7 +20,7 @@ import (
 const Default = "default"
 
 // Profile is one account's sign-in. One profile is one account: a grant is
-// bound to the single account picked on the consent page.
+// bound to a single account, the one named at sign-in (--account, else this profile's).
 type Profile struct {
 	Endpoint    string `json:"endpoint"`
 	AccountID   string `json:"accountId,omitempty"`

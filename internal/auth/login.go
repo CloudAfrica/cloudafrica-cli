@@ -21,7 +21,7 @@ type LoginOptions struct {
 	Scopes []string
 	// Account, when set, is the account the sign-in is for: it is sent as the
 	// authorize request's account parameter, so the consent page binds the
-	// token to it instead of asking.
+	// token to it. Unset, the server chooses or refuses.
 	Account string
 	// Open opens url in the user's browser; an error means the URL is only printed.
 	Open func(url string) error

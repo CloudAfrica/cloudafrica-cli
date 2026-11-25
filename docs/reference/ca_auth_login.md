@@ -13,7 +13,7 @@ ca auth login [flags]
 ### Options
 
 ```
-      --account string      sign in to this account id (default: the account this profile is signed in to; the consent page asks for none)
+      --account string      sign in to this account id (default: the account this profile is already signed in to)
   -h, --help                help for login
       --scope stringArray   also request this scope, e.g. protected:billing (repeatable; kept for every later sign-in of this profile)
 ```
