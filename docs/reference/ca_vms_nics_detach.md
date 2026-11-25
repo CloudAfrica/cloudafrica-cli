@@ -4,7 +4,9 @@ Detach a network interface from a virtual machine
 
 ### Synopsis
 
-Requires protected:network. Asynchronous: returns 202 with the operation to poll at Location.
+Requires protected:network.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms nics detach NIC_ID [flags]

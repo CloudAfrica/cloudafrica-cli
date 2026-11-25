@@ -4,7 +4,9 @@ Rename a virtual machine
 
 ### Synopsis
 
-Requires write:compute. The new name is a DNS name. Asynchronous: returns 202 with the operation to poll at Location.
+Requires write:compute. The new name is a DNS name.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms rename VM [flags]

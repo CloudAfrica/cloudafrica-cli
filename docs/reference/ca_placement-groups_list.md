@@ -4,7 +4,7 @@ List placement groups in the account
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List placement groups in the account
 
 ```
 ca placement-groups list [flags]

@@ -589,3 +589,23 @@ func TestScopesCoverHandwrittenAndPendingButNotExcluded(t *testing.T) {
 		t.Errorf("scopes = %v", out.Scopes)
 	}
 }
+
+// cliVoice removes each API-only sentence exactly, wherever it sits, and keeps a longer sentence that
+// starts the same way.
+func TestCliVoiceRemovesExactSentences(t *testing.T) {
+	const async = "Asynchronous: returns 202 with the operation to poll at Location."
+	const idem = "Must carry an Idempotency-Key header."
+	for in, want := range map[string]string{
+		async:                               "",
+		async + " Refuses with 404.":        "Refuses with 404.",
+		"Requires x. " + idem + " " + async: "Requires x.",
+		"Requires x. " + idem + " Then y.":  "Requires x. Then y.",
+		"Must carry an Idempotency-Key header: a retry replays.":                               "Must carry an Idempotency-Key header: a retry replays.",
+		"Asynchronous: returns 202 with the operation to poll at Location, and 409 when busy.": "Asynchronous: returns 202 with the operation to poll at Location, and 409 when busy.",
+		"Lists. Cursor-paginated: follow nextCursor via `?cursor=`.":                           "Lists.",
+	} {
+		if got := cliVoice(in); got != want {
+			t.Errorf("cliVoice(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

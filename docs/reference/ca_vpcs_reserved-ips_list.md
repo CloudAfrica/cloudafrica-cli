@@ -4,7 +4,7 @@ List the account's reserved public IPs
 
 ### Synopsis
 
-Requires read:network. The account's reservations in address order, attached or idle; the VPC in the path is only the object the request is authorised on. Cursor-paginated: follow nextCursor via `?cursor=`.
+Requires read:network. The account's reservations in address order, attached or idle; the VPC in the path is only the object the request is authorised on.
 
 ```
 ca vpcs reserved-ips list [flags]

@@ -4,7 +4,7 @@ List the SSH keys linked to a virtual machine
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List the SSH keys linked to a virtual machine
 
 ```
 ca vms ssh-keys list [flags]

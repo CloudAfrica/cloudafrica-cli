@@ -4,7 +4,7 @@ List object storage buckets in the account
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List object storage buckets in the account
 
 ```
 ca buckets list [flags]

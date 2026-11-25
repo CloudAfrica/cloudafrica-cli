@@ -4,7 +4,7 @@ List VPCs in the account
 
 ### Synopsis
 
-Ordered by name, case-insensitively. Cursor-paginated: follow nextCursor via `?cursor=`.
+Ordered by name, case-insensitively.
 
 ```
 ca vpcs list [flags]

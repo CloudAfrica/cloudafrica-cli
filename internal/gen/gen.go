@@ -510,9 +510,28 @@ func jsonSchema(content map[string]struct{ Schema *schema }) *schema {
 	return nil
 }
 
+// apiOnly are the sentences of an API description that a CLI reader does not need: the executor follows
+// every page, the transport stamps an Idempotency-Key on every write, and a 202 is waited on. Each is
+// removed exactly, full stop included, so a longer sentence that starts the same way stays.
+var apiOnly = []string{
+	"Cursor-paginated: follow nextCursor via `?cursor=`.",
+	"Must carry an Idempotency-Key header.",
+	"Asynchronous: returns 202 with the operation to poll at Location.",
+}
+
+// cliVoice is an API description without the apiOnly sentences.
+func cliVoice(desc string) string {
+	for _, s := range apiOnly {
+		desc = strings.ReplaceAll(desc, " "+s, "")
+		desc = strings.ReplaceAll(desc, s+" ", "")
+		desc = strings.ReplaceAll(desc, s, "")
+	}
+	return strings.TrimSpace(desc)
+}
+
 func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdspec.Op, bool) {
 	c := cmdspec.Op{OperationID: op.OperationID, Method: method, URL: url,
-		Short: firstLine(op.Summary), Long: strings.TrimSpace(op.Description), Example: strings.TrimSpace(oo.Example)}
+		Short: firstLine(op.Summary), Long: cliVoice(op.Description), Example: strings.TrimSpace(oo.Example)}
 	if c.Short == "" {
 		c.Short = op.OperationID
 	}

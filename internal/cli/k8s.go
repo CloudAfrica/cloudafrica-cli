@@ -12,6 +12,7 @@ import (
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
 
+	"github.com/CloudAfrica/cloudafrica-cli/internal/cmdspec"
 	"github.com/CloudAfrica/cloudafrica-cli/internal/output"
 )
 
@@ -214,7 +215,7 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 			"drains, so a workload with one replica is down while its node restarts. Without --version it takes the " +
 			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says so and exits 0 if the " +
 			"workers are CURRENT, DEADLINE or UPGRADE_AVAILABLE, else 1; when waiting (the default, unlike --no-wait) " +
-			"only CURRENT exits 0.",
+			"only CURRENT exits 0.\n\n" + cmdspec.WaitLine,
 		Args: exactArgs(1, "CLUSTER_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]

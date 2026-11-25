@@ -4,7 +4,7 @@ List public IPs attached to a virtual machine
 
 ### Synopsis
 
-Cursor-paginated: follow nextCursor via `?cursor=`.
+List public IPs attached to a virtual machine
 
 ```
 ca vms public-ips list [flags]

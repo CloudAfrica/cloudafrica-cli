@@ -4,7 +4,7 @@ List the token's own SSH keys
 
 ### Synopsis
 
-Keys are person-owned. A CUSTOMER_PAT sees its own person's keys; an ACCOUNT_SERVICE token has no person and is refused. Cursor-paginated: follow nextCursor via `?cursor=`.
+Keys are person-owned. A CUSTOMER_PAT sees its own person's keys; an ACCOUNT_SERVICE token has no person and is refused.
 
 ```
 ca ssh-keys list [flags]

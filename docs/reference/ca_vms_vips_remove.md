@@ -4,7 +4,9 @@ Take a VM out of a VIP's members
 
 ### Synopsis
 
-Requires protected:network, and manage access to both the VM and the VIP's VPC. Withdraws the VM's declaration; the permits it no longer needs come off shortly after the operation completes, and traffic to the VIP stops reaching the VM. Refuses as bind does. Asynchronous: returns 202 with the operation to poll at Location.
+Requires protected:network, and manage access to both the VM and the VIP's VPC. Withdraws the VM's declaration; the permits it no longer needs come off shortly after the operation completes, and traffic to the VIP stops reaching the VM. Refuses as bind does.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms vips remove VIP [flags]

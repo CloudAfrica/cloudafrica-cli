@@ -4,7 +4,7 @@ List the images a virtual machine can be created from
 
 ### Synopsis
 
-Every image you can create from. `id` is the `osImageId` that POST /v1/vms takes. `requiresSshKey` says whether the create must carry at least one SSH key (true) or refuses keys (false, for Windows images). Cursor-paginated: follow nextCursor via `?cursor=`.
+Every image you can create from. `id` is the `osImageId` that POST /v1/vms takes. `requiresSshKey` says whether the create must carry at least one SSH key (true) or refuses keys (false, for Windows images).
 
 ```
 ca os-images list [flags]

@@ -4,7 +4,9 @@ Add a firewall rule to a virtual machine
 
 ### Synopsis
 
-Must carry an Idempotency-Key header. Asynchronous: returns 202 with the operation to poll at Location. Refuses with 422 limit-reached (the FIREWALL_RULES_PER_VM key) at the VM's rule cap.
+Refuses with 422 limit-reached (the FIREWALL_RULES_PER_VM key) at the VM's rule cap.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms firewall-rules create [flags]

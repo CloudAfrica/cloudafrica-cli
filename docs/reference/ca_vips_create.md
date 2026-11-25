@@ -4,7 +4,9 @@ Reserve a VIP in a VPC
 
 ### Synopsis
 
-Requires write:network. Must carry an Idempotency-Key header. Takes a free private address from the VPC's network; the address is not a parameter. Asynchronous: returns 202 with the operation to poll at Location; a succeeded operation's createdResource names the new VIP, whose id the other /v1/vpcs/{id}/vips routes take.
+Requires write:network. Takes a free private address from the VPC's network; the address is not a parameter. Asynchronous: returns 202 with the operation to poll at Location; a succeeded operation's createdResource names the new VIP, whose id the other /v1/vpcs/{id}/vips routes take.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vips create [flags]

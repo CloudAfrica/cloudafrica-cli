@@ -4,7 +4,9 @@ Back a virtual machine up now
 
 ### Synopsis
 
-An extra backup alongside the VM's policy, not a replacement for it. Must carry an Idempotency-Key header. Asynchronous: returns 202 with the operation to poll at Location.
+An extra backup alongside the VM's policy, not a replacement for it.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms backups create [flags]

@@ -4,7 +4,7 @@ Reserve a public IP
 
 ### Synopsis
 
-Requires write:network. Must carry an Idempotency-Key header. Takes a free public address from the pool and holds it for the account until it is released; the address is not a parameter. Synchronous: returns 200 with the reservation. Refuses with 409 when no address is free, and with 422 limit-reached at the account's public-IP cap (the PUBLIC_IP key), which a reservation counts against whether or not it is attached. A retry with the same Idempotency-Key replays a 200 already returned; after a timeout or 5xx, or under a new key, it may reserve a second address, so list GET /v1/vpcs/{id}/reserved-ips first.
+Requires write:network. Takes a free public address from the pool and holds it for the account until it is released; the address is not a parameter. Synchronous: returns 200 with the reservation. Refuses with 409 when no address is free, and with 422 limit-reached at the account's public-IP cap (the PUBLIC_IP key), which a reservation counts against whether or not it is attached. A retry with the same Idempotency-Key replays a 200 already returned; after a timeout or 5xx, or under a new key, it may reserve a second address, so list GET /v1/vpcs/{id}/reserved-ips first.
 
 ```
 ca vpcs reserved-ips create [flags]

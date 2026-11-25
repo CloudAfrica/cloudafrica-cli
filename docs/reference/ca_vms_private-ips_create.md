@@ -4,7 +4,9 @@ Add a private IP address to a virtual machine's network interface
 
 ### Synopsis
 
-Leases the next free address from the interface's VPC; the caller picks the interface, never the address. Requires write:network. Must carry an Idempotency-Key header. Asynchronous: returns 202 with the operation to poll at Location. Refuses with 404 for an unknown VM or interface.
+Leases the next free address from the interface's VPC; the caller picks the interface, never the address. Requires write:network. Refuses with 404 for an unknown VM or interface.
+
+Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms private-ips create [flags]

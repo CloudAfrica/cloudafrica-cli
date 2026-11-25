@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 
 	cloudafrica "github.com/CloudAfrica/cloudafrica-go"
+
+	"github.com/CloudAfrica/cloudafrica-cli/internal/cmdspec"
 )
 
 // vmCmd is the hand-written part of `ca vms`; the generated commands join it.
@@ -62,6 +64,7 @@ func (a *App) vmCreate() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a VM",
+		Long:  "Creates a VM from flags; it takes no --data.\n\n" + cmdspec.WaitLine,
 		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireFlags(cmd, "name", "datacenter", "image", "vpc", "vcpu", "ram-gib", "boot-disk-gib"); err != nil {
