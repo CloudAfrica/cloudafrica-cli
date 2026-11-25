@@ -187,6 +187,9 @@ func TestNoTwoSiblingsAnswerToOneWord(t *testing.T) {
 func TestEveryTopLevelCommandHasASection(t *testing.T) {
 	root := treeRoot()
 	for _, c := range root.Commands() {
+		if c.Hidden {
+			continue
+		}
 		if c.GroupID == "" || !root.ContainsGroup(c.GroupID) {
 			t.Errorf("ca %s has no help section (GroupID %q)", c.Name(), c.GroupID)
 		}
@@ -232,6 +235,21 @@ func TestConfirmQuestionNamesTheGroupInTheSingular(t *testing.T) {
 		if got := groupNoun(strings.Fields(path)); got != want {
 			t.Errorf("groupNoun(%s) = %q, want %q", path, got, want)
 		}
+	}
+}
+
+// k8s is hidden until managed Kubernetes is offered in production, and still runs under both names.
+func TestK8sIsHiddenAndStillResolves(t *testing.T) {
+	root := treeRoot()
+	for _, name := range []string{"k8s", "kubernetes"} {
+		c, _, err := root.Find([]string{name, "list"})
+		if err != nil || c.CommandPath() != "ca k8s list" {
+			t.Errorf("ca %s list resolves to %v (%v)", name, c, err)
+		}
+	}
+	k, _, _ := root.Find([]string{"k8s"})
+	if !k.Hidden || k.IsAvailableCommand() {
+		t.Error("ca k8s is not hidden")
 	}
 }
 

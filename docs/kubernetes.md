@@ -1,7 +1,7 @@
 # Kubernetes
 
-> **Not yet available in production.** These commands are in `ca`, but managed Kubernetes is not yet
-> offered in production.
+> **Not yet available in production.** These commands are in `ca` but hidden from the command list and the
+> reference until managed Kubernetes is offered in production.
 
 ```sh
 ca k8s list               # UPGRADE: the workers' upgrade state
@@ -34,4 +34,4 @@ ca k8s kubeconfig <id> > prod.kubeconfig
 KUBECONFIG=prod.kubeconfig kubectl get nodes
 ```
 
-Every flag is in the [reference](reference/ca_k8s.md).
+Every flag is in `ca k8s <command> --help`.
