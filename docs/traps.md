@@ -95,7 +95,14 @@ Author misses the PR review caught. Check these before opening a PR.
   green; assert full rows, and revert a path to see the test go red (#14).
 - **A multi-flag mode needs all its flags, non-blank.** `--subject-type` alone reached the API (Copilot, #14).
 - **A summary view must not hide the thing the command is for.** `support ticket get` showed a
-  message count and no message text (Copilot, #14).
+  message count and no message text (Copilot, #14). `vpcs internal-dns get` read `active` while its
+  `clashes` and `skipped` arrays were not in any column (panel, #23): list every field of the response DTO
+  against the columns, and give each one left out a `tableNote` line (`internal/cli/secrets.go`) when it
+  can be non-empty.
+- **A command with no positional argument must not print its verb twice in its usage line.** `genCommand`
+  trimmed the verb off `use` and, with nothing to trim, passed it on (`usage: ca vpcs internal-dns set set`, #23).
+- **A new group can derive a bogus singular alias.** `internal-dns` gave `internal-dn`;
+  `TestEveryAliasIsAV090Name` rejects it until the group is listed under `aliases:` in `commands.yaml` (#23).
 - **Run each deliverable command with `-q` on the response it really gets.** `member create -q`
   printed nothing because the response keys on `userId` (#14).
 - **A doc claim about a flag comes from the CLI, not the API's description.** `vm restore` was documented
