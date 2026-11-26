@@ -21,11 +21,13 @@ Author misses the PR review caught. Check these before opening a PR.
   tested only on the fields it set; nothing checked the CA data and contexts survived, and a static
   token beside `exec` survived too, against the README's "holds no credential" (Copilot, #8).
 - **Every failure branch of a fetch gets a fake knob and a test.** Non-200, empty body and bad
-  YAML on `ca k8s kubeconfig` had none, nor had the argv0-derived exe name.
+  YAML on `ca k8s kubeconfig` had none, nor had the argv0-derived exe name. Revert each branch of a
+  retry loop (state reset, mid-request cancel) and see a test go red (#24).
 - **Test every branch a flag-dependent path reaches.** A reused-secret path that is paired on the
   first response does not cover the browser/poll branch; set the poll count so both run.
 - **Pin a length or range boundary with the off-by-one value.** A test value at the minimum passes
-  when the minimum is lowered; add the value one below it as a refused case.
+  when the minimum is lowered; add the value one below it as a refused case. `>= 500` served only 503
+  in its test, so `== 503` stayed green (#24).
 - **Run golangci-lint locally** (`go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run`);
   CI fails on staticcheck quick-fixes and forcetypeassert that `go vet` does not report (missed again
   on #11).
@@ -122,3 +124,13 @@ Author misses the PR review caught. Check these before opening a PR.
 - **A test of a rejected sign-in asserts which grant was revoked** (the new one, not the profile's), and the
   warning when the revoke fails (Copilot, #18).
 - **`git add -A` in the shared main checkout is blocked by a hook**; work in a worktree and `git add` explicit paths (#18).
+- **A new heading captures everything below it.** A `###` inserted mid-section moved the `--account` and
+  `--scope` paragraphs under "another machine"; read what falls under each heading after inserting one (#24).
+- **An injected seam hides its production default.** Every test passed a `Wait`, so a zero or ignored timer
+  stayed green; one test leaves each seam nil (#24).
+- **A test name states the path it runs.** `...ExpiryNames...` set a short `Timeout` and never expired the
+  code (#24).
+- **A type's second consumer re-reads every field's comment.** `LoginOptions` still described only the
+  browser flow once `DeviceLogin` took it (#24).
+- **A retry keyed on error type enumerates every error the helper returns.** `postForm` returned a body read
+  failure bare, so the poll ended on a lost answer it promised to repeat (#24).
