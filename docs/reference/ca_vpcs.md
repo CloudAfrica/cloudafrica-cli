@@ -27,6 +27,7 @@ ca vpcs [flags]
 * [ca vpcs delete](ca_vpcs_delete.md)	 - Delete a VPC
 * [ca vpcs firewall-rules](ca_vpcs_firewall-rules.md)	 - List a VPC's firewall rules
 * [ca vpcs get](ca_vpcs_get.md)	 - Get a VPC by id
+* [ca vpcs internal-dns](ca_vpcs_internal-dns.md)	 - Read and change a VPC's internal DNS
 * [ca vpcs list](ca_vpcs_list.md)	 - List VPCs in the account
 * [ca vpcs reserved-ips](ca_vpcs_reserved-ips.md)	 - Manage a VPC's reserved public IP addresses
 * [ca vpcs update](ca_vpcs_update.md)	 - Rename a VPC

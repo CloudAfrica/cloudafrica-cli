@@ -21,6 +21,7 @@ groups:
   ssh-keys: Manage SSH keys
   vpcs: Manage VPCs
   vpcs firewall-rules: List a VPC's firewall rules
+  vpcs internal-dns: Read and change a VPC's internal DNS
   vpcs reserved-ips: Manage a VPC's reserved public IP addresses
   vips: Manage virtual IPs
   vips firewall-rules: Manage a virtual IP's firewall rules
@@ -80,6 +81,7 @@ aliases:
   billing details: []
   buckets cors: []
   vips firewall-rules: []
+  vpcs internal-dns: []
   ips: [ip-address]
 
 resources:
@@ -129,6 +131,7 @@ exclude:
   - {operation: getSupportTicketAttachment, reason: the public API lists no attachment ids}
   - {operation: deleteVmFirewallRules, reason: firewall-rule delete covers one rule}
   - {operation: deleteVpcVipFirewallRules, reason: firewall-rule delete covers one rule}
+  - {operation: deleteVpcInternalDns, reason: vpcs internal-dns set --enabled=false does the same}
 
 
 operations:
@@ -206,6 +209,13 @@ operations:
     path: vms disks create
   createVpc:
     example: ca vpcs create --name web
+  getVpcInternalDns:
+    path: vpcs internal-dns get
+  setVpcInternalDns:
+    path: vpcs internal-dns set
+    example: |
+      ca vpcs internal-dns set --vpc web --enabled=true
+      ca vpcs internal-dns set --vpc web --enabled=false
   listIpAddresses:
     example: |
       ca ips list
@@ -508,6 +518,13 @@ columns:
       - {header: STATUS, path: status}
       - {header: DESCRIPTION, path: description}
       - {header: CREATED, path: createdAt, format: time}
+  PublicVpcInternalDnsDto:
+    columns:
+      - {header: STATE, path: state}
+      - {header: RESOLVERS, path: resolverAddresses, format: list}
+      - {header: GUESTS USE RESOLVER, path: guestsUseResolver, format: bool}
+      - {header: DRAINING UNTIL, path: drainingUntil, format: time}
+      - {header: REASON, path: reasonDetail}
   PublicVipDto:
     columns:
       - {header: ID, path: id}
