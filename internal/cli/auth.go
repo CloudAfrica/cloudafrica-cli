@@ -603,7 +603,7 @@ func requireFlags(cmd *cobra.Command, names ...string) error {
 func exactArgs(n int, names string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) != n {
-			return usageErr(fmt.Errorf("usage: %s %s", cmd.CommandPath(), names))
+			return usageErr(fmt.Errorf("usage: %s", strings.TrimSpace(cmd.CommandPath()+" "+names)))
 		}
 		return nil
 	}
