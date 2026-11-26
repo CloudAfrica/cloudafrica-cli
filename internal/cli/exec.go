@@ -141,8 +141,10 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 	var r genRun
 	use := op.Path[len(op.Path)-1]
 	nargs := 0
+	names := ""
 	if op.Positional.Name != "" {
-		use += " " + argName(op)
+		names = argName(op)
+		use += " " + names
 		nargs = 1
 	}
 	cmd := &cobra.Command{
@@ -151,7 +153,7 @@ func (a *App) genCommand(op cmdspec.Op) *cobra.Command {
 		Annotations: map[string]string{operationIDKey: op.OperationID},
 		Long:        longHelp(op),
 		Example:     indent(op.Example),
-		Args:        exactArgs(nargs, strings.TrimPrefix(use, op.Path[len(op.Path)-1]+" ")),
+		Args:        exactArgs(nargs, names),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.runGenerated(cmd, op, r, args)
 		},

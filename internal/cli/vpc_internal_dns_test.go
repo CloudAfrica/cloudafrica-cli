@@ -83,9 +83,9 @@ func TestVpcInternalDnsNoteNamesClashesAndSkips(t *testing.T) {
 			t.Errorf("-o %s wrote to stderr: %s", flag, h.stderr)
 		}
 	}
-	h.mustRun("vpcs", "internal-dns", "get", "--vpc", "web", "-q")
+	h.mustRun("vpcs", "internal-dns", "get", "--vpc", "web", "-o", "table", "-q")
 	if h.stderr.Len() != 0 {
-		t.Errorf("-q wrote to stderr: %s", h.stderr)
+		t.Errorf("-o table -q wrote to stderr: %s", h.stderr)
 	}
 	canned(h, map[string]fakeapi.Canned{"GET /v1/vpcs/vpc-1/internal-dns": {Body: `{"state":"active","clashes":[{"name":"db"}],"skipped":[]}`}})
 	h.mustRun("vpcs", "internal-dns", "get", "--vpc", "web", "-o", "table")
@@ -109,5 +109,14 @@ func TestVpcInternalDnsSetRefusals(t *testing.T) {
 	}
 	if got := h.stderr.String(); !strings.Contains(got, "two VMs claim the name db") {
 		t.Errorf("stderr lacks the refusal sentence: %s", got)
+	}
+}
+
+// A command with no positional prints its own path as the usage line, not the verb twice.
+func TestVpcInternalDnsUsageLine(t *testing.T) {
+	h := internalDnsHarness(t, nil)
+	if code := h.run("vpcs", "internal-dns", "set", "stray", "--vpc", "web", "--enabled=true"); code != ExitUsage ||
+		strings.TrimSpace(h.stderr.String()) != "Error: usage: ca vpcs internal-dns set" || len(h.fake.WriteURLs) != 0 {
+		t.Errorf("exit %d, writes %v, stderr %q", code, h.fake.WriteURLs, h.stderr)
 	}
 }
