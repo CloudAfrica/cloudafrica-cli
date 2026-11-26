@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // secretDeliverables lists the writes whose response is the only place a
@@ -71,6 +72,29 @@ func tableNote(operationID string, resp []byte) string {
 		return "Tags and user metadata are in -o json."
 	case "createObjectUploadUrl":
 		return "The PUT must send the signed headers too: -o json lists them."
+	case "getVpcInternalDns", "setVpcInternalDns":
+		return zoneNote(v)
 	}
 	return ""
+}
+
+// zoneNote says when a VPC's internal DNS zone leaves names out, which its
+// columns do not show: the state can read active while a name is unanswered.
+func zoneNote(v any) string {
+	var parts []string
+	if n := listLen(lookup(v, "clashes")); n > 0 {
+		parts = append(parts, fmt.Sprintf("names claimed more than once: %d", n))
+	}
+	if n := listLen(lookup(v, "skipped")); n > 0 {
+		parts = append(parts, fmt.Sprintf("VMs and virtual IPs left out of the zone: %d", n))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "; ") + ". -o json lists them."
+}
+
+func listLen(v any) int {
+	items, _ := v.([]any)
+	return len(items)
 }

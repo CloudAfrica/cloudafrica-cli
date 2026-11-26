@@ -30,8 +30,10 @@ ca vpcs internal-dns set --vpc web --enabled=false
 
 `get` prints the state (`off`, `setting_up`, `active`, `not_serving` or `winding_down`) and the
 resolver addresses guests are given; the names the VPC answers are in the `-o json` output.
-`set` takes `--enabled` as true or false, and both are repeatable. Turning it off is a drain, so
-`winding_down` is a normal answer, not a failure: run `get` again to see the state settle.
+`set` takes `--enabled=true` or `--enabled=false` (a bare `--enabled` is true), and repeating
+either changes nothing. When names clash or VMs are left out of the zone, `get` and `set` say so on
+stderr. Turning it off is a drain, so `winding_down` is a normal answer, not a failure: run `get`
+again to see the state settle.
 
 ## Reserved public IPs
 
