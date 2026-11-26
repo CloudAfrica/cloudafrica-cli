@@ -1,6 +1,6 @@
-// Package auth signs the CLI in with OAuth 2.1 authorization code + PKCE
-// against the CloudAfrica authorization server, and refreshes and revokes the
-// tokens it gets.
+// Package auth signs the CLI in against the CloudAfrica authorization server,
+// with OAuth 2.1 authorization code + PKCE or the RFC 8628 device flow, and
+// refreshes and revokes the tokens it gets.
 package auth
 
 import (

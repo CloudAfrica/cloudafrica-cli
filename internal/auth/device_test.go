@@ -114,6 +114,8 @@ func TestDeviceLoginEndsOnARefusal(t *testing.T) {
 		"invalid_grant":  "the sign-in was cancelled",
 		"invalid_client": "invalid_client",
 		"404":            "HTTP 404",
+		"200":            "decoding",
+		"empty":          "no access_token",
 	} {
 		t.Run(answer, func(t *testing.T) {
 			fake := fakeapi.New(t)
@@ -150,6 +152,30 @@ func TestDeviceLoginRefusesAnIncompleteOrInsecureResponse(t *testing.T) {
 	if _, _, out, err := deviceRun(t, context.Background(), fake, LoginOptions{}); err == nil ||
 		!strings.Contains(err.Error(), "refusing the sign-in page") || out != "" {
 		t.Errorf("http page: err %v, out %q", err, out)
+	}
+}
+
+func TestDeviceLoginReportsARefusedStart(t *testing.T) {
+	fake := fakeapi.New(t)
+	fake.DeviceRefusal = "invalid_scope"
+	_, _, out, err := deviceRun(t, context.Background(), fake, LoginOptions{})
+	if err == nil || !strings.Contains(err.Error(), "starting the device sign-in: oauth: HTTP 400 invalid_scope") ||
+		out != "" || fake.DevicePolls != 0 {
+		t.Errorf("err %v, out %q, polls %d", err, out, fake.DevicePolls)
+	}
+}
+
+// The direct link is optional, and is not printed when it is not TLS.
+func TestDeviceLoginDirectLink(t *testing.T) {
+	for name, link := range map[string]string{"absent": "", "insecure": "http://p.example/ui/device?user_code=u"} {
+		fake := fakeapi.New(t)
+		fake.DeviceBody = map[string]any{"device_code": "d", "user_code": "u", "expires_in": 600,
+			"verification_uri": "https://p.example/ui/device", "verification_uri_complete": link}
+		_, _, out, _ := deviceRun(t, context.Background(), fake, LoginOptions{})
+		want := "To sign in, visit https://p.example/ui/device and enter u\nWaiting for approval...\n"
+		if out != want {
+			t.Errorf("%s: output %q, want %q", name, out, want)
+		}
 	}
 }
 

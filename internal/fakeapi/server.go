@@ -73,10 +73,12 @@ type Server struct {
 	// Device flow. NoDeviceFlow leaves it out of discovery; DeviceInterval is
 	// the interval a device authorization answers (0: omitted); DeviceAnswers
 	// are served to the polls in turn before the approval: an OAuth error code,
-	// or an HTTP status such as "503".
+	// an HTTP status such as "503" (non-JSON body), or "empty" (a 200 carrying
+	// no token). DeviceRefusal refuses the device authorization with that code.
 	NoDeviceFlow   bool
 	DeviceInterval int64
 	DeviceAnswers  []string
+	DeviceRefusal  string
 	// DeviceBody, when set, replaces the device authorization response.
 	DeviceBody map[string]any
 	// DeviceAuthorizations is each device authorization form, DevicePolls the polls.
@@ -327,6 +329,10 @@ func (s *Server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		oauthErr(w, "invalid_request", "bad device authorization request")
 		return
 	}
+	if s.DeviceRefusal != "" {
+		oauthErr(w, s.DeviceRefusal, "refused")
+		return
+	}
 	if s.DeviceBody != nil {
 		writeJSON(w, 200, s.DeviceBody)
 		return
@@ -422,6 +428,10 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 			s.DeviceAnswers = s.DeviceAnswers[1:]
 			if status, err := strconv.Atoi(a); err == nil {
 				http.Error(w, "unavailable", status)
+				return
+			}
+			if a == "empty" {
+				writeJSON(w, 200, map[string]any{})
 				return
 			}
 			oauthErr(w, a, "")

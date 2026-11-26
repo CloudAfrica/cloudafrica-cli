@@ -3,6 +3,7 @@ package cli
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // The flow ca picks: the code for SSH and for Linux or BSD without a display,
@@ -98,17 +99,36 @@ func TestDeviceLoginDeniedForTheProfilesAccount(t *testing.T) {
 func TestLoginWithoutAServerDeviceFlow(t *testing.T) {
 	h := newHarness(t)
 	h.fake.NoDeviceFlow = true
-	if code := h.run("auth", "login", "--device"); code == ExitOK || len(h.fake.Authorizations) != 0 {
+	code := h.run("auth", "login", "--device", "--profile", "globex")
+	if code == ExitOK || len(h.fake.Authorizations) != 0 {
 		t.Fatalf("--device: exit %d, stderr %s", code, h.stderr)
 	}
 	if s := h.stderr.String(); !strings.Contains(s, "no device sign-in") ||
-		!strings.Contains(s, "`ca auth login --no-device`") {
+		!strings.Contains(s, "`ca auth login --no-device --profile globex`") {
 		t.Errorf("stderr = %s", s)
 	}
 	delete(h.env, "DISPLAY")
 	h.mustRun("auth", "login")
 	if len(h.fake.Authorizations) != 1 || !strings.Contains(h.stderr.String(), "Note: ") {
 		t.Errorf("no fallback with a note: %s", h.stderr)
+	}
+}
+
+// The sign-in offered after an insufficient-scope refusal picks its flow as
+// `ca auth login` does.
+func TestStepUpSignInOverSSHUsesTheDeviceFlow(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", compute(), time.Now().Add(time.Hour))
+	h.env["SSH_TTY"] = "/dev/pts/0"
+	h.fake.PairOnPoll = 2
+	h.tty = true
+	h.stdin = "y\ny\n"
+	h.mustRun("vm", "delete", "vm-1", "--yes")
+	if len(h.fake.DeviceAuthorizations) != 1 || len(h.fake.Authorizations) != 0 {
+		t.Fatalf("device %d, loopback %d", len(h.fake.DeviceAuthorizations), len(h.fake.Authorizations))
+	}
+	if got := h.fake.DeviceAuthorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
+		t.Errorf("scope = %q", got)
 	}
 }
 

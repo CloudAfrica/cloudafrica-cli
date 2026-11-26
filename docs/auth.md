@@ -18,8 +18,7 @@ on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE
 ### Signing in from another machine
 
 With `--device`, `ca` prints a portal URL and a code. Open the URL in a browser on any machine, enter
-the code, and approve; `ca` waits until you do, for up to the 10 minutes the code lasts. `ca` opens no
-browser itself.
+the code, and approve; `ca` waits until you do or the code expires. `ca` opens no browser itself.
 
 `ca` picks this flow without the flag in an SSH session (`SSH_CONNECTION` or `SSH_TTY` set), and on
 Linux and BSD when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. `--no-device` keeps the browser on
