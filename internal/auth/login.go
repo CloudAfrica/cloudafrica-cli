@@ -16,14 +16,15 @@ import (
 	"time"
 )
 
-// LoginOptions configures one browser sign-in.
+// LoginOptions configures one sign-in, by Login or DeviceLogin.
 type LoginOptions struct {
 	Scopes []string
 	// Account, when set, is the account the sign-in is for: it is sent as the
-	// authorize request's account parameter, so the consent page binds the
-	// token to it. Unset, the server chooses or refuses.
+	// account parameter of the authorize or device authorization request, to
+	// bind the token to it. Unset, the server chooses or refuses.
 	Account string
-	// Open opens url in the user's browser; an error means the URL is only printed.
+	// Open opens url in the user's browser; an error means the URL is only
+	// printed. DeviceLogin ignores it.
 	Open func(url string) error
 	// Out receives the instructions (the URL to visit).
 	Out io.Writer

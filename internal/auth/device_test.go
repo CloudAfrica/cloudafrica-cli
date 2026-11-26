@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
@@ -46,15 +48,15 @@ func TestDeviceLoginPollsUntilApproved(t *testing.T) {
 	fake := fakeapi.New(t)
 	fake.DeviceInterval = 2
 	fake.DeviceAnswers = []string{"authorization_pending", "slow_down", "authorization_pending", "503", "429",
-		"authorization_pending"}
+		"500", "502", "authorization_pending"}
 	tok, waits, out, err := deviceRun(t, context.Background(), fake, LoginOptions{Account: "acc-9"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tok.RefreshToken == "" || fake.GrantOf(tok.AccessToken) == nil || fake.DevicePolls != 7 {
+	if tok.RefreshToken == "" || fake.GrantOf(tok.AccessToken) == nil || fake.DevicePolls != 9 {
 		t.Errorf("token %+v after %d polls", tok, fake.DevicePolls)
 	}
-	if want := seconds(2, 2, 7, 7, 12, 17, 17); !slices.Equal(waits, want) {
+	if want := seconds(2, 2, 7, 7, 12, 17, 22, 27, 27); !slices.Equal(waits, want) {
 		t.Errorf("waits = %v, want %v", waits, want)
 	}
 	form := fake.DeviceAuthorizations[0]
@@ -100,6 +102,80 @@ func TestDeviceLoginRetriesADroppedPoll(t *testing.T) {
 		Wait: func(context.Context, time.Duration) error { return nil }})
 	if err != nil || tok.AccessToken == "" || !dropped {
 		t.Errorf("tok %+v, err %v", tok, err)
+	}
+}
+
+// An answer cut off in its body is a lost answer: the poll is repeated.
+func TestDeviceLoginRetriesACutOffAnswer(t *testing.T) {
+	fake := fakeapi.New(t)
+	m, err := Discover(context.Background(), HTTPClient(), fake.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := false
+	hc := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/oauth/token" && !cut {
+			cut = true
+			return &http.Response{StatusCode: 400, Header: http.Header{},
+				Body: io.NopCloser(iotest.ErrReader(io.ErrUnexpectedEOF))}, nil
+		}
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+	var out bytes.Buffer
+	tok, err := DeviceLogin(context.Background(), hc, m, LoginOptions{Out: &out,
+		Wait: func(context.Context, time.Duration) error { return nil }})
+	if err != nil || tok.AccessToken == "" || !cut {
+		t.Fatalf("tok %+v, err %v", tok, err)
+	}
+	if !strings.Contains(out.String(), `Post "`+fake.URL+`/oauth/token": unexpected EOF`) {
+		t.Errorf("the warning does not name the request: %s", out.String())
+	}
+}
+
+// A caller that gives up during a poll gets that, not a failed check.
+func TestDeviceLoginCancelledDuringAPoll(t *testing.T) {
+	fake := fakeapi.New(t)
+	m, err := Discover(context.Background(), HTTPClient(), fake.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hc := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/oauth/token" {
+			cancel()
+			return nil, ctx.Err()
+		}
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+	var out bytes.Buffer
+	_, err = DeviceLogin(ctx, hc, m, LoginOptions{Out: &out,
+		Wait: func(ctx context.Context, _ time.Duration) error { return ctx.Err() }})
+	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "last check") ||
+		strings.Contains(out.String(), "Warning") {
+		t.Errorf("err %v, out %s", err, out.String())
+	}
+}
+
+// Without a Wait the polls are paced by the server's interval.
+func TestDeviceLoginPacesItsPolls(t *testing.T) {
+	fake := fakeapi.New(t)
+	fake.DeviceInterval = 1
+	m, err := Discover(context.Background(), HTTPClient(), fake.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := DeviceLogin(context.Background(), HTTPClient(), m, LoginOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d < time.Second || fake.DevicePolls != 1 {
+		t.Errorf("%d polls in %v", fake.DevicePolls, d)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sleep(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled sleep: %v", err)
 	}
 }
 
@@ -211,8 +287,25 @@ func TestDeviceLoginStopsWaiting(t *testing.T) {
 	}
 }
 
-// A sign-in that expires while the server is failing says why.
-func TestDeviceLoginExpiryNamesTheLastFailure(t *testing.T) {
+// A failure that a later answer followed is not named when the wait ends.
+func TestDeviceLoginForgetsAnAnsweredFailure(t *testing.T) {
+	fake := fakeapi.New(t)
+	fake.DeviceAnswers = []string{"503", "authorization_pending"}
+	polls := 0
+	_, _, _, err := deviceRun(t, context.Background(), fake, LoginOptions{Timeout: time.Second,
+		Wait: func(ctx context.Context, _ time.Duration) error {
+			if polls++; polls > 2 {
+				<-ctx.Done()
+			}
+			return ctx.Err()
+		}})
+	if !errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "last check") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// A sign-in that times out while the server is failing says why.
+func TestDeviceLoginTimeoutNamesTheLastFailure(t *testing.T) {
 	fake := fakeapi.New(t)
 	fake.DeviceAnswers = []string{"503"}
 	polls := 0

@@ -206,7 +206,8 @@ func postForm(ctx context.Context, hc *http.Client, u string, form url.Values, o
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
-		return err
+		// A lost answer, like a request that got none.
+		return &url.Error{Op: "Post", URL: u, Err: err}
 	}
 	if resp.StatusCode/100 != 2 {
 		oe := &OAuthError{Status: resp.StatusCode}
