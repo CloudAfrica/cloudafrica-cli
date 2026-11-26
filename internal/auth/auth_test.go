@@ -36,6 +36,26 @@ func TestDiscoverRefusesForeignTokenEndpoint(t *testing.T) {
 	}
 }
 
+func TestDiscoverRefusesForeignDeviceEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		base := "http://" + r.Host
+		switch r.URL.Path {
+		case authorizationServerPath:
+			_, _ = w.Write([]byte(`{"authorization_endpoint":"` + base + `/oauth/authorize",
+				"token_endpoint":"` + base + `/oauth/token","revocation_endpoint":"` + base + `/oauth/revoke",
+				"device_authorization_endpoint":"https://evil.example/oauth/device_authorization"}`))
+		case protectedResourcePath:
+			_, _ = w.Write([]byte(`{"resource":"` + base + `/v1/mcp"}`))
+		}
+	}))
+	defer srv.Close()
+	_, err := Discover(context.Background(), HTTPClient(), srv.URL)
+	if err == nil || !strings.Contains(err.Error(), "device_authorization_endpoint") {
+		t.Fatalf("err = %v, want a refusal naming device_authorization_endpoint", err)
+	}
+}
+
 func TestCallbackChecksStateFirst(t *testing.T) {
 	q := url.Values{"state": {"other"}, "code": {"c"}}
 	if r := callback(q, "mine"); r.err == nil || r.code != "" {

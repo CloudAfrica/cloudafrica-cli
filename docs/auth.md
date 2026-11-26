@@ -3,7 +3,8 @@
 ## Signing in
 
 ```sh
-ca auth login     # opens the browser
+ca auth login     # opens the browser, or prints a code on a machine without one
+ca auth login --device     # always use a code
 ca auth login --scope write:billing   # also request a scope login does not ask for by default
 ca auth login --profile globex --account <account-id>   # sign in to a specific account
 ca auth status
@@ -22,6 +23,20 @@ and exits 4. One profile holds one account, so use `--profile` per account.
 
 Scopes added with `--scope` are kept, and requested again by every later `ca auth login` on that
 profile. A command that needs a scope the sign-in lacks says which, and how to add it.
+
+### Signing in from another machine
+
+With `--device`, `ca` prints a portal URL and a code. Open the URL in a browser on any machine, enter
+the code, and approve; `ca` waits until you do or the code expires. `ca` opens no browser itself.
+
+`ca` picks this flow without the flag in an SSH session (`SSH_CONNECTION` or `SSH_TTY` set), and on
+Linux and BSD when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. `--no-device` keeps the browser on
+this machine instead. Against a server without the device flow, `--device` fails, and the automatic
+choice falls back to the browser with a note.
+
+Only continue if you started the sign-in yourself, on a machine you control: approving someone else's
+code signs them in as you. If the server cancels the sign-in because the code was used twice, run
+`ca auth login` again.
 
 ## Protected actions
 

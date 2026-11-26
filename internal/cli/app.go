@@ -43,6 +43,10 @@ type App struct {
 	Transport http.RoundTripper
 	// LoginTimeout bounds the wait for the browser sign-in (0: the default).
 	LoginTimeout time.Duration
+	// GOOS picks the default sign-in flow ("": runtime.GOOS).
+	GOOS string
+	// DeviceWait pauses between the device sign-in's polls (nil: a timer).
+	DeviceWait func(ctx context.Context, d time.Duration) error
 	// ElevatePoll and ElevateTimeout pace `ca auth elevate` (0: 2 s and 5 min).
 	ElevatePoll    time.Duration
 	ElevateTimeout time.Duration
@@ -216,10 +220,10 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 		case slug == "insufficient-scope" && !signedIn && loginGrants(refusedScope(err)):
 			fmt.Fprintf(a.Stderr, "%v\n", err)
 			fmt.Fprintln(a.Stderr, "This sign-in was not granted the scope this action needs; pairing cannot add one.")
-			if !a.confirm("Sign in again in the browser now (`ca auth login`)?") {
+			if !a.confirm("Sign in again now (`ca auth login`)?") {
 				return err
 			}
-			if lerr := a.login(ctx, s.name, "", refusedScope(err)); lerr != nil {
+			if lerr := a.login(ctx, s.name, "", flowAuto, refusedScope(err)); lerr != nil {
 				return lerr
 			}
 			signedIn = true

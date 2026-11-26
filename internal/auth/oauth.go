@@ -1,6 +1,6 @@
-// Package auth signs the CLI in with OAuth 2.1 authorization code + PKCE
-// against the CloudAfrica authorization server, and refreshes and revokes the
-// tokens it gets.
+// Package auth signs the CLI in against the CloudAfrica authorization server,
+// with OAuth 2.1 authorization code + PKCE or the RFC 8628 device flow, and
+// refreshes and revokes the tokens it gets.
 package auth
 
 import (
@@ -33,7 +33,9 @@ type Metadata struct {
 	AuthorizationEndpoint string
 	TokenEndpoint         string
 	RevocationEndpoint    string
-	Resource              string
+	// DeviceAuthorizationEndpoint is "" on a server without the device flow.
+	DeviceAuthorizationEndpoint string
+	Resource                    string
 }
 
 // Discover reads the authorization-server and protected-resource documents
@@ -52,6 +54,7 @@ func Discover(ctx context.Context, hc *http.Client, endpoint string) (*Metadata,
 		AuthorizationEndpoint string `json:"authorization_endpoint"`
 		TokenEndpoint         string `json:"token_endpoint"`
 		RevocationEndpoint    string `json:"revocation_endpoint"`
+		DeviceEndpoint        string `json:"device_authorization_endpoint"`
 	}
 	if err := getJSON(ctx, hc, origin+authorizationServerPath, &as); err != nil {
 		return nil, err
@@ -66,13 +69,19 @@ func Discover(ctx context.Context, hc *http.Client, endpoint string) (*Metadata,
 		AuthorizationEndpoint: as.AuthorizationEndpoint,
 		TokenEndpoint:         as.TokenEndpoint,
 		RevocationEndpoint:    as.RevocationEndpoint,
-		Resource:              pr.Resource,
+
+		DeviceAuthorizationEndpoint: as.DeviceEndpoint,
+		Resource:                    pr.Resource,
 	}
-	for name, u := range map[string]string{
+	endpoints := map[string]string{
 		"authorization_endpoint": m.AuthorizationEndpoint,
 		"token_endpoint":         m.TokenEndpoint,
 		"revocation_endpoint":    m.RevocationEndpoint,
-	} {
+	}
+	if m.DeviceAuthorizationEndpoint != "" {
+		endpoints["device_authorization_endpoint"] = m.DeviceAuthorizationEndpoint
+	}
+	for name, u := range endpoints {
 		o, err := Origin(u)
 		if err != nil {
 			return nil, fmt.Errorf("discovery: %s %q: %w", name, u, err)
@@ -197,7 +206,8 @@ func postForm(ctx context.Context, hc *http.Client, u string, form url.Values, o
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
-		return err
+		// A lost answer, like a request that got none.
+		return &url.Error{Op: "Post", URL: u, Err: err}
 	}
 	if resp.StatusCode/100 != 2 {
 		oe := &OAuthError{Status: resp.StatusCode}
