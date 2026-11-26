@@ -27,8 +27,11 @@ type LoginOptions struct {
 	Open func(url string) error
 	// Out receives the instructions (the URL to visit).
 	Out io.Writer
-	// Timeout bounds the wait for the browser to come back (default 5 minutes).
+	// Timeout bounds the wait for the browser to come back (default 5 minutes;
+	// DeviceLogin: the code's lifetime, which it never outlasts).
 	Timeout time.Duration
+	// Wait pauses between DeviceLogin's polls (nil: a timer).
+	Wait func(ctx context.Context, d time.Duration) error
 }
 
 // Login runs the authorization code + PKCE flow with an RFC 8252 loopback

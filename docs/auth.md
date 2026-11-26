@@ -3,7 +3,8 @@
 ## Signing in
 
 ```sh
-ca auth login     # opens the browser
+ca auth login     # opens the browser, or prints a code on a machine without one
+ca auth login --device     # always use a code
 ca auth login --scope write:billing   # also request a scope login does not ask for by default
 ca auth login --profile globex --account <account-id>   # sign in to a specific account
 ca auth status
@@ -13,6 +14,21 @@ ca auth logout
 
 Tokens are stored per profile in the user config directory (`~/.config/cloudafrica/<profile>.json`
 on Linux), mode 0600. Pick a profile with `--profile`, else `CLOUDAFRICA_PROFILE`, else `default`.
+
+### Signing in from another machine
+
+With `--device`, `ca` prints a portal URL and a code. Open the URL in a browser on any machine, enter
+the code, and approve; `ca` waits until you do, for up to the 10 minutes the code lasts. `ca` opens no
+browser itself.
+
+`ca` picks this flow without the flag in an SSH session (`SSH_CONNECTION` or `SSH_TTY` set), and on
+Linux and BSD when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. `--no-device` keeps the browser on
+this machine instead. Against a server without the device flow, `--device` fails, and the automatic
+choice falls back to the browser with a note.
+
+Only continue if you started the sign-in yourself, on a machine you control: approving someone else's
+code signs them in as you. If the server cancels the sign-in because the code was used twice, run
+`ca auth login` again.
 
 The consent page never asks which account: `ca` names it. `--account` sets it for a first sign-in, and a
 later `ca auth login` on the same profile and endpoint stays in the account that profile is signed in to.

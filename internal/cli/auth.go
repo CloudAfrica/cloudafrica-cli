@@ -40,26 +40,40 @@ func (a *App) authCmd() *cobra.Command {
 	cmd := group("auth", "Sign in, sign out and list profiles")
 	var extra []string
 	var accountID string
+	var device, noDevice bool
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
-		Long: "Sign in through the browser and store the session in a profile. One profile holds one account: " +
+		Long: "Sign in through the browser and store the session in a profile. With --device, or by default over " +
+			"SSH and on Linux or BSD without a display, ca prints a URL and a code to use in a browser on any " +
+			"machine; --no-device keeps the browser on this one. One profile holds one account: " +
 			"to use several accounts, sign in once per account with --profile and name the account with " +
 			"--account. Signing in again to a profile stays in the account it is signed in to. Signing in " +
 			"never allows protected actions such as vms delete; `ca auth elevate` does.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			flow := flowAuto
+			switch {
+			case device && noDevice:
+				return usageErr(errors.New("--device and --no-device cannot be used together"))
+			case device:
+				flow = flowDevice
+			case noDevice:
+				flow = flowLoopback
+			}
 			name, err := a.profileName()
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name, accountID, extra...)
+			return a.login(cmd.Context(), name, accountID, flow, extra...)
 		},
 	}
 	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
 		"(repeatable; kept for every later sign-in of this profile)")
 	login.Flags().StringVar(&accountID, "account", "", "sign in to this account id (default: the account this "+
 		"profile is already signed in to)")
+	login.Flags().BoolVar(&device, "device", false, "sign in with a code, using a browser on any machine")
+	login.Flags().BoolVar(&noDevice, "no-device", false, "sign in through a browser on this machine")
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vms delete) for this sign-in or API token",
@@ -107,7 +121,7 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name, accountID string, extra ...string) error {
+func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow, extra ...string) error {
 	old, err := a.loadForReplace(name)
 	if err != nil {
 		return err
@@ -146,7 +160,20 @@ func (a *App) login(ctx context.Context, name, accountID string, extra ...string
 	if accountID == "" && old != nil && sameOrigin(old.Endpoint, endpoint) && old.AccountID != "" {
 		accountID, reused = old.AccountID, true
 	}
-	tok, err := auth.Login(ctx, hc, meta, auth.LoginOptions{
+	signIn := auth.Login
+	switch {
+	case flow == flowDevice && meta.DeviceAuthorizationEndpoint == "":
+		return fmt.Errorf("%s has no device sign-in; use `%s` on a machine with a browser", endpoint,
+			profileCmd(a.exe()+" auth login --no-device", name))
+	case flow == flowDevice:
+		signIn = auth.DeviceLogin
+	case flow == flowAuto && a.browserElsewhere() && meta.DeviceAuthorizationEndpoint == "":
+		fmt.Fprintf(a.Stderr, "Note: %s has no device sign-in, so the browser must run on this machine.\n", endpoint)
+	case flow == flowAuto && a.browserElsewhere():
+		signIn = auth.DeviceLogin
+	}
+	tok, err := signIn(ctx, hc, meta, auth.LoginOptions{
+		Wait:    a.DeviceWait,
 		Scopes:  scopes,
 		Account: accountID,
 		Open:    a.OpenBrowser,

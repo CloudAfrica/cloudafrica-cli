@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -68,6 +69,20 @@ type Server struct {
 	TokenRedirect      string // when set, the token endpoint 307s here
 	OmitOperationID    bool   // 202s carry only the Location header
 	EmptyOperationBody bool   // GET /v1/operations/* answers 200 with no body
+
+	// Device flow. NoDeviceFlow leaves it out of discovery; DeviceInterval is
+	// the interval a device authorization answers (0: omitted); DeviceAnswers
+	// are served to the polls in turn before the approval: an OAuth error code,
+	// or an HTTP status such as "503".
+	NoDeviceFlow   bool
+	DeviceInterval int64
+	DeviceAnswers  []string
+	// DeviceBody, when set, replaces the device authorization response.
+	DeviceBody map[string]any
+	// DeviceAuthorizations is each device authorization form, DevicePolls the polls.
+	DeviceAuthorizations []url.Values
+	DevicePolls          int
+	devices              map[string]*Grant
 
 	codes map[string]*pendingCode
 	// tokenPairs holds paired (API token, elevation secret) pairs; a token
@@ -168,6 +183,7 @@ users:
 func New(t testing.TB) *Server {
 	s := &Server{
 		T:          t,
+		devices:    map[string]*Grant{},
 		codes:      map[string]*pendingCode{},
 		tokenPairs: map[string]bool{},
 		access:     map[string]*Grant{},
@@ -239,16 +255,22 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	switch {
 	case p == "/.well-known/oauth-authorization-server":
-		writeJSON(w, 200, map[string]any{
+		doc := map[string]any{
 			"issuer":                 s.URL,
 			"authorization_endpoint": s.URL + "/oauth/authorize",
 			"token_endpoint":         s.URL + "/oauth/token",
 			"revocation_endpoint":    s.URL + "/oauth/revoke",
-		})
+		}
+		if !s.NoDeviceFlow {
+			doc["device_authorization_endpoint"] = s.URL + "/oauth/device_authorization"
+		}
+		writeJSON(w, 200, doc)
 	case p == "/.well-known/oauth-protected-resource/v1/mcp":
 		writeJSON(w, 200, map[string]any{"resource": s.URL + "/v1/mcp"})
 	case p == "/oauth/authorize":
 		s.authorize(w, r)
+	case p == "/oauth/device_authorization" && !s.NoDeviceFlow:
+		s.deviceAuthorization(w, r)
 	case p == "/oauth/token":
 		s.token(w, r)
 	case p == "/oauth/revoke":
@@ -295,6 +317,35 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	code := s.next("code_")
 	s.codes[code] = &pendingCode{challenge: q.Get("code_challenge"), redirectURI: redirect, resource: q.Get("resource"), grant: g}
 	http.Redirect(w, r, redirect+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), http.StatusFound)
+}
+
+func (s *Server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	f := r.PostForm
+	s.DeviceAuthorizations = append(s.DeviceAuthorizations, f)
+	if f.Get("client_id") != "cloudafrica-cli" || f.Get("resource") != s.URL+"/v1/mcp" {
+		oauthErr(w, "invalid_request", "bad device authorization request")
+		return
+	}
+	if s.DeviceBody != nil {
+		writeJSON(w, 200, s.DeviceBody)
+		return
+	}
+	granted := strings.Fields(f.Get("scope"))
+	if s.GrantScopes != nil {
+		granted = s.GrantScopes(granted)
+	}
+	code := s.next("dc_")
+	s.devices[code] = &Grant{Scopes: granted}
+	body := map[string]any{
+		"device_code": code, "user_code": "BCDF-GHJK", "expires_in": 600,
+		"verification_uri":          s.URL + "/ui/device",
+		"verification_uri_complete": s.URL + "/ui/device?user_code=BCDF-GHJK",
+	}
+	if s.DeviceInterval != 0 {
+		body["interval"] = s.DeviceInterval
+	}
+	writeJSON(w, 200, body)
 }
 
 func (s *Server) issue(w http.ResponseWriter, g *Grant) {
@@ -358,6 +409,25 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(s.refresh, rt)
 		s.spent[rt] = true
+		s.issue(w, g)
+	case "urn:ietf:params:oauth:grant-type:device_code":
+		s.DevicePolls++
+		g := s.devices[f.Get("device_code")]
+		if g == nil {
+			oauthErr(w, "invalid_grant", "invalid device code")
+			return
+		}
+		if len(s.DeviceAnswers) > 0 {
+			a := s.DeviceAnswers[0]
+			s.DeviceAnswers = s.DeviceAnswers[1:]
+			if status, err := strconv.Atoi(a); err == nil {
+				http.Error(w, "unavailable", status)
+				return
+			}
+			oauthErr(w, a, "")
+			return
+		}
+		delete(s.devices, f.Get("device_code"))
 		s.issue(w, g)
 	default:
 		oauthErr(w, "unsupported_grant_type", f.Get("grant_type"))

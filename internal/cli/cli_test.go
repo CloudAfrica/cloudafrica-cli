@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,7 @@ type harness struct {
 	// failStdout makes every write to stdout fail.
 	failStdout bool
 	executable func() (string, error)
+	goos       string
 }
 
 type failWriter struct{}
@@ -48,7 +50,7 @@ func (failWriter) Write([]byte) (int, error) { return 0, errors.New("stdout clos
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{t: t, fake: fakeapi.New(t), store: profile.Store{Dir: t.TempDir()}}
-	h.env = map[string]string{"CLOUDAFRICA_ENDPOINT": h.fake.URL}
+	h.env = map[string]string{"CLOUDAFRICA_ENDPOINT": h.fake.URL, "DISPLAY": ":0"}
 	return h
 }
 
@@ -90,6 +92,8 @@ func (h *harness) run(args ...string) int {
 		CacheDir:      h.cacheDir,
 		LoginTimeout:  lt,
 		Executable:    h.executable,
+		GOOS:          cmp.Or(h.goos, "linux"),
+		DeviceWait:    func(ctx context.Context, _ time.Duration) error { return ctx.Err() },
 		ElevatePoll:   10 * time.Millisecond,
 		OperationPoll: time.Millisecond,
 		ElevateTimeout: func() time.Duration {

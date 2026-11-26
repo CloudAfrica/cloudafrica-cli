@@ -96,6 +96,9 @@ var moved = map[string]struct {
 	"vpc vip public-ip detach":              {"vips public-ip detach", ""},
 }
 
+// addedFlags lists the flags a v0.9.0 command has gained since.
+var addedFlags = map[string][]string{"auth login": {"device", "no-device"}}
+
 // Every v0.9.0 command still runs under its old name, runs the same operation and takes the same
 // argument and flags; a moved one does so at its new path, and nothing else moved.
 func TestV090NamesStillRunTheSameCommand(t *testing.T) {
@@ -138,6 +141,10 @@ func TestV090NamesStillRunTheSameCommand(t *testing.T) {
 		}
 		if args != old.args {
 			t.Errorf("ca %s took %s arguments in v0.9.0, now %s", name, old.args, args)
+		}
+		if more := addedFlags[name]; more != nil {
+			old.flags = append(slices.Clone(old.flags), more...)
+			slices.Sort(old.flags)
 		}
 		if got := ownFlags(c); !slices.Equal(got, old.flags) {
 			t.Errorf("ca %s flags = %v, v0.9.0 had %v", name, got, old.flags)
