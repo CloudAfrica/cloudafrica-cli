@@ -128,7 +128,7 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 	// The token lacks protected:compute: another token, or the profile.
 	if s := h.stderr.String(); !strings.Contains(s, "CLOUDAFRICA_TOKEN was not granted protected:compute") ||
 		!strings.Contains(s, "use a token that has it, then `ca auth elevate`") ||
-		!strings.Contains(s, "Or unset it, run `ca auth login`, then `ca auth elevate`") ||
+		!strings.Contains(s, "Or unset it and run `ca auth login`.") ||
 		strings.Contains(s, "cannot pair") {
 		t.Errorf("env-token insufficient-scope hint: %s", s)
 	}
@@ -151,16 +151,23 @@ func TestEnvTokenStepUpOnTerminalDoesNotPrompt(t *testing.T) {
 	}
 }
 
-// not-paired offers pairing, never a new sign-in.
-func TestStepUpInteractiveNotPairedOffersElevate(t *testing.T) {
+// not-paired offers a new sign-in, the page that pairs it: never `ca auth
+// elevate`, which on a sign-in is that same sign-in.
+func TestStepUpInteractiveNotPairedOffersLogin(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.fake.PairOnPoll = 2
+	h.fake.PairOnConsent = true
 	h.tty = true
 	h.stdin = "y\n"
 	h.mustRun("vm", "delete", "vm-1", "--yes")
-	if !strings.Contains(h.stderr.String(), "`ca auth elevate`") || h.fake.DeleteCalls != 2 || len(h.fake.Authorizations) != 0 {
-		t.Errorf("delete calls %d, authorizations %d, stderr %s", h.fake.DeleteCalls, len(h.fake.Authorizations), h.stderr)
+	s := h.stderr.String()
+	if !strings.Contains(s, "Sign in again now (`ca auth login`)?") || strings.Contains(s, "ca auth elevate") ||
+		h.fake.DeleteCalls != 2 || h.fake.ElevationCalls != 0 || len(h.fake.Authorizations) != 1 {
+		t.Errorf("delete calls %d, elevation calls %d, authorizations %d, stderr %s",
+			h.fake.DeleteCalls, h.fake.ElevationCalls, len(h.fake.Authorizations), s)
+	}
+	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
+		t.Errorf("scope = %q: the sign-in must ask for the protected scopes it is meant to pair", got)
 	}
 }
 
@@ -179,21 +186,57 @@ func TestStepUpInteractiveNotPairedDeclinedPairsNothing(t *testing.T) {
 	}
 }
 
-// A not-paired refusal that persists after pairing ends the loop: pairing
-// is offered once.
-func TestStepUpPersistentNotPairedOffersElevateOnce(t *testing.T) {
+// A not-paired refusal that persists after signing in ends the loop: the
+// sign-in is offered once.
+func TestStepUpPersistentNotPairedOffersLoginOnce(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.fake.PairOnPoll = 1
 	h.fake.AlwaysNotPaired = true
 	h.tty = true
 	h.stdin = "y\ny\n"
-	h.browser = func(string) error { return nil }
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
 		t.Fatalf("exit %d, stderr %s", code, h.stderr)
 	}
-	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || h.fake.DeleteCalls != 2 || h.fake.ElevationCalls != 1 {
-		t.Errorf("prompts %d, delete calls %d, elevation calls %d", n, h.fake.DeleteCalls, h.fake.ElevationCalls)
+	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || h.fake.DeleteCalls != 2 || len(h.fake.Authorizations) != 1 {
+		t.Errorf("prompts %d, delete calls %d, authorizations %d", n, h.fake.DeleteCalls, len(h.fake.Authorizations))
+	}
+}
+
+// The portal approves a device request and then pairs it, so a token can
+// arrive first: after its own device sign-in, ca retries not-paired for a
+// while rather than refusing the command the user just asked for.
+func TestStepUpDeviceSignInWaitsOutThePairingLag(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["SSH_TTY"] = "/dev/pts/0"
+	h.fake.PairOnConsent = true
+	h.fake.DevicePairLag = 3
+	h.tty = true
+	h.stdin = "y\n"
+	h.mustRun("vm", "delete", "vm-1", "--yes")
+	if len(h.fake.DeviceAuthorizations) != 1 || h.fake.DeleteCalls != 5 {
+		t.Errorf("device sign-ins %d, delete calls %d (want 1 refused, 3 lagging, 1 paired = 5)",
+			len(h.fake.DeviceAuthorizations), h.fake.DeleteCalls)
+	}
+	if !strings.Contains(h.stderr.String(), "Waiting for the sign-in to be paired") {
+		t.Errorf("no waiting note: %s", h.stderr)
+	}
+}
+
+// The wait is bounded: a pairing that never lands ends in exit 5.
+func TestStepUpDeviceSignInGivesUpAfterTheGrace(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["SSH_TTY"] = "/dev/pts/0"
+	h.fake.AlwaysNotPaired = true
+	h.pairGrace = 60 * time.Millisecond
+	h.tty = true
+	h.stdin = "y\n"
+	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if h.fake.DeleteCalls < 3 || !strings.Contains(h.stderr.String(), "Waiting for the sign-in to be paired") {
+		t.Errorf("no wait: %d delete calls, stderr %s", h.fake.DeleteCalls, h.stderr)
 	}
 }
 
@@ -402,18 +445,6 @@ func TestLoginRefusedStoredAccountNamesTheWayOut(t *testing.T) {
 	if code := h.run("auth", "login", "--account", "acc-9"); code != ExitAuth ||
 		strings.Contains(h.stderr.String(), "`ca auth logout`") {
 		t.Errorf("a named account got the stored-account hint: exit %d, %s", code, h.stderr)
-	}
-}
-
-// When the pairing is not confirmed, the step-up refusal is not retried.
-func TestStepUpInteractiveElevateTimeoutStops(t *testing.T) {
-	h := newHarness(t)
-	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.elevateTimeout = 50 * time.Millisecond
-	h.tty = true
-	h.stdin = "y\n"
-	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitTimeout || h.fake.DeleteCalls != 1 {
-		t.Errorf("exit %d, delete calls %d", code, h.fake.DeleteCalls)
 	}
 }
 

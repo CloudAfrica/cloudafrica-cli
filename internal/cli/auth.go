@@ -25,7 +25,7 @@ import (
 // (generated), so a sign-in made now also covers commands added later; and the protected:
 // scopes of its commonest protected actions. Holding a protected: scope is
 // not enough for a protected action: the sign-in must also be paired, which
-// is `ca auth elevate`.
+// approving the consent page does (a CLOUDAFRICA_TOKEN is paired by `ca auth elevate`).
 var defaultScopes = append(slices.Clone(genScopes),
 	"protected:compute", "protected:network", "protected:backup", "protected:s3")
 
@@ -48,8 +48,9 @@ func (a *App) authCmd() *cobra.Command {
 			"SSH and on Linux or BSD without a display, ca prints a URL and a code to use in a browser on any " +
 			"machine; --no-device keeps the browser on this one. One profile holds one account: " +
 			"to use several accounts, sign in once per account with --profile and name the account with " +
-			"--account. Signing in again to a profile stays in the account it is signed in to. Signing in " +
-			"never allows protected actions such as vms delete; `ca auth elevate` does.",
+			"--account. Signing in again to a profile stays in the account it is signed in to. Approving a " +
+			"sign-in that holds a protected: scope also allows protected actions such as vms delete, for the " +
+			"account's elevation window; choose a Write level or lower on the consent page to leave them off.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			flow := flowAuto
@@ -65,7 +66,8 @@ func (a *App) authCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.login(cmd.Context(), name, accountID, flow, extra...)
+			_, err = a.login(cmd.Context(), name, accountID, flow, extra...)
+			return err
 		},
 	}
 	login.Flags().StringArrayVar(&extra, "scope", nil, "also request this scope, e.g. protected:billing "+
@@ -77,11 +79,14 @@ func (a *App) authCmd() *cobra.Command {
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vms delete) for this sign-in or API token",
-		Long: "Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you " +
-			"step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. " +
-			"The pairing lasts for the account's elevation window.\n\n" +
-			"With CLOUDAFRICA_TOKEN set, it pairs that API token instead and prints its secret, alone, on " +
-			"stdout; that pairing also ends with the confirming person's portal session. A script sets it with\n\n" +
+		Long: "Allow protected actions for the selected profile's sign-in. A sign-in that is already paired is " +
+			"left alone; otherwise it signs in again with the profile's scopes, because approving a sign-in that " +
+			"holds a protected: scope on the consent page pairs it for the account's elevation window, and then " +
+			"checks that the sign-in is paired.\n\n" +
+			"With CLOUDAFRICA_TOKEN set, it pairs that API token instead: it opens a page in the portal where you " +
+			"step up and confirm the code shown here, waits up to 5 minutes for the confirmation, and prints the " +
+			"token's secret, alone, on stdout; the pairing lasts for the account's elevation window. " +
+			"A script sets it with\n\n" +
 			"  CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit; export CLOUDAFRICA_ELEVATION\n\n" +
 			"An existing CLOUDAFRICA_ELEVATION is paired again rather than replaced.",
 		Args: noArgs,
@@ -90,7 +95,10 @@ func (a *App) authCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.elevate(cmd.Context(), s)
+			if s.envToken {
+				return a.elevate(cmd.Context(), s)
+			}
+			return a.elevateSignIn(cmd.Context(), s)
 		},
 	}
 
@@ -121,10 +129,11 @@ func (a *App) authCmd() *cobra.Command {
 // existing profile revokes that profile's previous grant: every authorize
 // makes a new one, and the old would otherwise stay live in Connected apps.
 // A corrupt profile file is replaced, since login is how it gets repaired.
-func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow, extra ...string) error {
+// It returns the flow the sign-in used.
+func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow, extra ...string) (used loginFlow, err error) {
 	old, err := a.loadForReplace(name)
 	if err != nil {
-		return err
+		return used, err
 	}
 	endpoint := a.envEndpoint()
 	if endpoint == "" && old != nil {
@@ -136,7 +145,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 	hc := a.authHTTP()
 	meta, err := auth.Discover(ctx, hc, endpoint)
 	if err != nil {
-		return err
+		return used, err
 	}
 	var extras []string
 	if old != nil {
@@ -148,7 +157,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 			continue
 		}
 		if !strings.Contains(sc, ":") {
-			return usageErr(fmt.Errorf("--scope %q is not a scope: use the form read:compute or protected:billing", sc))
+			return used, usageErr(fmt.Errorf("--scope %q is not a scope: use the form read:compute or protected:billing", sc))
 		}
 		if !slices.Contains(defaultScopes, sc) && !slices.Contains(extras, sc) {
 			extras = append(extras, sc)
@@ -161,16 +170,17 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 		accountID, reused = old.AccountID, true
 	}
 	signIn := auth.Login
+	used = flowLoopback
 	switch {
 	case flow == flowDevice && meta.DeviceAuthorizationEndpoint == "":
-		return fmt.Errorf("%s has no device sign-in; use `%s` on a machine with a browser", endpoint,
+		return used, fmt.Errorf("%s has no device sign-in; use `%s` on a machine with a browser", endpoint,
 			profileCmd(a.exe()+" auth login --no-device", name))
 	case flow == flowDevice:
-		signIn = auth.DeviceLogin
+		signIn, used = auth.DeviceLogin, flowDevice
 	case flow == flowAuto && a.browserElsewhere() && meta.DeviceAuthorizationEndpoint == "":
 		fmt.Fprintf(a.Stderr, "Note: %s has no device sign-in, so the browser must run on this machine.\n", endpoint)
 	case flow == flowAuto && a.browserElsewhere():
-		signIn = auth.DeviceLogin
+		signIn, used = auth.DeviceLogin, flowDevice
 	}
 	tok, err := signIn(ctx, hc, meta, auth.LoginOptions{
 		Wait:    a.DeviceWait,
@@ -182,7 +192,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 	})
 	if err != nil {
 		if reused && strings.Contains(err.Error(), "access_denied") {
-			return &hintedError{
+			return used, &hintedError{
 				err: fmt.Errorf("%w: sign-in was declined for account %s (the page refused it, or you pressed Deny)",
 					auth.ErrLoginRequired, accountID),
 				hint: "That is the account this profile is signed in to. Sign in to another with `" +
@@ -190,7 +200,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 					"` removes this profile.",
 			}
 		}
-		return &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
+		return used, &auth.LoginRequiredError{Profile: name, Reason: err.Error()}
 	}
 	p := &profile.Profile{
 		Endpoint:     endpoint,
@@ -203,12 +213,12 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 	acct, aerr := a.fetchAccount(ctx, endpoint, tok.AccessToken)
 	switch {
 	case aerr != nil && accountID != "":
-		return a.rejectSession(ctx, p, fmt.Errorf("%w: could not confirm the session is for account %s (%v); "+
+		return used, a.rejectSession(ctx, p, fmt.Errorf("%w: could not confirm the session is for account %s (%v); "+
 			"nothing was saved", auth.ErrLoginRequired, accountID, aerr), "Sign in again once the API is reachable.")
 	case aerr != nil:
 		fmt.Fprintf(a.Stderr, "Warning: could not read the account name: %v\n", aerr)
 	case accountID != "" && acct.id != accountID:
-		return a.rejectSession(ctx, p, fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; "+
+		return used, a.rejectSession(ctx, p, fmt.Errorf("%w: asked to sign in to account %s but the session is for %s; "+
 			"nothing was saved", auth.ErrLoginRequired, accountID, orUnknown(acct.id)),
 			"One profile holds one account: use `ca auth login --profile <name> --account <id>` "+
 				"for each account. An older gateway ignores --account.")
@@ -220,7 +230,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 	// grant being replaced.
 	release, err := a.Store.Lock(ctx, name)
 	if err != nil {
-		return err
+		return used, err
 	}
 	if cur, err := a.Store.Load(name); err == nil {
 		old = cur
@@ -228,7 +238,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 	err = a.Store.Save(name, p)
 	release()
 	if err != nil {
-		return err
+		return used, err
 	}
 	if missing := missingScopes(scopes, tok.Scope); len(missing) > 0 {
 		fmt.Fprintf(a.Stderr, "Warning: not granted: %s. Commands that need them will be refused; "+
@@ -245,7 +255,7 @@ func (a *App) login(ctx context.Context, name, accountID string, flow loginFlow,
 		who = p.AccountID
 	}
 	fmt.Fprintf(a.Stderr, "Signed in to %s as profile %q.\n", orUnknown(who), name)
-	return nil
+	return used, nil
 }
 
 // profileCmd is cmd with --profile name, unless name is the default profile.
@@ -268,21 +278,14 @@ func (a *App) rejectSession(ctx context.Context, p *profile.Profile, err error, 
 	return &hintedError{err: err, hint: hint}
 }
 
-// elevate pairs s's grant for protected actions: it asks for a pairing,
-// opens the confirm page, and repeats the request until the answer is
-// paired or the wait runs out. The gateway derives the page and code from
-// the grant, so the page is opened once. A sign-in known to lack
-// any protected: scope is refused before any request, since pairing it would
-// not allow protected actions. For CLOUDAFRICA_TOKEN it pairs a secret
-// instead (CLOUDAFRICA_ELEVATION, else a new one) and prints it, alone, on
-// stdout once paired, whatever -o says: a script captures it with $(...).
+// elevate pairs a CLOUDAFRICA_TOKEN for protected actions: it asks for a pairing
+// for a secret (CLOUDAFRICA_ELEVATION, else a new one), opens the confirm page,
+// and repeats the request until the answer is paired or the wait runs out. The
+// gateway derives the page and code from the secret, so the page is opened
+// once. The secret is printed, alone, on stdout once paired, whatever -o says:
+// a script captures it with $(...). A profile's sign-in goes through
+// elevateSignIn.
 func (a *App) elevate(ctx context.Context, s *session) error {
-	if s.scope != "" && !slices.ContainsFunc(strings.Fields(s.scope), func(sc string) bool {
-		return strings.HasPrefix(sc, "protected:")
-	}) {
-		return &hintedError{err: errNoProtectedScope,
-			hint: "Run `ca auth login` and tick the protected: scopes on the consent page, then `ca auth elevate`."}
-	}
 	poll, limit := a.ElevatePoll, a.ElevateTimeout
 	if poll <= 0 {
 		poll = elevatePollDefault
@@ -372,6 +375,66 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 		case <-time.After(poll):
 		}
 	}
+}
+
+// elevateSignIn allows protected actions for a profile's sign-in. A sign-in
+// that is already paired is left alone: signing in again would revoke it
+// before knowing the new one pairs. Otherwise it signs in again, since
+// approving a sign-in that holds a protected: scope pairs it, and asks the API
+// whether the new one is paired, waiting out a device sign-in's lag, so it
+// never reports a pairing it did not see.
+func (a *App) elevateSignIn(ctx context.Context, s *session) error {
+	if s.scope != "" && !slices.ContainsFunc(strings.Fields(s.scope), func(sc string) bool {
+		return strings.HasPrefix(sc, "protected:")
+	}) {
+		return &hintedError{err: errNoProtectedScope,
+			hint: "Run `ca auth login` and tick the protected: scopes on the consent page."}
+	}
+	label := elevateLabel
+	probe := func(s *session) error {
+		r, err := s.client.API.CreateElevationRequestWithResponse(ctx, &cloudafrica.CreateElevationRequestParams{},
+			cloudafrica.PublicElevationRequestBody{Label: &label})
+		if err != nil {
+			return err
+		}
+		if err := cloudafrica.CheckResponse(r.HTTPResponse, r.Body); err != nil {
+			return err
+		}
+		if r.JSON200 == nil {
+			return errors.New("empty elevation response")
+		}
+		if d := r.JSON200; d.Paired != nil && *d.Paired {
+			return nil
+		}
+		return errStillNotPaired
+	}
+	switch perr := probe(s); {
+	case perr == nil:
+		fmt.Fprintln(a.Stderr, "This sign-in is already allowed protected actions.")
+		return nil
+	case !errors.Is(perr, errStillNotPaired):
+		return perr
+	}
+	used, err := a.login(ctx, s.name, "", flowAuto)
+	if err != nil {
+		return err
+	}
+	if s, err = a.session(); err != nil {
+		return err
+	}
+	err = probe(s)
+	if used == flowDevice {
+		err = a.awaitPairing(ctx, s, err, probe)
+	}
+	if errors.Is(err, errStillNotPaired) {
+		return &hintedError{err: err, hint: "Run `ca auth login` again and approve a protected: scope, or in the " +
+			"portal open Connected apps and choose \"Allow protected actions\"."}
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(a.Stderr, "Paired: this sign-in may use protected actions for the elevation window.")
+	return nil
 }
 
 // loadForReplace loads a profile about to be replaced: nil when

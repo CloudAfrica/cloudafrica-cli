@@ -82,11 +82,10 @@ ca vms public-ips list --vm web-01
 ```
 
 `vms create` waits until the VM is built. When you are done, shut it down and delete it. Deleting is a
-[protected action](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md#protected-actions), so run `ca auth elevate` first:
+[protected action](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md#protected-actions), so approve the protected scopes when you sign in (`ca auth login`):
 
 ```sh
 ca vms shutdown web-01
-ca auth elevate
 ca vms delete web-01
 ```
 

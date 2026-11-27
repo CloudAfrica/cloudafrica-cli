@@ -50,6 +50,10 @@ type App struct {
 	// ElevatePoll and ElevateTimeout pace `ca auth elevate` (0: 2 s and 5 min).
 	ElevatePoll    time.Duration
 	ElevateTimeout time.Duration
+	// PairGrace and PairGracePoll pace the wait for a device sign-in's pairing
+	// to land (0: 20 s and 2 s).
+	PairGrace     time.Duration
+	PairGracePoll time.Duration
 	// OperationPoll paces every operation wait (0: from 2 s, doubling to 10 s).
 	OperationPoll time.Duration
 	// Exe is the name the CLI was run as ("" means "ca"); a kubeconfig from
@@ -184,13 +188,21 @@ func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource, elevation s
 		cloudafrica.WithTransport(rt))
 }
 
+// pairGraceDefault is how long a device sign-in's pairing may trail its token:
+// the portal approves the device request, then pairs the grant, and `ca` can
+// be handed the token in between.
+const (
+	pairGraceDefault     = 20 * time.Second
+	pairGracePollDefault = 2 * time.Second
+)
+
 // withSession runs fn against a session. On an interactive terminal with a
-// stored profile, a step-up refusal offers its remedy and runs fn again:
-// not-paired offers `ca auth elevate`; insufficient-scope offers `ca auth
-// login` when signing in can grant the scope, since pairing cannot add one.
-// Each remedy is offered at most once, so a fresh sign-in that is then
-// refused not-paired can still be paired, and a refusal that persists after
-// its remedy ends the loop.
+// stored profile, a step-up refusal offers its remedy and runs fn again: both
+// not-paired and insufficient-scope offer `ca auth login` (when signing in
+// can grant the scope), because approving a sign-in that holds a protected:
+// scope pairs it. Signing in is offered at most once, so a refusal that
+// persists after it ends the loop. After a device sign-in, not-paired is
+// retried for a while first, since its pairing can trail the token.
 func (a *App) withSession(ctx context.Context, fn func(s *session) error) error {
 	s, err := a.session()
 	if err != nil {
@@ -200,38 +212,64 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 	if s.envToken || !a.TTY {
 		return err
 	}
-	signedIn, paired := false, false
+	signedIn := false
 	for {
 		slug, ok := stepUpSlug(err)
-		if !ok {
+		if !ok || signedIn || !loginGrants(refusedScope(err)) {
 			return err
 		}
-		switch {
-		case slug == "not-paired" && !paired:
-			fmt.Fprintf(a.Stderr, "%v\n", err)
-			fmt.Fprintln(a.Stderr, "This is a protected action, and this sign-in is not paired for it.")
-			if !a.confirm("Allow protected actions now (`ca auth elevate`)?") {
-				return err
-			}
-			if perr := a.elevate(ctx, s); perr != nil {
-				return perr
-			}
-			paired = true
-		case slug == "insufficient-scope" && !signedIn && loginGrants(refusedScope(err)):
-			fmt.Fprintf(a.Stderr, "%v\n", err)
-			fmt.Fprintln(a.Stderr, "This sign-in was not granted the scope this action needs; pairing cannot add one.")
-			if !a.confirm("Sign in again now (`ca auth login`)?") {
-				return err
-			}
-			if lerr := a.login(ctx, s.name, "", flowAuto, refusedScope(err)); lerr != nil {
-				return lerr
-			}
-			signedIn = true
-		default:
+		fmt.Fprintf(a.Stderr, "%v\n", err)
+		if slug == "not-paired" {
+			fmt.Fprintln(a.Stderr, "This is a protected action, and this sign-in is not paired for it. "+
+				"Signing in again and approving it pairs it.")
+		} else {
+			fmt.Fprintln(a.Stderr, "This sign-in was not granted the scope this action needs.")
+		}
+		if !a.confirm("Sign in again now (`ca auth login`)?") {
 			return err
 		}
+		used, lerr := a.login(ctx, s.name, "", flowAuto, refusedScope(err))
+		if lerr != nil {
+			return lerr
+		}
+		signedIn = true
 		if s, err = a.session(); err != nil {
 			return err
+		}
+		err = fn(s)
+		if used == flowDevice {
+			err = a.awaitPairing(ctx, s, err, fn)
+		}
+	}
+}
+
+// awaitPairing repeats fn on s while it is refused not-paired, up to the grace
+// period, and returns the error of the last attempt. It reuses s rather than
+// reading the profile again, so a retry cannot reach an endpoint another
+// process has since stored.
+func (a *App) awaitPairing(ctx context.Context, s *session, err error, fn func(s *session) error) error {
+	grace, poll := a.PairGrace, a.PairGracePoll
+	if grace <= 0 {
+		grace = pairGraceDefault
+	}
+	if poll <= 0 {
+		poll = pairGracePollDefault
+	}
+	deadline := time.Now().Add(grace)
+	announced := false
+	for {
+		if slug, _ := stepUpSlug(err); (slug != "not-paired" && !errors.Is(err, errStillNotPaired)) ||
+			time.Now().After(deadline) {
+			return err
+		}
+		if !announced {
+			announced = true
+			fmt.Fprintln(a.Stderr, "Waiting for the sign-in to be paired for protected actions...")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
 		}
 		err = fn(s)
 	}

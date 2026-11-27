@@ -40,14 +40,15 @@ code signs them in as you. If the server cancels the sign-in because the code wa
 
 ## Protected actions
 
-Signing in grants scopes but never allows protected actions, such as `vms delete`. `ca auth elevate` opens a portal page where you step up and confirm the code it
-prints; the sign-in may then use protected actions for the account's elevation window. Connected apps →
-"Allow protected actions" in the portal does the same. A sign-in made before `ca auth login` requested
-a `protected:` scope must sign in again first.
+Approving a sign-in that asks for a `protected:` scope, on the consent page, also allows protected
+actions such as `vms delete` for the account's elevation window; signing out of the portal does not end
+it. If a protected command is refused as not
+paired, `ca` offers to sign in again; on a script it exits 5. Connected apps → "Allow protected actions"
+in the portal does the same without signing in again. Choose Write or lower on the consent page to leave
+protected actions off.
 
-```sh
-ca auth elevate
-```
+`ca auth elevate` on a sign-in checks whether it is already paired and, if not, signs in again so that
+approving a `protected:` scope pairs it, then checks. With `CLOUDAFRICA_TOKEN` it pairs the token instead, as below.
 
 ## Scripts and CI
 
@@ -75,8 +76,7 @@ without capturing it prints the secret to the terminal, where it stays in the sc
 
 `ca auth elevate` opens a portal page where the person steps up and confirms the code; it then prints
 only the pairing secret on stdout, which `ca` sends with every request while `CLOUDAFRICA_ELEVATION`
-is set. The pairing lasts for the account's elevation window and only while that person's portal
-session does. Run `ca auth elevate` again with the variable still set to pair the same value. The
+is set. The pairing lasts for the account's elevation window. Run `ca auth elevate` again with the variable still set to pair the same value. The
 secret is useless without the token, but treat it as one: do not log it or commit it.
 
 ## Another endpoint

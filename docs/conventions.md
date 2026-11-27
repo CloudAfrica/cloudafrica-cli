@@ -37,6 +37,6 @@ ca operations get|wait|cancel <operation-id>
 | 0 | success |
 | 1 | API error, or a failed operation |
 | 2 | usage error, or `ca update` refused (a development build, or a directory it cannot write to) |
-| 3 | waiting for an operation timed out (`--timeout`), `ca auth elevate` was not confirmed in 5 minutes, or `ca update` timed out reaching GitHub |
+| 3 | waiting for an operation timed out (`--timeout`), the pairing of `CLOUDAFRICA_TOKEN` by `ca auth elevate` was not confirmed in 5 minutes, or `ca update` timed out reaching GitHub |
 | 4 | not signed in, or the session ended (`ca auth login`) |
-| 5 | protected action refused: run `ca auth elevate` (not paired), or `ca auth login` (the sign-in lacks the scope) |
+| 5 | protected action refused: run `ca auth login` and approve it (the sign-in is not paired, or lacks the scope); with `CLOUDAFRICA_TOKEN`, run `ca auth elevate` |

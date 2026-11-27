@@ -78,6 +78,11 @@ func loginFlag(scope string) string {
 	return " --scope " + scope
 }
 
+// errStillNotPaired is the refusal when a sign-in approved on the consent page
+// is still not paired: the page did not pair it (the approver chose no protected
+// scope, or the pairing failed).
+var errStillNotPaired = errors.New("this sign-in is still not paired for protected actions")
+
 // errNoProtectedScope refuses to pair a sign-in that was not granted any
 // protected: scope: pairing cannot add one.
 var errNoProtectedScope = errors.New("this sign-in was not granted any protected: scope, so pairing it would not " +
@@ -135,7 +140,7 @@ func ExitCode(err error) int {
 		return ExitAuth
 	case errors.Is(err, context.DeadlineExceeded):
 		return ExitTimeout
-	case errors.Is(err, errNoProtectedScope):
+	case errors.Is(err, errNoProtectedScope), errors.Is(err, errStillNotPaired):
 		return ExitStepUp
 	}
 	if _, ok := stepUpSlug(err); ok {
@@ -159,16 +164,17 @@ func hint(err error, envToken, elevation bool) string {
 	if slug, ok := stepUpSlug(err); ok {
 		if slug == "not-paired" {
 			if envToken && elevation {
-				return "CLOUDAFRICA_ELEVATION is no longer paired: the elevation window ended, or the portal session " +
-					"of the person who confirmed it did. Run `ca auth elevate` again with this same CLOUDAFRICA_ELEVATION set; " +
+				return "CLOUDAFRICA_ELEVATION is no longer paired: the elevation window ended. " +
+					"Run `ca auth elevate` again with this same CLOUDAFRICA_ELEVATION set; " +
 					"it pairs that value again."
 			}
 			if envToken {
 				return "CLOUDAFRICA_TOKEN is not paired for protected actions. A person runs " +
 					"`CLOUDAFRICA_ELEVATION=$(ca auth elevate)`, confirms in the portal, and exports it for the script."
 			}
-			return "This is a protected action, and this sign-in is not paired for it. Run `ca auth elevate`, or in " +
-				"the portal open Connected apps and choose \"Allow protected actions\"."
+			return "This is a protected action, and this sign-in is not paired for it. Run `ca auth login` and " +
+				"approve it on the consent page, or in the portal open Connected apps and choose " +
+				"\"Allow protected actions\"."
 		}
 		return scopeHint(refusedScope(err), envToken, true)
 	}
@@ -183,7 +189,7 @@ func hint(err error, envToken, elevation bool) string {
 
 // scopeHint is the remedy for a refusal naming scope ("" when unknown);
 // protected is whether the action also needs pairing afterwards
-// (`ca auth elevate`, for a sign-in or for CLOUDAFRICA_TOKEN).
+// (for CLOUDAFRICA_TOKEN, `ca auth elevate`; a sign-in is paired on the consent page).
 func scopeHint(scope string, envToken, protected bool) string {
 	named := scope
 	if named == "" {
@@ -197,7 +203,7 @@ func scopeHint(scope string, envToken, protected bool) string {
 			"CLOUDAFRICA_TOKEN, then pair it with `ca auth elevate`."
 	case protected && envToken:
 		return "CLOUDAFRICA_TOKEN was not granted " + named + "; use a token that has it, then `ca auth elevate`. " +
-			"Or unset it, run `ca auth login" + loginFlag(scope) + "`, then `ca auth elevate`."
+			"Or unset it and run `ca auth login" + loginFlag(scope) + "`."
 	case envToken && scope == "":
 		return "CLOUDAFRICA_TOKEN was not granted a scope this action needs; use a token that has it."
 	case envToken:
@@ -206,14 +212,10 @@ func scopeHint(scope string, envToken, protected bool) string {
 		return "A `ca auth login` sign-in cannot be granted " + scope + ". Use a user API token that has it, " +
 			"in CLOUDAFRICA_TOKEN."
 	}
-	then := ""
-	if protected {
-		then = ", then `ca auth elevate`"
-	}
 	if scope == "" {
 		return "This sign-in was not granted a scope this action needs. Run `ca auth login` and tick every scope " +
-			"on the consent page" + then + "."
+			"on the consent page."
 	}
 	return "This sign-in was not granted " + scope + ". Run `ca auth login" + loginFlag(scope) +
-		"` and tick it on the consent page" + then + "."
+		"` and tick it on the consent page."
 }

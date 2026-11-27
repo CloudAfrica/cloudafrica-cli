@@ -2,8 +2,8 @@
 
 Buckets, their objects, and the access keys that reach them. Every command is in the [reference](reference/ca.md).
 
-Some of these commands, deletes among them, are protected actions: run `ca auth elevate` before them. A
-protected command run without it exits 5 and prints the remedy. See [Protected actions](auth.md#protected-actions),
+Some of these commands, deletes among them, are protected actions: sign in with `ca auth login` and approve them on the consent page. A
+protected command that is refused exits 5 and prints the remedy. See [Protected actions](auth.md#protected-actions),
 or [Scripts and CI](auth.md#scripts-and-ci) when you sign in with a token.
 
 ## Buckets
@@ -30,7 +30,7 @@ ca buckets objects list-deleted logs-7f3a
 The API moves an object's bytes through a short-lived URL, not through itself.
 
 ```bash
-# Download: the URL works for about a minute and needs no credentials. Protected: elevate first.
+# Download: the URL works for about a minute and needs no credentials. Protected: sign in with protected scopes first.
 URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) &&
   curl -fsS -o q3.pdf "$URL"
 
