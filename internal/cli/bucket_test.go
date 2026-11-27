@@ -93,7 +93,7 @@ func TestBucketDeleteSendsConfirmationName(t *testing.T) {
 }
 
 // An order carries the optional fields, an Idempotency-Key, and refuses a
-// versioning value the API does not know.
+// versioning value the API does not accept.
 func TestBucketCreateBodyAndKey(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{"POST /v1/buckets": {Status: 202, Body: `{"operationId":"op/bucket-new"}`}})
@@ -105,13 +105,15 @@ func TestBucketCreateBodyAndKey(t *testing.T) {
 	if len(h.fake.IdemKeys) != 1 || h.fake.IdemKeys[0] == "" {
 		t.Errorf("idempotency keys = %q", h.fake.IdemKeys)
 	}
-	if code := h.run("bucket", "create", "--versioning", "unknown", "--no-wait"); code != ExitUsage || len(h.fake.Writes) != 1 {
-		t.Errorf("unknown versioning: exit %d, writes %d", code, len(h.fake.Writes))
+	for _, mode := range []string{"unknown", "suspended"} {
+		if code := h.run("bucket", "create", "--versioning", mode, "--no-wait"); code != ExitUsage || len(h.fake.Writes) != 1 {
+			t.Errorf("--versioning %q: exit %d, writes %d", mode, code, len(h.fake.Writes))
+		}
 	}
 }
 
-// Versioning reads its mode, sets one of the three the API accepts, and
-// refuses "unknown" (a state the API only reports) before writing.
+// Versioning reads its mode, suspended included, sets a mode the API accepts,
+// and refuses "suspended" or "unknown" before writing.
 func TestBucketVersioningGetAndSet(t *testing.T) {
 	h := s3Harness(t)
 	canned(h, map[string]fakeapi.Canned{
@@ -127,7 +129,7 @@ func TestBucketVersioningGetAndSet(t *testing.T) {
 	if len(h.fake.WriteURLs) != 1 || h.fake.WriteURLs[0] != "PATCH /v1/buckets/b-1/versioning" || h.fake.Bodies[0]["mode"] != "enabled" {
 		t.Errorf("writes %v bodies %v", h.fake.WriteURLs, h.fake.Bodies)
 	}
-	for _, mode := range []string{"unknown", ""} {
+	for _, mode := range []string{"suspended", "unknown", ""} {
 		if code := h.run("bucket", "versioning", "set", "logs-7f3a", "--mode", mode, "--yes"); code != ExitUsage || len(h.fake.Writes) != 1 {
 			t.Errorf("--mode %q: exit %d, writes %d", mode, code, len(h.fake.Writes))
 		}

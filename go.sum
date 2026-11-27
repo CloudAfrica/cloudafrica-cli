@@ -1,5 +1,5 @@
-github.com/CloudAfrica/cloudafrica-go v0.4.0 h1:s+wLEWXsQdPCjAZMNddRL/hKuczja0+wv5zZouX5Zck=
-github.com/CloudAfrica/cloudafrica-go v0.4.0/go.mod h1:iovZIVlC6/9uyvJ/A8I3/lxbbRDm3R5yj+t2wzADbxU=
+github.com/CloudAfrica/cloudafrica-go v0.4.1 h1:c9WxGY4FRYJ3Lx+cg+4zQesy+AX0J4metv6tL0a5CnY=
+github.com/CloudAfrica/cloudafrica-go v0.4.1/go.mod h1:iovZIVlC6/9uyvJ/A8I3/lxbbRDm3R5yj+t2wzADbxU=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=

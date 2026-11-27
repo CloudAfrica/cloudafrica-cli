@@ -28,7 +28,7 @@ ca buckets create [flags]
       --no-wait               print the operation and return without waiting for it
       --object-lock           Enable S3 object lock. Write-once: a bucket ordered without it can never be locked afterwards.
       --timeout duration      how long to wait for the operation (default 10m0s)
-      --versioning string     Versioning at creation, enabled or suspended. Absent, or off, creates the bucket suspended; off is deprecated. (one of: off, enabled, suspended)
+      --versioning string     Versioning at creation, off / enabled; absent leaves versioning off. (one of: off, enabled)
 ```
 
 ### Options inherited from parent commands
