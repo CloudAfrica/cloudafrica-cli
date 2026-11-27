@@ -12,55 +12,6 @@ import (
 	"github.com/CloudAfrica/cloudafrica-cli/internal/fakeapi"
 )
 
-func TestElevatePollsUntilPaired(t *testing.T) {
-	h := newHarness(t)
-	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.fake.PairOnPoll = 3
-	var opened []string
-	h.browser = func(u string) error { opened = append(opened, u); return nil }
-	h.mustRun("auth", "elevate")
-	if h.fake.ElevationCalls != 3 {
-		t.Errorf("elevation calls = %d, want 3", h.fake.ElevationCalls)
-	}
-	if len(opened) != 1 || opened[0] != h.fake.URL+"/pair?h=abc" {
-		t.Errorf("opened = %v, want the pair page once", opened)
-	}
-	if s := h.stderr.String(); !strings.Contains(s, "ABCD-1234") || !strings.Contains(s, "Paired") {
-		t.Errorf("stderr = %s", s)
-	}
-	if h.stdout.Len() != 0 {
-		t.Errorf("stdout = %s", h.stdout)
-	}
-	if got := h.fake.ElevationBody[0]["label"]; got != elevateLabel {
-		t.Errorf("label = %v", got)
-	}
-}
-
-func TestElevateAlreadyPairedOpensNothing(t *testing.T) {
-	h := newHarness(t)
-	g := protected()
-	g.Elevated = true
-	h.seed("default", g, time.Now().Add(time.Hour))
-	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
-	h.mustRun("auth", "elevate")
-	if h.fake.ElevationCalls != 1 || !strings.Contains(h.stderr.String(), "already allowed") {
-		t.Errorf("calls %d, stderr %s", h.fake.ElevationCalls, h.stderr)
-	}
-}
-
-func TestElevateTimesOutWithExit3(t *testing.T) {
-	h := newHarness(t)
-	h.seed("default", protected(), time.Now().Add(time.Hour))
-	h.elevateTimeout = 100 * time.Millisecond
-	h.browser = func(string) error { return nil }
-	if code := h.run("auth", "elevate"); code != ExitTimeout || !strings.Contains(h.stderr.String(), "not confirmed") {
-		t.Errorf("exit %d, stderr %s", code, h.stderr)
-	}
-	if h.fake.ElevationCalls < 2 {
-		t.Errorf("elevation calls = %d: did not poll", h.fake.ElevationCalls)
-	}
-}
-
 const testSecret = "cae_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 // An API token pairs a new secret, printed alone on stdout even when -o
@@ -222,7 +173,7 @@ func TestAuthStatusShowsWhetherElevationIsSet(t *testing.T) {
 
 func TestElevateRefusesAPlainHTTPPage(t *testing.T) {
 	h := newHarness(t)
-	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
 	h.fake.PairURL = "http://portal.example/pair?h=abc"
 	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
 	if code := h.run("auth", "elevate"); code != ExitAPI || !strings.Contains(h.stderr.String(), "plain http") {
@@ -245,7 +196,7 @@ func TestElevateWithoutProtectedScopeOffersLogin(t *testing.T) {
 
 func TestElevateRefusesAPageWithoutACode(t *testing.T) {
 	h := newHarness(t)
-	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["CLOUDAFRICA_TOKEN"] = "cak_protected"
 	h.fake.NoPairCode = true
 	h.browser = func(u string) error { t.Errorf("opened %s", u); return nil }
 	if code := h.run("auth", "elevate"); code != ExitAPI || !strings.Contains(h.stderr.String(), "no confirmation code") {
@@ -364,10 +315,57 @@ func TestListAllRefusesARepeatedCursor(t *testing.T) {
 func TestElevateAcceptsAnyProtectedScope(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", &fakeapi.Grant{Scopes: []string{"read:network", "protected:network"}}, time.Now().Add(time.Hour))
-	h.fake.PairOnPoll = 1
-	h.browser = func(string) error { return nil }
+	h.fake.PairOnConsent = true
 	h.mustRun("auth", "elevate")
-	if h.fake.ElevationCalls != 1 {
-		t.Errorf("elevation calls = %d", h.fake.ElevationCalls)
+	if len(h.fake.Authorizations) != 1 || !strings.Contains(h.stderr.String(), "Paired: this sign-in") {
+		t.Errorf("authorizations %d, stderr %s", len(h.fake.Authorizations), h.stderr)
+	}
+}
+
+// On a sign-in, elevate is a new sign-in whose approval pairs the grant; it
+// keeps the profile's scopes and asks the API before it says "Paired".
+func TestElevateSignInSignsInAgainAndVerifies(t *testing.T) {
+	h := newHarness(t)
+	old := h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.PairOnConsent = true
+	h.mustRun("auth", "elevate")
+	if len(h.fake.Authorizations) != 1 || h.fake.ElevationCalls != 1 {
+		t.Fatalf("authorizations %d, elevation calls %d", len(h.fake.Authorizations), h.fake.ElevationCalls)
+	}
+	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
+		t.Errorf("scope = %q", got)
+	}
+	if len(h.fake.Revoked) != 1 || h.fake.Revoked[0] != old.RefreshToken {
+		t.Errorf("old grant not revoked: %v", h.fake.Revoked)
+	}
+	if h.stdout.Len() != 0 || !strings.Contains(h.stderr.String(), "Paired: this sign-in") {
+		t.Errorf("stdout %q, stderr %s", h.stdout, h.stderr)
+	}
+}
+
+// When the consent page did not pair the new sign-in, elevate says so and
+// exits 5 rather than claiming a pairing it did not see.
+func TestElevateSignInNotPairedByConsentExits5(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	if code := h.run("auth", "elevate"); code != ExitStepUp || strings.Contains(h.stderr.String(), "Paired:") {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "still not paired") || !strings.Contains(s, "Allow protected actions") {
+		t.Errorf("stderr = %s", s)
+	}
+}
+
+// After a device sign-in the pairing can trail the token, so elevate waits
+// for it rather than failing on the first look.
+func TestElevateSignInWaitsOutADevicePairingLag(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["SSH_TTY"] = "/dev/pts/0"
+	h.fake.PairOnConsent = true
+	h.fake.DevicePairLag = 2
+	h.mustRun("auth", "elevate")
+	if len(h.fake.DeviceAuthorizations) != 1 || h.fake.ElevationCalls != 3 {
+		t.Errorf("device sign-ins %d, elevation calls %d (want 3)", len(h.fake.DeviceAuthorizations), h.fake.ElevationCalls)
 	}
 }

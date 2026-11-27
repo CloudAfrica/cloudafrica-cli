@@ -40,14 +40,15 @@ code signs them in as you. If the server cancels the sign-in because the code wa
 
 ## Protected actions
 
-Signing in grants scopes but never allows protected actions, such as `vms delete`. `ca auth elevate` opens a portal page where you step up and confirm the code it
-prints; the sign-in may then use protected actions for the account's elevation window. Connected apps →
-"Allow protected actions" in the portal does the same. A sign-in made before `ca auth login` requested
-a `protected:` scope must sign in again first.
+Approving a sign-in that asks for a `protected:` scope, on the consent page, also allows protected
+actions such as `vms delete` for the account's elevation window; signing out of the portal does not end
+it. If a protected command is refused as not
+paired, `ca` offers to sign in again; on a script it exits 5. Connected apps → "Allow protected actions"
+in the portal does the same without signing in again. Choose Write or lower on the consent page to leave
+protected actions off.
 
-```sh
-ca auth elevate
-```
+`ca auth elevate` on a sign-in is that sign-in again, then a check that it is paired. With
+`CLOUDAFRICA_TOKEN` it pairs the token instead, as below.
 
 ## Scripts and CI
 

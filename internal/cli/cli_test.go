@@ -37,6 +37,7 @@ type harness struct {
 	cacheDir       string
 	loginTimeout   time.Duration
 	elevateTimeout time.Duration
+	pairGrace      time.Duration
 	// failStdout makes every write to stdout fail.
 	failStdout bool
 	executable func() (string, error)
@@ -81,20 +82,27 @@ func (h *harness) run(args ...string) int {
 		stdout = failWriter{}
 	}
 	h.app = &App{
-		Version:       "0.1.0",
-		Stdout:        stdout,
-		Stderr:        h.stderr,
-		Stdin:         strings.NewReader(h.stdin),
-		Getenv:        func(k string) string { return h.env[k] },
-		TTY:           h.tty,
-		OpenBrowser:   open,
-		Store:         h.store,
-		CacheDir:      h.cacheDir,
-		LoginTimeout:  lt,
-		Executable:    h.executable,
-		GOOS:          cmp.Or(h.goos, "linux"),
-		DeviceWait:    func(ctx context.Context, _ time.Duration) error { return ctx.Err() },
-		ElevatePoll:   10 * time.Millisecond,
+		Version:      "0.1.0",
+		Stdout:       stdout,
+		Stderr:       h.stderr,
+		Stdin:        strings.NewReader(h.stdin),
+		Getenv:       func(k string) string { return h.env[k] },
+		TTY:          h.tty,
+		OpenBrowser:  open,
+		Store:        h.store,
+		CacheDir:     h.cacheDir,
+		LoginTimeout: lt,
+		Executable:   h.executable,
+		GOOS:         cmp.Or(h.goos, "linux"),
+		DeviceWait:   func(ctx context.Context, _ time.Duration) error { return ctx.Err() },
+		ElevatePoll:  10 * time.Millisecond,
+		PairGrace: func() time.Duration {
+			if h.pairGrace > 0 {
+				return h.pairGrace
+			}
+			return 2 * time.Second
+		}(),
+		PairGracePoll: 5 * time.Millisecond,
 		OperationPoll: time.Millisecond,
 		ElevateTimeout: func() time.Duration {
 			if h.elevateTimeout > 0 {
@@ -416,28 +424,27 @@ func TestStepUpNonInteractiveExits5WithTheMatchingCommand(t *testing.T) {
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp || !strings.Contains(h.stderr.String(), "not-paired") {
 		t.Fatalf("not paired: exit = %d; %s", code, h.stderr)
 	}
-	if s := h.stderr.String(); !strings.Contains(s, "Run `ca auth elevate`") || !strings.Contains(s, "Allow protected actions") ||
-		strings.Contains(s, "ca auth login") {
+	if s := h.stderr.String(); !strings.Contains(s, "Run `ca auth login`") || !strings.Contains(s, "Allow protected actions") ||
+		strings.Contains(s, "ca auth elevate") {
 		t.Errorf("not-paired hint: %s", s)
 	}
 }
 
-// A sign-in without protected:compute is offered `ca auth login`; the new
-// sign-in is then refused not-paired and offered `ca auth elevate`.
+// A sign-in without protected:compute is offered `ca auth login`; approving
+// the new sign-in pairs it, so the retry succeeds without a second prompt.
 func TestStepUpInteractiveSignsInThenPairs(t *testing.T) {
 	h := newHarness(t)
 	old := h.seed("default", compute(), time.Now().Add(time.Hour))
-	h.fake.PairOnPoll = 2
+	h.fake.PairOnConsent = true
 	h.tty = true
 	h.stdin = "y\ny\n"
 	h.mustRun("vm", "delete", "vm-1", "--yes")
-	if h.fake.DeleteCalls != 3 || h.fake.ElevationCalls != 2 || len(h.fake.Authorizations) != 1 {
-		t.Errorf("delete calls %d (want 3), elevation calls %d (want 2), authorizations %d (want 1)",
+	if h.fake.DeleteCalls != 2 || h.fake.ElevationCalls != 0 || len(h.fake.Authorizations) != 1 {
+		t.Errorf("delete calls %d (want 2), elevation calls %d (want 0), authorizations %d (want 1)",
 			h.fake.DeleteCalls, h.fake.ElevationCalls, len(h.fake.Authorizations))
 	}
-	s := h.stderr.String()
-	if li, ei := strings.Index(s, "`ca auth login`"), strings.Index(s, "`ca auth elevate`"); li < 0 || ei < 0 || li > ei {
-		t.Errorf("remedies missing or out of order: %s", s)
+	if n := strings.Count(h.stderr.String(), "[y/N]"); n != 1 || strings.Contains(h.stderr.String(), "ca auth elevate") {
+		t.Errorf("prompts %d, stderr %s", n, h.stderr)
 	}
 	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
 		t.Errorf("re-authorize scope = %q", got)

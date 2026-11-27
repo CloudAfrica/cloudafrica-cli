@@ -4,9 +4,9 @@ Allow protected actions (such as vms delete) for this sign-in or API token
 
 ### Synopsis
 
-Pair the selected profile's sign-in for protected actions. Opens a page in the portal where you step up and confirm the code shown here, then waits up to 5 minutes for the confirmation. The pairing lasts for the account's elevation window.
+Allow protected actions for the selected profile's sign-in by signing in again, with the profile's scopes: approving a sign-in that holds a protected: scope on the consent page pairs it for the account's elevation window. It then checks that the sign-in is paired.
 
-With CLOUDAFRICA_TOKEN set, it pairs that API token instead and prints its secret, alone, on stdout; that pairing also ends with the confirming person's portal session. A script sets it with
+With CLOUDAFRICA_TOKEN set, it pairs that API token instead: it opens a page in the portal where you step up and confirm the code shown here, waits up to 5 minutes for the confirmation, and prints the token's secret, alone, on stdout; that pairing also ends with the confirming person's portal session. A script sets it with
 
   CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit; export CLOUDAFRICA_ELEVATION
 

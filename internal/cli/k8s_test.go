@@ -199,7 +199,7 @@ func TestUpgradeWorkersNotPairedExits5(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", protected(), time.Now().Add(time.Hour))
 	if code := h.run("k8s", "upgrade-workers", "k-1", "--version", "v1.33.1"); code != ExitStepUp ||
-		!strings.Contains(h.stderr.String(), "ca auth elevate") {
+		!strings.Contains(h.stderr.String(), "ca auth login") {
 		t.Errorf("exit %d, stderr %q", code, h.stderr)
 	}
 }

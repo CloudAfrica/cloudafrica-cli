@@ -120,9 +120,9 @@ func TestStepUpSignInOverSSHUsesTheDeviceFlow(t *testing.T) {
 	h := newHarness(t)
 	h.seed("default", compute(), time.Now().Add(time.Hour))
 	h.env["SSH_TTY"] = "/dev/pts/0"
-	h.fake.PairOnPoll = 2
+	h.fake.PairOnConsent = true
 	h.tty = true
-	h.stdin = "y\ny\n"
+	h.stdin = "y\n"
 	h.mustRun("vm", "delete", "vm-1", "--yes")
 	if len(h.fake.DeviceAuthorizations) != 1 || len(h.fake.Authorizations) != 0 {
 		t.Fatalf("device %d, loopback %d", len(h.fake.DeviceAuthorizations), len(h.fake.Authorizations))

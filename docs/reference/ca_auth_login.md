@@ -4,7 +4,7 @@ Sign in through the browser
 
 ### Synopsis
 
-Sign in through the browser and store the session in a profile. With --device, or by default over SSH and on Linux or BSD without a display, ca prints a URL and a code to use in a browser on any machine; --no-device keeps the browser on this one. One profile holds one account: to use several accounts, sign in once per account with --profile and name the account with --account. Signing in again to a profile stays in the account it is signed in to. Signing in never allows protected actions such as vms delete; `ca auth elevate` does.
+Sign in through the browser and store the session in a profile. With --device, or by default over SSH and on Linux or BSD without a display, ca prints a URL and a code to use in a browser on any machine; --no-device keeps the browser on this one. One profile holds one account: to use several accounts, sign in once per account with --profile and name the account with --account. Signing in again to a profile stays in the account it is signed in to. Approving a sign-in that holds a protected: scope also allows protected actions such as vms delete, for the account's elevation window; choose a Write level or lower on the consent page to leave them off.
 
 ```
 ca auth login [flags]

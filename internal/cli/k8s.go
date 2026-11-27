@@ -211,7 +211,7 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "upgrade-workers CLUSTER_ID",
-		Short: "Upgrade a cluster's workers (a protected action: needs `ca auth elevate`)",
+		Short: "Upgrade a cluster's workers (a protected action)",
 		Long: "Upgrades every worker to a Kubernetes version and its Talos version, one node at a time. Each node " +
 			"drains, so a workload with one replica is down while its node restarts. Without --version it takes the " +
 			"newest of the cluster's worker targets (`ca k8s get`). When there is none it says so and exits 0 if the " +

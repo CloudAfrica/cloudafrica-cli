@@ -24,6 +24,11 @@ type Grant struct {
 	Scopes   []string
 	Elevated bool
 	Revoked  bool
+	// Pairing is set when approving the grant pairs it, as the consent page
+	// does for a sign-in with a protected: scope. PairLag is how many refusals
+	// the pairing still owes: the device page approves, then pairs.
+	Pairing bool
+	PairLag int
 }
 
 func (g *Grant) Has(scope string) bool {
@@ -52,6 +57,11 @@ type Server struct {
 	// PairOnPoll, when > 0, confirms a grant's pairing on its PairOnPoll-th
 	// elevation request, as the user confirming on /pair would.
 	PairOnPoll int
+	// PairOnConsent makes approving a sign-in that holds a protected: scope
+	// pair its grant; DevicePairLag is the refusals a device sign-in's pairing
+	// owes after the token is issued.
+	PairOnConsent bool
+	DevicePairLag int
 	// PairURL, when set, replaces the confirm page an elevation request returns.
 	PairURL string
 	// NoPairCode makes an elevation request answer a page with no code.
@@ -314,8 +324,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	if s.GrantScopes != nil {
 		granted = s.GrantScopes(requested)
 	}
-	// Consent grants scopes; it never pairs (elevation is its own step).
-	g := &Grant{Scopes: granted}
+	// Consent grants scopes; it pairs only when PairOnConsent says it does.
+	g := &Grant{Scopes: granted, Pairing: s.pairsOnConsent(granted)}
 	code := s.next("code_")
 	s.codes[code] = &pendingCode{challenge: q.Get("code_challenge"), redirectURI: redirect, resource: q.Get("resource"), grant: g}
 	http.Redirect(w, r, redirect+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), http.StatusFound)
@@ -342,7 +352,11 @@ func (s *Server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		granted = s.GrantScopes(granted)
 	}
 	code := s.next("dc_")
-	s.devices[code] = &Grant{Scopes: granted}
+	g := &Grant{Scopes: granted, Pairing: s.pairsOnConsent(granted)}
+	if g.Pairing {
+		g.PairLag = s.DevicePairLag
+	}
+	s.devices[code] = g
 	body := map[string]any{
 		"device_code": code, "user_code": "BCDF-GHJK", "expires_in": 600,
 		"verification_uri":          s.URL + "/ui/device",
@@ -352,6 +366,31 @@ func (s *Server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		body["interval"] = s.DeviceInterval
 	}
 	writeJSON(w, 200, body)
+}
+
+func (s *Server) pairsOnConsent(granted []string) bool {
+	if !s.PairOnConsent {
+		return false
+	}
+	for _, sc := range granted {
+		if strings.HasPrefix(sc, "protected:") {
+			return true
+		}
+	}
+	return false
+}
+
+// unpaired reports whether a protected action on g is refused not-paired now.
+// A grant that consent pairs becomes paired once its lag has been served.
+func (s *Server) unpaired(g *Grant) bool {
+	if !g.Elevated && g.Pairing {
+		if g.PairLag > 0 {
+			g.PairLag--
+		} else {
+			g.Elevated = true
+		}
+	}
+	return !g.Elevated || s.AlwaysNotPaired
 }
 
 func (s *Server) issue(w http.ResponseWriter, g *Grant) {
@@ -541,7 +580,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case !g.Has("protected:compute"):
 			insufficientScope(w, "protected:compute")
-		case !g.Elevated || s.AlwaysNotPaired:
+		case s.unpaired(g):
 			problem(w, 403, "not-paired", "Client not paired", nil)
 		case s.vmStatus(strings.TrimPrefix(p, "/v1/vms/")) == "running":
 			problem(w, 409, "conflict", "Conflict", map[string]any{"detail": "The VM must be stopped first."})
@@ -574,7 +613,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case !g.Has("protected:compute"):
 			insufficientScope(w, "protected:compute")
-		case !g.Elevated:
+		case s.unpaired(g):
 			problem(w, 403, "not-paired", "Client not paired", nil)
 		case s.UpgradeConflict != "":
 			problem(w, 409, "conflict", "Conflict", map[string]any{"detail": s.UpgradeConflict})
@@ -592,7 +631,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			insufficientScope(w, "protected:compute")
 		case !strings.HasPrefix(tok, "cak_"): // only a person's own API token mints
 			problem(w, 404, "not-found", "Not found", nil)
-		case !g.Elevated:
+		case s.unpaired(g):
 			problem(w, 403, "not-paired", "Client not paired", nil)
 		case s.EmptyClusterToken:
 			w.WriteHeader(http.StatusOK)
@@ -726,6 +765,9 @@ func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok st
 	}
 	if r.Header.Get("X-CloudAfrica-Elevation") != "" && !strings.HasPrefix(tok, "cak_") {
 		s.T.Errorf("an OAuth sign-in sent an elevation header")
+	}
+	if g.Pairing && !s.unpaired(g) {
+		g.Elevated = true
 	}
 	if s.PairOnPoll > 0 && s.ElevationCalls >= s.PairOnPoll {
 		g.Elevated = true

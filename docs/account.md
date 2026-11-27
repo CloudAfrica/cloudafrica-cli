@@ -31,7 +31,7 @@ ca members resend-invitation|cancel-invitation jo@example.com
 ```
 
 A member is named by email. `create`, `delete` and `role set` need the `protected:team` scope:
-`ca auth login --scope protected:team`, then `ca auth elevate` (see [Signing in](auth.md)).
+`ca auth login --scope protected:team` (see [Signing in](auth.md)).
 
 ## Billing
 
@@ -42,5 +42,4 @@ ca billing details get|set
 ca transactions list     # invoices and credit notes
 ```
 
-`billing details set` needs `protected:billing`: `ca auth login --scope protected:billing`, then
-`ca auth elevate`.
+`billing details set` needs `protected:billing`: `ca auth login --scope protected:billing`.
