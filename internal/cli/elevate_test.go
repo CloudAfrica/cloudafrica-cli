@@ -393,6 +393,21 @@ func TestElevateSignInDeviceNeverPairedExits5(t *testing.T) {
 	}
 }
 
+// A probe that fails for any reason but "not paired" must not start a sign-in:
+// it would replace and revoke a grant that may be paired.
+func TestElevateSignInProbeErrorSignsInNothing(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.fake.ElevationUnavailable = true
+	if code := h.run("auth", "elevate"); code == 0 {
+		t.Fatalf("exit 0, stderr %s", h.stderr)
+	}
+	if len(h.fake.Authorizations) != 0 || len(h.fake.DeviceAuthorizations) != 0 || len(h.fake.Revoked) != 0 {
+		t.Errorf("signed in after a failed probe: authorizations %d, device %d, revoked %v",
+			len(h.fake.Authorizations), len(h.fake.DeviceAuthorizations), h.fake.Revoked)
+	}
+}
+
 // A sign-in that is already paired is left alone: signing in again would
 // revoke it before the new one is known to pair.
 func TestElevateSignInAlreadyPairedSignsInNothing(t *testing.T) {

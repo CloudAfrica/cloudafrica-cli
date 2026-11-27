@@ -408,9 +408,12 @@ func (a *App) elevateSignIn(ctx context.Context, s *session) error {
 		}
 		return errStillNotPaired
 	}
-	if probe(s) == nil {
+	switch perr := probe(s); {
+	case perr == nil:
 		fmt.Fprintln(a.Stderr, "This sign-in is already allowed protected actions.")
 		return nil
+	case !errors.Is(perr, errStillNotPaired):
+		return perr
 	}
 	used, err := a.login(ctx, s.name, "", flowAuto)
 	if err != nil {
@@ -421,7 +424,7 @@ func (a *App) elevateSignIn(ctx context.Context, s *session) error {
 	}
 	err = probe(s)
 	if used == flowDevice {
-		err = a.awaitPairing(ctx, err, probe)
+		err = a.awaitPairing(ctx, s, err, probe)
 	}
 	if errors.Is(err, errStillNotPaired) {
 		return &hintedError{err: err, hint: "Run `ca auth login` again and approve a protected: scope, or in the " +

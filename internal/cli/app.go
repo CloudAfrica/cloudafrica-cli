@@ -238,14 +238,16 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 		}
 		err = fn(s)
 		if used == flowDevice {
-			err = a.awaitPairing(ctx, err, fn)
+			err = a.awaitPairing(ctx, s, err, fn)
 		}
 	}
 }
 
-// awaitPairing repeats fn while it is refused not-paired, up to the grace
-// period, and returns the error of the last attempt.
-func (a *App) awaitPairing(ctx context.Context, err error, fn func(s *session) error) error {
+// awaitPairing repeats fn on s while it is refused not-paired, up to the grace
+// period, and returns the error of the last attempt. It reuses s rather than
+// reading the profile again, so a retry cannot reach an endpoint another
+// process has since stored.
+func (a *App) awaitPairing(ctx context.Context, s *session, err error, fn func(s *session) error) error {
 	grace, poll := a.PairGrace, a.PairGracePoll
 	if grace <= 0 {
 		grace = pairGraceDefault
@@ -269,11 +271,7 @@ func (a *App) awaitPairing(ctx context.Context, err error, fn func(s *session) e
 			return ctx.Err()
 		case <-time.After(poll):
 		}
-		next, serr := a.session()
-		if serr != nil {
-			return serr
-		}
-		err = fn(next)
+		err = fn(s)
 	}
 }
 

@@ -66,6 +66,8 @@ type Server struct {
 	PairURL string
 	// NoPairCode makes an elevation request answer a page with no code.
 	NoPairCode bool
+	// ElevationUnavailable makes an elevation request answer 503.
+	ElevationUnavailable bool
 	// AlwaysNotPaired makes VM delete answer not-paired even once paired.
 	AlwaysNotPaired bool
 	// ExpiresIn is the access-token lifetime in seconds (default 3600).
@@ -755,6 +757,10 @@ func (s *Server) vmStatus(id string) string {
 // The page and code stay the same while the request is pending.
 func (s *Server) elevationRequest(w http.ResponseWriter, r *http.Request, tok string, g *Grant) {
 	s.ElevationCalls++
+	if s.ElevationUnavailable {
+		problem(w, 503, "unavailable", "Unavailable", nil)
+		return
+	}
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	s.ElevationBody = append(s.ElevationBody, body)
