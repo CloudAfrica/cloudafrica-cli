@@ -79,12 +79,13 @@ func (a *App) authCmd() *cobra.Command {
 	elevate := &cobra.Command{
 		Use:   "elevate",
 		Short: "Allow protected actions (such as vms delete) for this sign-in or API token",
-		Long: "Allow protected actions for the selected profile's sign-in by signing in again, with the profile's " +
-			"scopes: approving a sign-in that holds a protected: scope on the consent page pairs it for the " +
-			"account's elevation window. It then checks that the sign-in is paired.\n\n" +
+		Long: "Allow protected actions for the selected profile's sign-in. A sign-in that is already paired is " +
+			"left alone; otherwise it signs in again with the profile's scopes, because approving a sign-in that " +
+			"holds a protected: scope on the consent page pairs it for the account's elevation window, and then " +
+			"checks that the sign-in is paired.\n\n" +
 			"With CLOUDAFRICA_TOKEN set, it pairs that API token instead: it opens a page in the portal where you " +
 			"step up and confirm the code shown here, waits up to 5 minutes for the confirmation, and prints the " +
-			"token's secret, alone, on stdout; that pairing also ends with the confirming person's portal session. " +
+			"token's secret, alone, on stdout; the pairing lasts for the account's elevation window. " +
 			"A script sets it with\n\n" +
 			"  CLOUDAFRICA_ELEVATION=$(ca auth elevate) || exit; export CLOUDAFRICA_ELEVATION\n\n" +
 			"An existing CLOUDAFRICA_ELEVATION is paired again rather than replaced.",
@@ -277,21 +278,14 @@ func (a *App) rejectSession(ctx context.Context, p *profile.Profile, err error, 
 	return &hintedError{err: err, hint: hint}
 }
 
-// elevate pairs s's grant for protected actions: it asks for a pairing,
-// opens the confirm page, and repeats the request until the answer is
-// paired or the wait runs out. The gateway derives the page and code from
-// the grant, so the page is opened once. A sign-in known to lack
-// any protected: scope is refused before any request, since pairing it would
-// not allow protected actions. For CLOUDAFRICA_TOKEN it pairs a secret
-// instead (CLOUDAFRICA_ELEVATION, else a new one) and prints it, alone, on
-// stdout once paired, whatever -o says: a script captures it with $(...).
+// elevate pairs a CLOUDAFRICA_TOKEN for protected actions: it asks for a pairing
+// for a secret (CLOUDAFRICA_ELEVATION, else a new one), opens the confirm page,
+// and repeats the request until the answer is paired or the wait runs out. The
+// gateway derives the page and code from the secret, so the page is opened
+// once. The secret is printed, alone, on stdout once paired, whatever -o says:
+// a script captures it with $(...). A profile's sign-in goes through
+// elevateSignIn.
 func (a *App) elevate(ctx context.Context, s *session) error {
-	if s.scope != "" && !slices.ContainsFunc(strings.Fields(s.scope), func(sc string) bool {
-		return strings.HasPrefix(sc, "protected:")
-	}) {
-		return &hintedError{err: errNoProtectedScope,
-			hint: "Run `ca auth login` and tick the protected: scopes on the consent page."}
-	}
 	poll, limit := a.ElevatePoll, a.ElevateTimeout
 	if poll <= 0 {
 		poll = elevatePollDefault
@@ -383,23 +377,18 @@ func (a *App) elevate(ctx context.Context, s *session) error {
 	}
 }
 
-// elevateSignIn allows protected actions for a profile's sign-in by signing in
-// again: approving a sign-in that holds a protected: scope pairs it. It then
-// asks the API whether the sign-in is paired, waiting out a device sign-in's
-// lag, so it never reports a pairing it did not see.
+// elevateSignIn allows protected actions for a profile's sign-in. A sign-in
+// that is already paired is left alone: signing in again would revoke it
+// before knowing the new one pairs. Otherwise it signs in again, since
+// approving a sign-in that holds a protected: scope pairs it, and asks the API
+// whether the new one is paired, waiting out a device sign-in's lag, so it
+// never reports a pairing it did not see.
 func (a *App) elevateSignIn(ctx context.Context, s *session) error {
 	if s.scope != "" && !slices.ContainsFunc(strings.Fields(s.scope), func(sc string) bool {
 		return strings.HasPrefix(sc, "protected:")
 	}) {
 		return &hintedError{err: errNoProtectedScope,
 			hint: "Run `ca auth login` and tick the protected: scopes on the consent page."}
-	}
-	used, err := a.login(ctx, s.name, "", flowAuto)
-	if err != nil {
-		return err
-	}
-	if s, err = a.session(); err != nil {
-		return err
 	}
 	label := elevateLabel
 	probe := func(s *session) error {
@@ -419,9 +408,20 @@ func (a *App) elevateSignIn(ctx context.Context, s *session) error {
 		}
 		return errStillNotPaired
 	}
+	if probe(s) == nil {
+		fmt.Fprintln(a.Stderr, "This sign-in is already allowed protected actions.")
+		return nil
+	}
+	used, err := a.login(ctx, s.name, "", flowAuto)
+	if err != nil {
+		return err
+	}
+	if s, err = a.session(); err != nil {
+		return err
+	}
 	err = probe(s)
 	if used == flowDevice {
-		_, err = a.awaitPairing(ctx, s, err, probe)
+		err = a.awaitPairing(ctx, err, probe)
 	}
 	if errors.Is(err, errStillNotPaired) {
 		return &hintedError{err: err, hint: "Run `ca auth login` again and approve a protected: scope, or in the " +

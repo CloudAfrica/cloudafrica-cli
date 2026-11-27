@@ -235,14 +235,8 @@ func TestStepUpDeviceSignInGivesUpAfterTheGrace(t *testing.T) {
 	if code := h.run("vm", "delete", "vm-1", "--yes"); code != ExitStepUp {
 		t.Fatalf("exit %d, stderr %s", code, h.stderr)
 	}
-}
-
-// The grace outlasts the portal's own 20-second wait on a failed pairing
-// minus the CLI's poll interval: a shorter default refuses a command the
-// portal would have let through.
-func TestPairGraceDefaultCoversThePortalsOwnWait(t *testing.T) {
-	if pairGraceDefault < 15*time.Second {
-		t.Errorf("pairGraceDefault = %s, want at least 15s", pairGraceDefault)
+	if h.fake.DeleteCalls < 3 || !strings.Contains(h.stderr.String(), "Waiting for the sign-in to be paired") {
+		t.Errorf("no wait: %d delete calls, stderr %s", h.fake.DeleteCalls, h.stderr)
 	}
 }
 

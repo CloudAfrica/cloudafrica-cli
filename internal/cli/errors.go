@@ -164,8 +164,8 @@ func hint(err error, envToken, elevation bool) string {
 	if slug, ok := stepUpSlug(err); ok {
 		if slug == "not-paired" {
 			if envToken && elevation {
-				return "CLOUDAFRICA_ELEVATION is no longer paired: the elevation window ended, or the portal session " +
-					"of the person who confirmed it did. Run `ca auth elevate` again with this same CLOUDAFRICA_ELEVATION set; " +
+				return "CLOUDAFRICA_ELEVATION is no longer paired: the elevation window ended. " +
+					"Run `ca auth elevate` again with this same CLOUDAFRICA_ELEVATION set; " +
 					"it pairs that value again."
 			}
 			if envToken {

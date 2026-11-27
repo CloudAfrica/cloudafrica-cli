@@ -190,8 +190,7 @@ func (a *App) newClient(endpoint string, ts cloudafrica.TokenSource, elevation s
 
 // pairGraceDefault is how long a device sign-in's pairing may trail its token:
 // the portal approves the device request, then pairs the grant, and `ca` can
-// be handed the token in between. It matches the portal's own wait on a
-// failed pairing.
+// be handed the token in between.
 const (
 	pairGraceDefault     = 20 * time.Second
 	pairGracePollDefault = 2 * time.Second
@@ -239,14 +238,14 @@ func (a *App) withSession(ctx context.Context, fn func(s *session) error) error 
 		}
 		err = fn(s)
 		if used == flowDevice {
-			_, err = a.awaitPairing(ctx, s, err, fn)
+			err = a.awaitPairing(ctx, err, fn)
 		}
 	}
 }
 
 // awaitPairing repeats fn while it is refused not-paired, up to the grace
-// period, and returns the session and error of the last attempt.
-func (a *App) awaitPairing(ctx context.Context, s *session, err error, fn func(s *session) error) (*session, error) {
+// period, and returns the error of the last attempt.
+func (a *App) awaitPairing(ctx context.Context, err error, fn func(s *session) error) error {
 	grace, poll := a.PairGrace, a.PairGracePoll
 	if grace <= 0 {
 		grace = pairGraceDefault
@@ -259,7 +258,7 @@ func (a *App) awaitPairing(ctx context.Context, s *session, err error, fn func(s
 	for {
 		if slug, _ := stepUpSlug(err); (slug != "not-paired" && !errors.Is(err, errStillNotPaired)) ||
 			time.Now().After(deadline) {
-			return s, err
+			return err
 		}
 		if !announced {
 			announced = true
@@ -267,14 +266,14 @@ func (a *App) awaitPairing(ctx context.Context, s *session, err error, fn func(s
 		}
 		select {
 		case <-ctx.Done():
-			return s, ctx.Err()
+			return ctx.Err()
 		case <-time.After(poll):
 		}
 		next, serr := a.session()
 		if serr != nil {
-			return s, serr
+			return serr
 		}
-		s, err = next, fn(next)
+		err = fn(next)
 	}
 }
 

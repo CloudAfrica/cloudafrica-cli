@@ -329,8 +329,9 @@ func TestElevateSignInSignsInAgainAndVerifies(t *testing.T) {
 	old := h.seed("default", protected(), time.Now().Add(time.Hour))
 	h.fake.PairOnConsent = true
 	h.mustRun("auth", "elevate")
-	if len(h.fake.Authorizations) != 1 || h.fake.ElevationCalls != 1 {
-		t.Fatalf("authorizations %d, elevation calls %d", len(h.fake.Authorizations), h.fake.ElevationCalls)
+	if len(h.fake.Authorizations) != 1 || h.fake.ElevationCalls != 2 {
+		t.Fatalf("authorizations %d, elevation calls %d (want 1 look at the old grant, 1 at the new)",
+			len(h.fake.Authorizations), h.fake.ElevationCalls)
 	}
 	if got := h.fake.Authorizations[0].Get("scope"); !strings.Contains(got, "protected:compute") {
 		t.Errorf("scope = %q", got)
@@ -365,7 +366,46 @@ func TestElevateSignInWaitsOutADevicePairingLag(t *testing.T) {
 	h.fake.PairOnConsent = true
 	h.fake.DevicePairLag = 2
 	h.mustRun("auth", "elevate")
-	if len(h.fake.DeviceAuthorizations) != 1 || h.fake.ElevationCalls != 3 {
-		t.Errorf("device sign-ins %d, elevation calls %d (want 3)", len(h.fake.DeviceAuthorizations), h.fake.ElevationCalls)
+	if len(h.fake.DeviceAuthorizations) != 1 || h.fake.ElevationCalls != 4 {
+		t.Errorf("device sign-ins %d, elevation calls %d (want 1 old + 3 new)", len(h.fake.DeviceAuthorizations),
+			h.fake.ElevationCalls)
+	}
+}
+
+// A device sign-in whose pairing never lands ends in exit 5 with the hint,
+// after waiting rather than on the first look.
+func TestElevateSignInDeviceNeverPairedExits5(t *testing.T) {
+	h := newHarness(t)
+	h.seed("default", protected(), time.Now().Add(time.Hour))
+	h.env["SSH_TTY"] = "/dev/pts/0"
+	h.fake.PairOnConsent = true
+	h.fake.DevicePairLag = 1000
+	h.pairGrace = 60 * time.Millisecond
+	if code := h.run("auth", "elevate"); code != ExitStepUp || strings.Contains(h.stderr.String(), "Paired:") {
+		t.Fatalf("exit %d, stderr %s", code, h.stderr)
+	}
+	if s := h.stderr.String(); !strings.Contains(s, "Waiting for the sign-in to be paired") ||
+		!strings.Contains(s, "still not paired") || !strings.Contains(s, "Allow protected actions") {
+		t.Errorf("stderr = %s", s)
+	}
+	if h.fake.ElevationCalls < 3 {
+		t.Errorf("elevation calls %d: gave up without waiting", h.fake.ElevationCalls)
+	}
+}
+
+// A sign-in that is already paired is left alone: signing in again would
+// revoke it before the new one is known to pair.
+func TestElevateSignInAlreadyPairedSignsInNothing(t *testing.T) {
+	h := newHarness(t)
+	g := protected()
+	g.Elevated = true
+	h.seed("default", g, time.Now().Add(time.Hour))
+	h.mustRun("auth", "elevate")
+	if len(h.fake.Authorizations) != 0 || len(h.fake.DeviceAuthorizations) != 0 || len(h.fake.Revoked) != 0 {
+		t.Errorf("signed in again: authorizations %d, device %d, revoked %v",
+			len(h.fake.Authorizations), len(h.fake.DeviceAuthorizations), h.fake.Revoked)
+	}
+	if !strings.Contains(h.stderr.String(), "already allowed protected actions") {
+		t.Errorf("stderr = %s", h.stderr)
 	}
 }
