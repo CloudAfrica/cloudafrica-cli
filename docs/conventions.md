@@ -18,7 +18,7 @@ Every command follows these, and every command has `--help`.
   only.
 - **Lists** follow every page. `--limit N` prints one page as the API returns it; the next page is
   `--limit N --cursor <next>`.
-- **Output** is a table on a terminal and JSON otherwise; `-o table|json|yaml`, `-q` prints ids only (the
+- **Output** is a table on a terminal and JSON otherwise; `-o table`, `-o json` or `-o yaml` chooses one, and `-q` prints ids only (the
   secret key for `bucket-keys create` and `reveal-secret`). JSON and YAML are the API's response as
   returned, with two exceptions. A list followed across pages prints its rows as one array (`--limit`
   prints the page as returned). A command that starts an operation prints the finished operation, or
@@ -26,8 +26,12 @@ Every command follows these, and every command has `--help`.
 
 ## Operations
 
+`ca operations get` shows an operation, `ca operations wait` waits for it to finish and `ca operations cancel` asks for it to be cancelled. Each takes the operation's id.
+
+For example, following an operation that `--no-wait` left running:
+
 ```sh
-ca operations get|wait|cancel <operation-id>
+ca operations wait <operation-id>
 ```
 
 ## Exit codes

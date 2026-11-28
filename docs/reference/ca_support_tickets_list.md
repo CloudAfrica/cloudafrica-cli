@@ -13,7 +13,6 @@ ca support tickets list [flags]
 ### Examples
 
 ```
-  ca support tickets list
   ca support tickets list --status open,waiting-on-you
 ```
 

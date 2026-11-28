@@ -40,7 +40,7 @@ groups:
   placement-groups members: Manage a placement group's members
   account: Show the account and its limits
   activity: List account activity
-  backup-policies: List the backup policy of every VM
+  backup-policies: List the backup policy of every live VM
   backup-windows: List the backup windows
   billing: Read the balance and accrual, and manage the billing details
   billing details: Read and change the billing details
@@ -138,9 +138,7 @@ operations:
   listVms:
     flags:
       slug: {help: only the VM with this slug}
-    example: |
-      ca vms list
-      ca vms list -o json
+    example: ca vms list
   getVm:
     example: ca vms get web-01
   startVm:
@@ -213,19 +211,13 @@ operations:
     path: vpcs internal-dns get
   setVpcInternalDns:
     path: vpcs internal-dns set
-    example: |
-      ca vpcs internal-dns set --vpc web --enabled=true
-      ca vpcs internal-dns set --vpc web --enabled=false
+    example: ca vpcs internal-dns set --vpc web --enabled=false
   listIpAddresses:
-    example: |
-      ca ips list
-      ca ips list -o json
+    example: ca ips list
   listPlacementGroupDatacenters:
     path: datacenters list
   createBucket:
-    example: |
-      ca buckets create --display-name backups
-      ca buckets create --display-name audit --object-lock --versioning enabled
+    example: ca buckets create --display-name backups
   deleteBucket:
     flags:
       confirmBucketName: {help: "the bucket's name, spelled exactly as ca buckets list shows it"}
@@ -248,9 +240,7 @@ operations:
   listBucketObjects:
     path: buckets objects list
     positional: id
-    example: |
-      ca buckets objects list logs-7f3a
-      ca buckets objects list logs-7f3a --prefix reports/2026/ --limit 50
+    example: ca buckets objects list logs-7f3a --prefix reports/2026/ --limit 50
   listBucketDeletedObjects:
     path: buckets objects list-deleted
     positional: id
@@ -269,7 +259,6 @@ operations:
     flags:
       versionId: {help: "an earlier version to download (ca buckets objects versions lists them); omit for the current one"}
     example: |
-      ca buckets objects download-url logs-7f3a --key reports/q3.pdf
       # -q prints the URL, which expires in about a minute
       URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) && curl -fsS -o q3.pdf "$URL"
   createObjectUploadUrl:
@@ -310,12 +299,10 @@ operations:
     flags:
       bucketResourceId: {help: "the id of the bucket to attach the key to (ca buckets get NAME -q prints it), not its name; omit for an account-level key"}
     example: |
-      ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)"
       # -q prints the secret key, not the id
-      SECRET=$(ca bucket-keys create --name ci2 --access-type full --yes -q)
+      SECRET=$(ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)" --yes -q)
   revealBucketKeySecret:
     example: |
-      ca bucket-keys reveal-secret ci
       # -q prints the secret key, not the id
       SECRET=$(ca bucket-keys reveal-secret ci --yes -q)
   grantBucketKeyBucketAccess:
@@ -336,10 +323,7 @@ operations:
     path: account backup-retention
   listActivity:
     exclusive: [[types], [subject-type, subject-id]]
-    example: |
-      ca activity list --limit 20
-      ca activity list --types vm,vpc
-      ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
+    example: ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
   listBackupPolicies:
     path: backup-policies list
   listBackupWindows:
@@ -387,9 +371,7 @@ operations:
   listSupportTickets:
     flags:
       q: {name: search}
-    example: |
-      ca support tickets list
-      ca support tickets list --status open,waiting-on-you
+    example: ca support tickets list --status open,waiting-on-you
   getSupportTicket:
     example: ca support tickets get 1234
   createSupportTicket:

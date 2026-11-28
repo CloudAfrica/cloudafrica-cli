@@ -13,7 +13,6 @@ ca buckets objects download-url BUCKET [flags]
 ### Examples
 
 ```
-  ca buckets objects download-url logs-7f3a --key reports/q3.pdf
   # -q prints the URL, which expires in about a minute
   URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) && curl -fsS -o q3.pdf "$URL"
 ```

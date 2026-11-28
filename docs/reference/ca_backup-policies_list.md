@@ -28,5 +28,5 @@ ca backup-policies list [flags]
 
 ### SEE ALSO
 
-* [ca backup-policies](ca_backup-policies.md)	 - List the backup policy of every VM
+* [ca backup-policies](ca_backup-policies.md)	 - List the backup policy of every live VM
 

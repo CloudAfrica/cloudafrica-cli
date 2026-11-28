@@ -1,6 +1,6 @@
 ## ca backup-policies
 
-List the backup policy of every VM
+List the backup policy of every live VM
 
 ```
 ca backup-policies [flags]

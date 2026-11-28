@@ -13,8 +13,6 @@ ca activity list [flags]
 ### Examples
 
 ```
-  ca activity list --limit 20
-  ca activity list --types vm,vpc
   ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
 ```
 

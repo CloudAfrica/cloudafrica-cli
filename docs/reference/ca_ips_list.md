@@ -14,7 +14,6 @@ ca ips list [flags]
 
 ```
   ca ips list
-  ca ips list -o json
 ```
 
 ### Options

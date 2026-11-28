@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // handWritten is every hand-written page that names commands.
@@ -175,6 +176,41 @@ func TestDocumentedCommandsExist(t *testing.T) {
 		if !c.Hidden && c.Name() != "help" && !seen[c.Name()] {
 			t.Errorf("ca %s is on no hand-written page", c.Name())
 		}
+	}
+}
+
+var flagSpan = regexp.MustCompile("`(--[a-z][a-z0-9-]*)(?:[ =][^`]*)?`")
+
+// allFlags is every long flag on any command, hidden ones included.
+func allFlags(c *cobra.Command, into map[string]bool) {
+	c.Flags().VisitAll(func(f *pflag.Flag) { into[f.Name] = true })
+	c.PersistentFlags().VisitAll(func(f *pflag.Flag) { into[f.Name] = true })
+	for _, s := range c.Commands() {
+		allFlags(s, into)
+	}
+}
+
+// A backticked `--flag` in prose is not a full `ca ...` invocation, so TestDocumentedCommandsExist
+// does not see it; each must still name a flag some command has. It does not check that the flag
+// belongs to the command the prose names, and it skips short flags and `-d/--data`.
+func TestDocumentedFlagSpansExist(t *testing.T) {
+	known := map[string]bool{"help": true}
+	allFlags(root(), known)
+	spans := 0
+	for _, page := range handWritten(t) {
+		data, err := os.ReadFile(page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range flagSpan.FindAllStringSubmatch(string(data), -1) {
+			spans++
+			if !known[strings.TrimPrefix(m[1], "--")] {
+				t.Errorf("%s: `%s` is a flag no command has", filepath.Base(page), m[1])
+			}
+		}
+	}
+	if spans == 0 {
+		t.Fatal("found no flag spans: the pattern or the page list is wrong")
 	}
 }
 

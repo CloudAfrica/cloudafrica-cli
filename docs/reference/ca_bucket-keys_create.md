@@ -13,9 +13,8 @@ ca bucket-keys create [flags]
 ### Examples
 
 ```
-  ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)"
   # -q prints the secret key, not the id
-  SECRET=$(ca bucket-keys create --name ci2 --access-type full --yes -q)
+  SECRET=$(ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)" --yes -q)
 ```
 
 ### Options
