@@ -83,3 +83,24 @@ func TestLongHelpNamesEveryProtectedScope(t *testing.T) {
 		t.Fatalf("checked %d protected scopes: the walk is wrong", checked)
 	}
 }
+
+// A hand-written command that calls itself a protected action names its protected: scope, as the generated ones do.
+func TestHandWrittenProtectedHelpNamesItsScope(t *testing.T) {
+	var walk func(c *cobra.Command)
+	found := 0
+	walk = func(c *cobra.Command) {
+		for _, s := range c.Commands() {
+			if strings.Contains(s.Short, "protected action") && !strings.HasPrefix(s.CommandPath(), "ca auth") {
+				found++
+				if !strings.Contains(s.Long, "protected:") {
+					t.Errorf("%s calls itself a protected action but its help names no protected: scope", s.CommandPath())
+				}
+			}
+			walk(s)
+		}
+	}
+	walk(treeRoot())
+	if found == 0 {
+		t.Fatal("found no hand-written protected command: the walk is wrong")
+	}
+}

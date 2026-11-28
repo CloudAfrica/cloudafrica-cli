@@ -279,15 +279,15 @@ func TestReferenceLinksExist(t *testing.T) {
 
 // apiWords are API transport details a `ca` user never sees: `ca` waits on operations, follows pages,
 // sends the Idempotency-Key and maps statuses to exit codes, and its users run commands, not routes.
-var apiWords = regexp.MustCompile(`\b(GET|POST|PUT|PATCH|DELETE) [/…]|/v1/|\bthis route\b|Idempotency-Key|(?i:\b(returns|answers|refuses with|refused with|is a|is) [1-5][0-9][0-9]\b)|\b[1-5]0[0-9]s?\b|\b[45][0-9][0-9]s?\b|\b5xx\b|Asynchronous|Synchronous|\bLocation\b|\bgateway\b|\bbackend\b|\bthis API\b|(?i:cursor-paginated)|\?cursor=|previous response|\b[A-Z][A-Z_]{3,} key\b|\bNull\b|\bnull\b|\bthe caller\b`)
+var apiWords = regexp.MustCompile(`\b(GET|POST|PUT|PATCH|DELETE) [/…]|/v1/|\bthis route\b|Idempotency-Key|(?i:\b(returns|answers|refuses with|refused with|is a|is) [1-5][0-9][0-9]\b)|\b[1-5]0[0-9]s?\b|(?i:\b(a|an|with|on) [45][0-9][0-9]s?\b)|\b[45][0-9][0-9]s? (means|response|error|status)\b|\b[45]xx\b|Asynchronous|Synchronous|\bLocation\b|\bgateway\b|\bbackend\b|\bthis API\b|(?i:cursor-paginated)|\?cursor=|previous response|\b[A-Z][A-Z_]{3,} key\b|\bNull\b|\bnull\b|\bthe caller\b`)
 
 func TestApiWordsCatchesTransportDetail(t *testing.T) {
-	for _, s := range []string{"refused with 422", "a 429 means wait", "410s", "GET /v1/vms", "sends Idempotency-Key"} {
+	for _, s := range []string{"refused with 422", "a 429 means wait", "on a 410", "a 4xx error", "GET /v1/vms", "sends Idempotency-Key"} {
 		if apiWords.FindString(s) == "" {
 			t.Errorf("apiWords misses %q", s)
 		}
 	}
-	for _, s := range []string{"--hours 168", "at most 120 characters", "keeps the last 4"} {
+	for _, s := range []string{"--hours 168", "at most 120 characters", "keeps the last 4", "up to 512 MiB", "at most 450 rules"} {
 		if m := apiWords.FindString(s); m != "" {
 			t.Errorf("apiWords flags %q in %q", m, s)
 		}
