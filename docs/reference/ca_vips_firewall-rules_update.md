@@ -16,7 +16,7 @@ ca vips firewall-rules update RULE_ID [flags]
 
 ```
   -d, --data string          the JSON request body: a literal, @file or @- (stdin); flags override its fields
-      --description string   At most 255 characters; null or blank clears it.
+      --description string   at most 255 characters; an empty value clears it
   -h, --help                 help for update
       --no-wait              print the operation and return without waiting for it
       --timeout duration     how long to wait for the operation (default 10m0s)

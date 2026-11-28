@@ -273,7 +273,7 @@ func (a *App) k8sUpgradeWorkers() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&version, "version", "", "Kubernetes version to upgrade to, from `ca k8s get` (default: the newest target)")
+	cmd.Flags().StringVar(&version, "version", "", "Kubernetes version to upgrade to, from ca k8s get (default: the newest target)")
 	wf.bind(cmd, true)
 	t := cmd.Flags().Lookup("timeout")
 	_ = t.Value.Set(upgradeWaitTimeout.String())

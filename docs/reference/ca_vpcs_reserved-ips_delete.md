@@ -4,7 +4,7 @@ Release a reserved public IP
 
 ### Synopsis
 
-Requires protected:network. Returns the address to the pool. Synchronous: returns 204. Refuses with 409 while a VM or a VIP holds the address; detach it first. A retry after a lost answer is a 404, the address no longer being the account's.
+Releases the reserved address back to the pool. An address a VM or VIP still holds is refused: detach it first. Needs protected:network.
 
 ```
 ca vpcs reserved-ips delete PUBLIC_IP_ID [flags]

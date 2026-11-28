@@ -10,6 +10,12 @@ Get an operation
 ca operations get OPERATION_ID [flags]
 ```
 
+### Examples
+
+```
+  ca operations get <operation-id>
+```
+
 ### Options
 
 ```

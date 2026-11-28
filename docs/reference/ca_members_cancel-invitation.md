@@ -4,7 +4,7 @@ Cancel a pending invitation
 
 ### Synopsis
 
-Withdraws an invitation that has not been accepted yet. Pending invitations only: 409 means the invitation was already accepted. An accepted member is removed with `DELETE /v1/members/{userId}` (protected:team). `userId` is the id `GET /v1/members` returns.
+Withdraws an invitation that has not been accepted. An accepted invitation is refused; remove that member with `ca members delete`.
 
 ```
 ca members cancel-invitation MEMBER [flags]

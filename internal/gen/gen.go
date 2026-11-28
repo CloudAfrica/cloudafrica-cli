@@ -69,6 +69,10 @@ type OpOverlay struct {
 	AtLeastOne []string               `json:"atLeastOne"`
 	Exclusive  [][]string             `json:"exclusive"`
 	Example    string                 `json:"example"`
+	// Short and Long replace the API summary and description as the command's help, for one that describes
+	// the HTTP API rather than what ca does.
+	Short string `json:"short"`
+	Long  string `json:"long"`
 }
 
 // FlagOverlay renames, scales or hides a query or body field.
@@ -532,6 +536,12 @@ func cliVoice(desc string) string {
 func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdspec.Op, bool) {
 	c := cmdspec.Op{OperationID: op.OperationID, Method: method, URL: url,
 		Short: firstLine(op.Summary), Long: cliVoice(op.Description), Example: strings.TrimSpace(oo.Example)}
+	if oo.Short != "" {
+		c.Short = strings.TrimSpace(oo.Short)
+	}
+	if oo.Long != "" {
+		c.Long = strings.TrimSpace(oo.Long)
+	}
 	if c.Short == "" {
 		c.Short = op.OperationID
 	}

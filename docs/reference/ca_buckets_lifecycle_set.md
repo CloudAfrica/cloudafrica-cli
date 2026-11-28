@@ -4,7 +4,7 @@ Replace a bucket's lifecycle rules
 
 ### Synopsis
 
-Replaces every rule with `rules`; an empty list removes them all. Send the `rules` GET /lifecycle returned as `basedOn`: the save is a 409 when the stored rules differ, including when `basedOn` is omitted and the bucket has rules. `replaceUnsupported` skips that check and replaces whatever is stored, rules this API cannot represent included. Step-up applies when any rule is enabled or `replaceUnsupported` is set: a personal access token then also needs a paired client. Returns the rules as stored. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route.
+Replaces every lifecycle rule with the rules you send; an empty list removes them all. Send the rules `ca buckets lifecycle get` returned as basedOn: the change is refused when the stored rules differ, or when you leave basedOn out and the bucket has rules. --replace-unsupported skips that check and replaces whatever is stored. Enabling a rule, or --replace-unsupported, is a protected action. Prints the rules as stored. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
 
 Some fields of the request body have no flag; set them with --data.
 
@@ -26,7 +26,7 @@ ca buckets lifecycle set BUCKET [flags]
 ```
   -d, --data string           the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help                  help for set
-      --replace-unsupported   True to replace whatever is stored, rules this API cannot represent included, without the basedOn check; always needs step-up.
+      --replace-unsupported   replace whatever is stored, without the basedOn check; always a protected action
   -y, --yes                   do not ask for confirmation
 ```
 

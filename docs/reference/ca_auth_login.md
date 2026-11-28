@@ -10,6 +10,13 @@ Sign in through the browser and store the session in a profile. With --device, o
 ca auth login [flags]
 ```
 
+### Examples
+
+```
+  ca auth login
+  ca auth login --profile globex --account <account-id>
+```
+
 ### Options
 
 ```

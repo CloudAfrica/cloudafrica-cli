@@ -4,7 +4,7 @@ Delete an object storage access key
 
 ### Synopsis
 
-Detaches the key from every bucket, then removes it. The account's master key cannot be deleted — that would orphan every bucket it owns. Requires protected:s3. Returns 204.
+Detaches the key from every bucket, then deletes it. The account's master key cannot be deleted, because every bucket it owns would be orphaned. Needs protected:s3.
 
 ```
 ca bucket-keys delete BUCKET_KEY [flags]

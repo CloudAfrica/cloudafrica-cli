@@ -4,7 +4,7 @@ List activity
 
 ### Synopsis
 
-Two modes on one route. The account feed takes `types`, `cursor` and `limit` and returns the account's activity newest first; pass the previous response's nextCursor as `cursor` for the next page. The subject history takes `subjectType` and `subjectId` (and `limit`) and returns that one subject's newest activity, at most `limit` rows and never a nextCursor. Mixing the two is 400. `limit` is 1 to 50 and defaults to 50. Rows are limited to what the token's scopes could read directly, and rows show teammates' short display names, or "Service token" for an account service token. Readable by any token of the account; it needs no scope of its own.
+Lists the account's activity, newest first. --types narrows it to kinds of resource. --subject-type with --subject-id shows one resource's newest activity instead, at most 50 rows and in one page. The two do not mix. You see the rows your scopes could read directly; teammates show by display name, and an account service token as "Service token". Needs no scope of its own.
 
 ```
 ca activity list [flags]

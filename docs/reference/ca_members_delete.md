@@ -4,7 +4,7 @@ Remove a member from the account's team
 
 ### Synopsis
 
-Also revokes that person's personal API tokens for this account, so a credential they already hold stops working here — removing the membership alone would leave a token that keeps confirming the account. A repeat is 404: they are no longer a member. `userId` is the id `GET /v1/members` returns. Requires protected:team — the backend requires a recent second factor for a session and the matching scope for a token.
+Removes the member, and revokes their personal API tokens for this account so a token they hold stops working here. Removing someone who is not a member is refused. Needs protected:team.
 
 ```
 ca members delete MEMBER [flags]

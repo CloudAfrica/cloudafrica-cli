@@ -4,12 +4,18 @@ Attach a network interface to a virtual machine
 
 ### Synopsis
 
-Adds an interface in one of the account's VPCs; the platform picks its address. Requires protected:network. 202 does not mean the interface is up inside the guest: it is hot-plugged, and the guest's OS must configure it. Refuses with 404 for an unknown VM or VPC.
+Adds a network interface in one of the account's VPCs; the platform picks its address. The interface is hot-plugged, so the guest's OS must still configure it. Needs protected:network.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms nics attach [flags]
+```
+
+### Examples
+
+```
+  ca vms nics attach --vm web-01 --vpc-resource-id "$(ca vpcs get db -q)"
 ```
 
 ### Options
@@ -20,7 +26,7 @@ ca vms nics attach [flags]
       --no-wait                  print the operation and return without waiting for it
       --timeout duration         how long to wait for the operation (default 10m0s)
       --vm string                the vm id or name (required)
-      --vpc-resource-id string   The VPC's identifier, as /v1/vpcs uses it. (required)
+      --vpc-resource-id string   the VPC's id (ca vpcs get NAME -q prints it) (required)
   -y, --yes                      do not ask for confirmation
 ```
 

@@ -4,7 +4,7 @@ Release a VIP
 
 ### Synopsis
 
-Requires protected:network. Returns the private address to the VPC's network; it may be given to someone else. Refuses with 409 while the VIP has a public IP: detach it first.
+Releases the virtual IP's private address back to the VPC, where it may go to something else. A VIP with a public IP is refused: detach it with `ca vips public-ip detach` first. Needs protected:network.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 

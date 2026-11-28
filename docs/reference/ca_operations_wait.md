@@ -6,6 +6,12 @@ Wait for an operation to finish
 ca operations wait OPERATION_ID [flags]
 ```
 
+### Examples
+
+```
+  ca operations wait <operation-id> --timeout 30m
+```
+
 ### Options
 
 ```

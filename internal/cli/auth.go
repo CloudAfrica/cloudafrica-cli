@@ -44,6 +44,8 @@ func (a *App) authCmd() *cobra.Command {
 	login := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in through the browser",
+		Example: "  ca auth login\n" +
+			"  ca auth login --profile globex --account <account-id>",
 		Long: "Sign in through the browser and store the session in a profile. With --device, or by default over " +
 			"SSH and on Linux or BSD without a display, ca prints a URL and a code to use in a browser on any " +
 			"machine; --no-device keeps the browser on this one. One profile holds one account: " +
@@ -77,8 +79,9 @@ func (a *App) authCmd() *cobra.Command {
 	login.Flags().BoolVar(&device, "device", false, "sign in with a code, using a browser on any machine")
 	login.Flags().BoolVar(&noDevice, "no-device", false, "sign in through a browser on this machine")
 	elevate := &cobra.Command{
-		Use:   "elevate",
-		Short: "Allow protected actions (such as vms delete) for this sign-in or API token",
+		Use:     "elevate",
+		Short:   "Allow protected actions (such as vms delete) for this sign-in or API token",
+		Example: "  ca auth elevate",
 		Long: "Allow protected actions for the selected profile's sign-in. A sign-in that is already paired is " +
 			"left alone; otherwise it signs in again with the profile's scopes, because approving a sign-in that " +
 			"holds a protected: scope on the consent page pairs it for the account's elevation window, and then " +

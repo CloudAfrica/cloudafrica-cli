@@ -27,6 +27,6 @@ ca bucket-keys [flags]
 * [ca bucket-keys delete](ca_bucket-keys_delete.md)	 - Delete an object storage access key
 * [ca bucket-keys grant](ca_bucket-keys_grant.md)	 - Grant a key access to a bucket
 * [ca bucket-keys list](ca_bucket-keys_list.md)	 - List object storage access keys in the account
-* [ca bucket-keys reveal-secret](ca_bucket-keys_reveal-secret.md)	 - Reveal the secret the backend holds for a key
+* [ca bucket-keys reveal-secret](ca_bucket-keys_reveal-secret.md)	 - Show a key's secret
 * [ca bucket-keys revoke](ca_bucket-keys_revoke.md)	 - Revoke a key's access to a bucket
 

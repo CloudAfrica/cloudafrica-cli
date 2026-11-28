@@ -16,6 +16,12 @@ An existing CLOUDAFRICA_ELEVATION is paired again rather than replaced.
 ca auth elevate [flags]
 ```
 
+### Examples
+
+```
+  ca auth elevate
+```
+
 ### Options
 
 ```

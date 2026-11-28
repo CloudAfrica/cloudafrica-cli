@@ -4,12 +4,18 @@ Attach a public IP to a virtual machine
 
 ### Synopsis
 
-Requires protected:network. Refuses with 422 limit-reached at the VM's public-IP cap (the PUBLIC_IPS_PER_VM key) or the account's (the PUBLIC_IP key), and with a transitional 409 while THIS VM already has an attach in flight — the guard is keyed on the VM, so a concurrent attach on another of the account's VMs is not refused. privateLeaseId optionally names the VM's private address (a leaseId from GET /v1/vms/{id}/private-ips) the public IP is NATed to; absent keeps the primary interface's address. The operation fails if the named private address already has a public IP, or if the guest's firewall would not pass traffic to it. reservedIpId optionally names one of the account's unattached Reserved IPs (GET /v1/vpcs/{id}/reserved-ips) to attach instead of drawing one from the pool: 404 if the account does not hold it, 409 if it is already attached. It is exempt from the account's PUBLIC_IP cap, which already counts it, but not from the VM's. Detaching it later keeps the reservation.
+Attaches a public IP to the VM, drawn from the pool or, with --reserved-ip-id, one of the account's unattached reserved IPs; detaching it later keeps the reservation. --private-lease-id picks the private address it maps to (from `ca vms private-ips list`); the default is the primary interface's. It is refused at the VM's or the account's public-IP limit (a reserved IP counts against the VM's only), while another attach on this VM is running, and for a reserved IP that is attached already. The operation fails if the private address already has a public IP, or the guest's firewall would block traffic to it. Needs protected:network.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms public-ips attach [flags]
+```
+
+### Examples
+
+```
+  ca vms public-ips attach --vm web-01
 ```
 
 ### Options

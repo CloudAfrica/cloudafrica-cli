@@ -4,7 +4,7 @@ Delete an SSH key
 
 ### Synopsis
 
-Refused with 409 while the key is still linked to a virtual machine — unlink it from them first, then delete it.
+Deletes the key. A key still attached to a VM is refused: detach it with `ca vms ssh-keys detach` first.
 
 ```
 ca ssh-keys delete SSH_KEY [flags]

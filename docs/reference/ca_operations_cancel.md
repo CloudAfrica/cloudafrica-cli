@@ -4,12 +4,18 @@ Request cancellation of an operation
 
 ### Synopsis
 
-202 when the request was accepted; the operation reaches its terminal state later.
+Asks for the operation to be cancelled. It reaches its final state later.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca operations cancel OPERATION_ID [flags]
+```
+
+### Examples
+
+```
+  ca operations cancel <operation-id>
 ```
 
 ### Options

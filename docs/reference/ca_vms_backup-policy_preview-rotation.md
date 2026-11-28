@@ -20,7 +20,7 @@ ca vms backup-policy preview-rotation [flags]
   -d, --data string                the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help                       help for preview-rotation
       --paused                     Start the policy paused.
-      --plan-id string             Catalogue plan to copy. Null for a custom set.
+      --plan-id string             catalogue plan to copy; leave it out for a custom set
       --vm string                  the vm id or name (required)
       --window-preference string   overnight, morning, afternoon or evening.
 ```

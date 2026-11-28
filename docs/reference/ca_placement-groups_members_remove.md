@@ -4,7 +4,7 @@ Remove a VM from a placement group
 
 ### Synopsis
 
-The VM stays where it is; the constraint no longer applies to it. Synchronous: returns 200 with the group as it stands.
+Takes the VM out of the group. The VM stays where it is; the constraint no longer applies to it. Prints the group.
 
 ```
 ca placement-groups members remove VM [flags]

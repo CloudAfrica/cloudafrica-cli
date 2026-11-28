@@ -4,7 +4,7 @@ A bucket's lifecycle rules
 
 ### Synopsis
 
-Read live from the storage cluster. `unsupported` means the bucket also holds rules this API cannot represent.
+Shows the bucket's lifecycle rules, read live from the storage cluster. `unsupported` means the bucket also holds rules ca cannot show.
 
 ```
 ca buckets lifecycle get BUCKET [flags]

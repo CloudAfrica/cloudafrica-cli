@@ -4,12 +4,18 @@ Detach a public IP from a virtual machine
 
 ### Synopsis
 
-Requires protected:network. Refuses with a transitional 409 while THAT ADDRESS already has a release in flight — keyed on the address, not the VM.
+Detaches a public IP from the VM. It is refused while a release of that address is already running. Needs protected:network.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms public-ips detach PUBLIC_IP_ID [flags]
+```
+
+### Examples
+
+```
+  ca vms public-ips detach "$(ca vms public-ips list --vm web-01 -q)" --vm web-01
 ```
 
 ### Options

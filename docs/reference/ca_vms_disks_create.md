@@ -4,12 +4,18 @@ Attach a data disk to a virtual machine
 
 ### Synopsis
 
-Billing-affecting: the new volume raises the VM's disk charge. Requires write:compute. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request. That matters most here: a blind retry without one adds a SECOND billable volume.
+Attaches a new data disk, which adds to the VM's disk charge. If ca fails without an answer, run `ca vms disks list` before trying again: a second run adds a second billable disk. Needs write:compute.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms disks create [flags]
+```
+
+### Examples
+
+```
+  ca vms disks create --vm web-01 --size-gib 100
 ```
 
 ### Options
@@ -18,7 +24,7 @@ ca vms disks create [flags]
   -d, --data string        the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help               help for create
       --no-wait            print the operation and return without waiting for it
-      --size-gib int       Size in GiB, at least 1. A size above the disk ceiling is refused with a 400.
+      --size-gib int       size in GiB, at least 1, up to the disk limit
       --timeout duration   how long to wait for the operation (default 10m0s)
       --vm string          the vm id or name (required)
 ```

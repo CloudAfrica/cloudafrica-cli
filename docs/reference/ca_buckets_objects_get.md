@@ -4,7 +4,7 @@ Get one object's metadata, tags and retention
 
 ### Synopsis
 
-Reads the current version's content headers, user metadata, tags and object-lock retention. 404 for a missing key, and for an object whose current version is a delete marker.
+Shows the current version's content headers, user metadata, tags and retention. A missing key, or one whose current version is a delete marker, is refused.
 
 ```
 ca buckets objects get BUCKET [flags]

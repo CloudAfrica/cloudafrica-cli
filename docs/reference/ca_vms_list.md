@@ -4,7 +4,7 @@ List virtual machines in the account
 
 ### Synopsis
 
-Cursor-paginated: pass `cursor` from the previous response's nextCursor to fetch the next page. Use this to find a VM when you do not have its id: filter by current display name with `slug`, or read every VM in the account. Each row is the full VM, so no second call is needed for its details. When you already hold the VM's id, call getVm instead of listing.
+Lists your VMs, each with its full details. --slug narrows it to the VM with that name.
 
 ```
 ca vms list [flags]

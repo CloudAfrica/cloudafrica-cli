@@ -10,6 +10,12 @@ Newest first.
 ca vms backups list [flags]
 ```
 
+### Examples
+
+```
+  ca vms backups list --vm web-01
+```
+
 ### Options
 
 ```

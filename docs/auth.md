@@ -44,12 +44,15 @@ code signs them in as you. If the server cancels the sign-in because the code wa
 
 ## Protected actions
 
-Approving a sign-in that asks for a `protected:` scope, on the consent page, also allows protected
-actions such as `vms delete` for the account's elevation window; signing out of the portal does not end
-it. If a protected command is refused as not
-paired, `ca` offers to sign in again; on a script it exits 5. Connected apps → "Allow protected actions"
-in the portal does the same without signing in again. Choose Write or lower on the consent page to leave
-protected actions off.
+A protected action is one that is hard to undo, such as `vms delete`. It runs only for a sign-in or
+API token that is **paired**, which means a person allowed protected actions for it in the portal, as
+below. A pairing lasts for the **elevation window**, a period set by CloudAfrica; after it ends, pair
+again. A protected command that is refused as not paired exits 5 and prints the remedy.
+
+Approving a sign-in that asks for a `protected:` scope, on the consent page, pairs it; signing out of
+the portal does not end the pairing. Connected apps → "Allow protected actions" in the portal pairs a
+sign-in without signing in again. Choose Write or lower on the consent page to leave protected actions
+off. When a protected command is refused at a terminal, `ca` offers to sign in again.
 
 `ca auth elevate` on a sign-in checks whether it is already paired and, if not, signs in again so that
 approving a `protected:` scope pairs it, then checks. With `CLOUDAFRICA_TOKEN` it pairs the token instead, as below.

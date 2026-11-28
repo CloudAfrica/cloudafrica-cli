@@ -111,6 +111,7 @@ In zsh, `source <(ca completion zsh)`; in fish, `ca completion fish | source`; i
 - [Signing in and protected actions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/auth.md), including scripts and CI
 - [Conventions](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/conventions.md): names or ids, waiting, confirmation, output, exit codes
 - [Environment variables](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/environment.md)
+- [Scripting with ca](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/scripting.md): JSON and ids, waiting, retrying, CI
 - Commands by domain:
   - [Compute](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/compute.md): VMs, disks, backups, placement groups, SSH keys, images
   - [Networking](https://github.com/CloudAfrica/cloudafrica-cli/blob/main/docs/networking.md): VPCs, reserved IPs, VIPs, firewall rules

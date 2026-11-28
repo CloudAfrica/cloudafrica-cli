@@ -4,7 +4,7 @@ Create a project
 
 ### Synopsis
 
-Creates an empty project in the token's account. Only an account admin's personal token can create a project: every account-service token is refused with 403. The slug is optional: 2 to 5 letters or digits, starting with a letter, upper-cased on receipt (prd is stored as PRD), DEF is reserved, derived from the name when omitted (Production gives PRD), and fixed once created. 409 if the account already has a project with this name (ignoring case) or with this slug. Requires an idempotency key: a retry under the same key returns the first call's project rather than creating a second.
+Creates an empty project. Only an account admin's own sign-in or personal token can; an account service token is refused. --slug is 2 to 5 letters or digits starting with a letter, upper-cased (prd becomes PRD); DEF is reserved, it is derived from the name when you leave it out (Production gives PRD), and it cannot be changed. A name (ignoring case) or slug another project has is refused.
 
 ```
 ca projects create [flags]

@@ -256,6 +256,28 @@ func TestGenerateStringListQuery(t *testing.T) {
 	}
 }
 
+// short: and long: replace the API's summary and description; an operation without them keeps the API's.
+func TestGenerateHelpOverrides(t *testing.T) {
+	overlay := strings.Replace(fixtureOverlay, "  createWidget:\n",
+		"  createWidget:\n    short: Make a widget\n    long: >-\n      Makes a widget,\n      in ca's words.\n", 1)
+	out, _, err := generate(t, fixtureDoc(), overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := opByID(t, out, "createWidget")
+	if c.Short != "Make a widget" || c.Long != "Makes a widget, in ca's words." {
+		t.Errorf("createWidget help = %q / %q", c.Short, c.Long)
+	}
+	plain, _, err := generate(t, fixtureDoc(), fixtureOverlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := opByID(t, plain, "listWidgets")
+	if got := opByID(t, out, "listWidgets"); got.Short != want.Short || got.Long != want.Long {
+		t.Errorf("listWidgets help changed: %q / %q", got.Short, got.Long)
+	}
+}
+
 func TestGenerateRefuses(t *testing.T) {
 	for name, c := range map[string]struct {
 		doc     func(d map[string]any)

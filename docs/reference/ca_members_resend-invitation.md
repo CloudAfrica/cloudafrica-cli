@@ -4,7 +4,7 @@ Resend a pending invitation
 
 ### Synopsis
 
-Sends the invitation again to someone who has not accepted yet. Pending invitations only: 409 means the invitation was already accepted, or the invitee has no identity to send to. An accepted member is removed with `DELETE /v1/members/{userId}` (protected:team). `userId` is the id `GET /v1/members` returns.
+Sends a pending invitation again. It is refused when the invitation was already accepted, or when there is no one to send it to; remove an accepted member with `ca members delete`.
 
 ```
 ca members resend-invitation MEMBER [flags]

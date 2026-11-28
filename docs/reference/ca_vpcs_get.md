@@ -10,6 +10,12 @@ Get a VPC by id
 ca vpcs get VPC [flags]
 ```
 
+### Examples
+
+```
+  ca vpcs get web
+```
+
 ### Options
 
 ```

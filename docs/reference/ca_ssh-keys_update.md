@@ -4,7 +4,7 @@ Rename an SSH key
 
 ### Synopsis
 
-Rename only — the key body cannot be rotated; delete and re-create to replace it. The backend authorizes on the stored key's owner and reads only the new name from the body, so the forwarded userId is inert here.
+Renames the key. The key itself cannot be changed: delete it and create a new one.
 
 ```
 ca ssh-keys update SSH_KEY [flags]

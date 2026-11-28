@@ -4,7 +4,7 @@ Turn a VPC's internal DNS on or off
 
 ### Synopsis
 
-Send {"enabled": true} to turn it on or {"enabled": false} to turn it off; repeating the same request changes nothing. Turning it on checks the VPC first and answers 409 with a sentence saying why when it cannot be served. Turning it off drains: the names keep resolving for guests whose DHCP lease still names the resolver, and state is winding_down until then. The answer is the state the change leads to, setting_up or winding_down when it could not be read back yet: read it again with GET.
+Turns internal DNS on with --enabled=true or off with --enabled=false; repeating either changes nothing. Turning it on checks the VPC first, and says why when it cannot be served. Turning it off drains: the names keep resolving for guests whose DHCP lease still names the resolver, and the state is winding_down until then. Prints the state the change leads to; run `ca vpcs internal-dns get` to see it settle.
 
 ```
 ca vpcs internal-dns set [flags]

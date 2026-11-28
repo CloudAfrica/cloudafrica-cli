@@ -4,7 +4,7 @@ Delete a project
 
 ### Synopsis
 
-Only an empty project that is not the account's default and not managed by the platform can be deleted; anything else answers 409, so move its resources out first. Only an account admin's personal token can delete a project: every account-service token is refused with 403.
+Deletes an empty project. The default project and projects the platform manages cannot be deleted, and a project that holds resources is refused: move them out first. Only an account admin's own sign-in or personal token can delete; an account service token is refused.
 
 ```
 ca projects delete PROJECT [flags]

@@ -18,14 +18,7 @@ func handWritten(t *testing.T) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pages = append(pages, "../../../README.md")
-	var kept []string
-	for _, p := range pages {
-		if filepath.Base(p) != "traps.md" {
-			kept = append(kept, p)
-		}
-	}
-	return kept
+	return append(pages, "../../../README.md")
 }
 
 var inlineCa = regexp.MustCompile("`(ca [^`]+)`")
@@ -281,5 +274,89 @@ func TestReferenceLinksExist(t *testing.T) {
 	}
 	if links == 0 {
 		t.Fatal("found no reference links: the pattern or the page list is wrong")
+	}
+}
+
+// apiWords are API transport details a `ca` user never sees: `ca` waits on operations, follows pages,
+// sends the Idempotency-Key and maps statuses to exit codes, and its users run commands, not routes.
+var apiWords = regexp.MustCompile(`\b(GET|POST|PUT|PATCH|DELETE) [/…]|/v1/|\bthis route\b|Idempotency-Key|(?i:\b(returns|answers|refuses with|refused with|is a|is) [1-5][0-9][0-9]\b)|\b[1-5]0[0-9]s?\b|\b5xx\b|Asynchronous|Synchronous|\bLocation\b|\bgateway\b|\bbackend\b|\bthis API\b|(?i:cursor-paginated)|\?cursor=|previous response|\b[A-Z][A-Z_]{3,} key\b|\bNull\b|\bnull\b|\bthe caller\b`)
+
+// commands is every command under c; hidden ones only when withHidden.
+func commands(c *cobra.Command, withHidden bool, into *[]*cobra.Command) {
+	for _, s := range c.Commands() {
+		if (s.Hidden && !withHidden) || s.Name() == "help" {
+			continue
+		}
+		*into = append(*into, s)
+		commands(s, withHidden, into)
+	}
+}
+
+// Help text describes `ca`, not the HTTP API behind it.
+func TestHelpSpeaksCLI(t *testing.T) {
+	var cmds []*cobra.Command
+	commands(root(), false, &cmds)
+	for _, c := range cmds {
+		for _, s := range []string{c.Short, c.Long} {
+			if m := apiWords.FindString(s); m != "" {
+				t.Errorf("%s: help says %q: describe what ca does instead (long: in commands.yaml)", c.CommandPath(), m)
+			}
+		}
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if m := apiWords.FindString(f.Usage); m != "" {
+				t.Errorf("%s --%s: help says %q", c.CommandPath(), f.Name, m)
+			}
+		})
+	}
+	if len(cmds) < 100 {
+		t.Fatalf("walked %d commands: the tree is not the real one", len(cmds))
+	}
+}
+
+// pflag shows a backticked word in a flag's usage as the value's type: `--vpc ca vpcs list`.
+func TestFlagUsageHasNoBackticks(t *testing.T) {
+	var cmds []*cobra.Command
+	commands(root(), true, &cmds)
+	for _, c := range cmds {
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if strings.Contains(f.Usage, "`") {
+				t.Errorf("%s --%s: usage %q has a backtick", c.CommandPath(), f.Name, f.Usage)
+			}
+		})
+	}
+}
+
+// Every --help example names commands and flags that exist, as the hand-written pages must.
+func TestExamplesResolve(t *testing.T) {
+	r := root()
+	var cmds []*cobra.Command
+	commands(r, true, &cmds)
+	examples := 0
+	for _, c := range cmds {
+		if c.Example == "" {
+			continue
+		}
+		examples++
+		page := filepath.Join(t.TempDir(), "example.md")
+		if err := os.WriteFile(page, []byte("```\n"+c.Example+"\n```\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range commandLines(t, page) {
+			found, flags, problem := resolve(r, line)
+			if problem != "" {
+				t.Errorf("%s example %q: %s", c.CommandPath(), line, problem)
+				continue
+			}
+			for _, fc := range found {
+				for _, f := range flags {
+					if !hasFlag(fc, f) {
+						t.Errorf("%s example %q: %s has no flag %s", c.CommandPath(), line, fc.CommandPath(), f)
+					}
+				}
+			}
+		}
+	}
+	if examples < 50 {
+		t.Fatalf("found %d examples: the walk is wrong", examples)
 	}
 }

@@ -4,7 +4,7 @@ List the versions of one object
 
 ### Synopsis
 
-Lists every version of exactly one key, delete markers included: the current version first, then newest first. A bucket that was never versioned lists one entry with a null versionId. Cursor-paginated; a version written between two pages can list the version it replaced again, now as noncurrent, and when the newest versions are permanently deleted between pages, the version that becomes current can be skipped. Follow nextCursor until it is null; a page can be short or even empty while more follow, so never infer the end from a page's size.
+Lists every version of one key, delete markers included: the current version first, then newest first. A bucket that was never versioned lists one entry with no version id. A version written while the list runs can show twice, the second time as noncurrent; one that becomes current because newer versions were deleted meanwhile can be missed. With --limit, a page can be short or empty while more follow: keep going until it has no nextCursor.
 
 ```
 ca buckets objects versions BUCKET [flags]

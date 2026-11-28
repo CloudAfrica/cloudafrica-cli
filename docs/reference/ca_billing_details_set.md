@@ -4,7 +4,7 @@ Update the account's billing details
 
 ### Synopsis
 
-Partial: an omitted or null field is left unchanged. An account with no billing record yet stores the edit and pushes it to billing; the address must then be complete. Requires protected:billing — the backend requires a recent second factor for a session and accepts this scope in its place for a token.
+Changes the fields you give and leaves the rest. On an account with no billing record yet, the address must be complete. Needs protected:billing.
 
 ```
 ca billing details set [flags]
@@ -19,17 +19,17 @@ ca billing details set [flags]
 ### Options
 
 ```
-      --billing-email string     Billing email address. Null or absent leaves it unchanged.
-      --company-number string    Company registration number. Null or absent leaves it unchanged.
+      --billing-email string     billing email address; leave it out to keep the current value
+      --company-number string    company registration number; leave it out to keep the current value
       --country-code string      ISO-3166 alpha-2 country code, e.g. ZA. Absent leaves it unchanged; it cannot be cleared.
   -d, --data string              the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help                     help for set
-      --postal-address1 string   Postal address line 1. Null or absent leaves it unchanged.
-      --postal-address2 string   Postal address line 2. Null or absent leaves it unchanged.
-      --postal-address3 string   Postal address line 3. Null or absent leaves it unchanged.
-      --postal-address4 string   Postal address line 4. Null or absent leaves it unchanged.
-      --postal-address5 string   Postal address line 5. Null or absent leaves it unchanged.
-      --vat-number string        VAT registration number. Null or absent leaves it unchanged.
+      --postal-address1 string   postal address line 1; leave it out to keep the current value
+      --postal-address2 string   postal address line 2; leave it out to keep the current value
+      --postal-address3 string   postal address line 3; leave it out to keep the current value
+      --postal-address4 string   postal address line 4; leave it out to keep the current value
+      --postal-address5 string   postal address line 5; leave it out to keep the current value
+      --vat-number string        VAT registration number; leave it out to keep the current value
   -y, --yes                      do not ask for confirmation
 ```
 

@@ -4,10 +4,16 @@ Make an SSH key usable by a virtual machine
 
 ### Synopsis
 
-The key must belong to the token's own person — a key is never usable by an account at large. Use `GET /v1/ssh-keys` for the ids.
+Attaches one of your own SSH keys to the VM. `ca ssh-keys list` shows them.
 
 ```
 ca vms ssh-keys attach SSH_KEY [flags]
+```
+
+### Examples
+
+```
+  ca vms ssh-keys attach laptop --vm web-01
 ```
 
 ### Options

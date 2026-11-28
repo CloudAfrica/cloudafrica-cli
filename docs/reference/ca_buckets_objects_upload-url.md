@@ -4,7 +4,7 @@ Mint a short-lived URL that uploads one new object
 
 ### Synopsis
 
-Returns a URL to PUT the bytes of one new object to, valid until `expiresAt`. The PUT must send every header in `headers` exactly as given, because they are signed into the URL, and must send exactly `contentLength` bytes, at most 25 MiB. A key that already exists is refused: when the URL is minted on a bucket with versioning on, and by the PUT itself otherwise, because the URL signs `If-None-Match: *`. On a bucket with versioning on, a write to the key after the mint, this URL's included, becomes a new version and keeps the earlier one as noncurrent. For larger files or an overwrite, use an S3 client with a bucket key. An Idempotency-Key on this call replays an empty 200, not the URL: mint again without one. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route.
+Prints a URL and headers to upload one new object of at most 25 MiB. The PUT must send every header exactly as given, because they are signed into the URL, and exactly --content-length bytes. A key that already exists is refused. On a bucket with versioning on, a later write to the key becomes a new version and keeps this one. For a larger file or an overwrite, use an S3 client with a bucket key. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
 
 ```
 ca buckets objects upload-url BUCKET [flags]

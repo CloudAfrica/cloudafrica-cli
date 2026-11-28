@@ -4,7 +4,7 @@ Remove a virtual machine's backup policy
 
 ### Synopsis
 
-Stops future scheduled backups. Nothing is deleted: every existing backup stays where it is. 404 when the VM had no policy.
+Stops future scheduled backups. Existing backups are kept. A VM with no policy is refused.
 
 ```
 ca vms backup-policy delete [flags]

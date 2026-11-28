@@ -4,10 +4,16 @@ Give a VIP a public IP
 
 ### Synopsis
 
-Requires protected:network. Takes a free public address from the pool; the address is not a parameter. Synchronous: returns 200 with the VIP. Refuses with 409 when the VIP already has a public IP or no address is free, and with 422 limit-reached at the account's public-IP cap (the PUBLIC_IP key). If the answer to an attach is lost, a retry with the same Idempotency-Key replays the 200; under a new key it answers 409, so list GET /v1/vips and treat a VIP that now has a publicAddress as attached.
+Gives the virtual IP a free public address from the pool. A VIP that already has one is refused, and so is an account at its public-IP limit or a pool with no address free. If ca fails without an answer, run `ca vips list`: a VIP that now shows a public address was attached. Needs protected:network.
 
 ```
 ca vips public-ip attach [flags]
+```
+
+### Examples
+
+```
+  ca vips public-ip attach --vpc web --vip lb1
 ```
 
 ### Options

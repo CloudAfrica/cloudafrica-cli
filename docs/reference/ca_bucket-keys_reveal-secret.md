@@ -1,10 +1,10 @@
 ## ca bucket-keys reveal-secret
 
-Reveal the secret the backend holds for a key
+Show a key's secret
 
 ### Synopsis
 
-Requires protected:s3. 200 with the secret, or 200 with available=false and no secret when the backend holds none — a key created before secret storage was backfilled. 404 only for a key that is not in this account. Answered no-store: a live credential must not sit in a response an intermediary may cache. A retry carrying the same Idempotency-Key replays the 200 without the secret, so call it again without that header to read one.
+Shows the key's secret. A key created before secrets were stored has none, and the answer says so with available=false. Needs protected:s3.
 
 ```
 ca bucket-keys reveal-secret BUCKET_KEY [flags]

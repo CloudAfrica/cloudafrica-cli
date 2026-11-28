@@ -37,9 +37,10 @@ func (a *App) operationCmd() *cobra.Command {
 	cmd.Aliases = []string{"operation", "op"}
 	var wf waitFlags
 	wait := &cobra.Command{
-		Use:   "wait OPERATION_ID",
-		Short: "Wait for an operation to finish",
-		Args:  exactArgs(1, "OPERATION_ID"),
+		Use:     "wait OPERATION_ID",
+		Short:   "Wait for an operation to finish",
+		Example: "  ca operations wait <operation-id> --timeout 30m",
+		Args:    exactArgs(1, "OPERATION_ID"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.withSession(cmd.Context(), func(s *session) error {
 				return a.waitAndPrint(cmd.Context(), s, args[0], wf)

@@ -136,19 +136,29 @@ exclude:
 
 operations:
   listVms:
+    long: >-
+      Lists your VMs, each with its full details. --slug narrows it to the VM with that name.
     flags:
       slug: {help: only the VM with this slug}
     example: ca vms list
   getVm:
+    long: >-
+      Shows one VM and its current state.
     example: ca vms get web-01
   startVm:
     example: ca vms start web-01
   shutdownVm:
+    long: >-
+      Asks the guest OS to shut down.
     flags:
       timeout: {name: guest-timeout}
+    example: |
+      ca vms shutdown web-01
   applyVmPendingRestart:
     flags:
       timeout: {name: guest-timeout}
+    example: |
+      ca vms apply-pending-restart web-01
   resizeVm:
     flags:
       cpus: {name: vcpu, help: the new vCPU count}
@@ -160,65 +170,173 @@ operations:
     example: ca vms rename web-01 --name db-01
   backupVm:
     path: vms backups create
+    example: |
+      ca vms backups create --vm web-01
   attachVmNetworkInterface:
+    long: >-
+      Adds a network interface in one of the account's VPCs; the platform picks its address. The interface
+      is hot-plugged, so the guest's OS must still configure it. Needs protected:network.
+    flags:
+      vpcResourceId: {help: "the VPC's id (ca vpcs get NAME -q prints it)"}
     path: vms nics attach
+    example: |
+      ca vms nics attach --vm web-01 --vpc-resource-id "$(ca vpcs get db -q)"
   detachVmNetworkInterface:
     path: vms nics detach
   attachVmPublicIp:
+    long: >-
+      Attaches a public IP to the VM, drawn from the pool or, with --reserved-ip-id, one of the account's
+      unattached reserved IPs; detaching it later keeps the reservation. --private-lease-id picks the
+      private address it maps to (from `ca vms private-ips list`); the default is the primary interface's.
+      It is refused at the VM's or the account's public-IP limit (a reserved IP counts against the VM's
+      only), while another attach on this VM is running, and for a reserved IP that is attached already.
+      The operation fails if the private address already has a public IP, or the guest's firewall would
+      block traffic to it. Needs protected:network.
     path: vms public-ips attach
+    example: |
+      ca vms public-ips attach --vm web-01
   detachVmPublicIp:
+    long: >-
+      Detaches a public IP from the VM. It is refused while a release of that address is already running.
+      Needs protected:network.
     path: vms public-ips detach
+    example: |
+      ca vms public-ips detach "$(ca vms public-ips list --vm web-01 -q)" --vm web-01
   attachVmSshKey:
+    long: >-
+      Attaches one of your own SSH keys to the VM. `ca ssh-keys list` shows them.
     path: vms ssh-keys attach
+    example: |
+      ca vms ssh-keys attach laptop --vm web-01
   detachVmSshKey:
     path: vms ssh-keys detach
   addVmToVip:
+    long: >-
+      Makes the VM a server for the virtual IP's address and lets the VIP's traffic reach it. The platform
+      does not choose a holder, so the guest must configure the address itself. Adding a member again
+      changes nothing. A VIP owned by a Kubernetes LoadBalancer Service, a VM the platform manages, or a
+      VIP with no VPC is refused. Needs protected:network and access to both the VM and the VIP's VPC.
     path: vms vips add
+    example: |
+      ca vms vips add lb1 --vm web-01
   removeVmFromVip:
     path: vms vips remove
   addPlacementGroupMember:
+    long: >-
+      Puts the VM in the group. That constrains where it is placed next; a running VM does not move.
+      Adding a VM already in this group changes nothing. A VM in another group is refused, and so is a
+      group at its member limit. Prints the group.
     path: placement-groups members add
   removePlacementGroupMember:
+    long: >-
+      Takes the VM out of the group. The VM stays where it is; the constraint no longer applies to it.
+      Prints the group.
     path: placement-groups members remove
   updateVmBackupProtection:
+    long: >-
+      Protects a backup from rotation, or releases it. A protected backup is not deleted when retention
+      tightens. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches
+      no backup, or more than one, is refused.
     path: vms backups set-protection
+    example: |
+      ca vms backups set-protection 2026-11-01T02:00:00Z --vm web-01 --protected
   previewVmBackupPolicyRotation:
+    flags:
+      planId: {help: "catalogue plan to copy; leave it out for a custom set"}
     path: vms backup-policy preview-rotation
   cancelOperation:
+    long: >-
+      Asks for the operation to be cancelled. It reaches its final state later.
     path: operations cancel
     wait: self
+    example: |
+      ca operations cancel <operation-id>
   createVpcVip:
+    long: >-
+      Reserves a virtual IP: a free private address in the VPC, picked for you. Needs write:network.
     path: vips create
+    example: |
+      ca vips create --vpc web
   deleteVpcVip:
+    long: >-
+      Releases the virtual IP's private address back to the VPC, where it may go to something else. A VIP
+      with a public IP is refused: detach it with `ca vips public-ip detach` first. Needs
+      protected:network.
     path: vips delete
   listVpcVipFirewallRules:
     path: vips firewall-rules list
   createVpcVipFirewallRule:
     path: vips firewall-rules create
+    example: |
+      ca vips firewall-rules create --vpc web --vip lb1 --protocol tcp --from-port 443 --to-port 443 --source any
   deleteVpcVipFirewallRule:
     path: vips firewall-rules delete
   setVpcVipFirewallRuleDescription:
+    flags:
+      description: {help: "at most 255 characters; an empty value clears it"}
     path: vips firewall-rules update
   attachVpcVipPublicIp:
+    long: >-
+      Gives the virtual IP a free public address from the pool. A VIP that already has one is refused, and
+      so is an account at its public-IP limit or a pool with no address free. If ca fails without an
+      answer, run `ca vips list`: a VIP that now shows a public address was attached. Needs
+      protected:network.
     path: vips public-ip attach
+    example: |
+      ca vips public-ip attach --vpc web --vip lb1
   detachVpcVipPublicIp:
+    long: >-
+      Returns the virtual IP's public address to the pool; a VIP with none is left as it is. A VIP that
+      still has firewall rules is refused: delete them with `ca vips firewall-rules delete` first. A VIP
+      the platform manages is refused too. Needs protected:network.
     path: vips public-ip detach
   addVmDisk:
+    long: >-
+      Attaches a new data disk, which adds to the VM's disk charge. If ca fails without an answer, run `ca
+      vms disks list` before trying again: a second run adds a second billable disk. Needs write:compute.
+    flags:
+      sizeGib: {help: "size in GiB, at least 1, up to the disk limit"}
     path: vms disks create
+    example: |
+      ca vms disks create --vm web-01 --size-gib 100
   createVpc:
+    long: >-
+      Creates a VPC. It is refused when there is no capacity for it. Needs write:network.
     example: ca vpcs create --name web
   getVpcInternalDns:
+    long: >-
+      Shows whether internal DNS is on for the VPC and serving, and the names its VMs and virtual IPs
+      resolve to. It fails when the platform cannot be asked right now; try again shortly.
     path: vpcs internal-dns get
   setVpcInternalDns:
+    long: >-
+      Turns internal DNS on with --enabled=true or off with --enabled=false; repeating either changes
+      nothing. Turning it on checks the VPC first, and says why when it cannot be served. Turning it off
+      drains: the names keep resolving for guests whose DHCP lease still names the resolver, and the state
+      is winding_down until then. Prints the state the change leads to; run `ca vpcs internal-dns get` to
+      see it settle.
     path: vpcs internal-dns set
     example: ca vpcs internal-dns set --vpc web --enabled=false
   listIpAddresses:
     example: ca ips list
   listPlacementGroupDatacenters:
+    long: >-
+      Lists the datacenters, each with its slug. `ca placement-groups create --datacenter-id` takes only a
+      slug from this list: a display name, or a datacenter the account cannot place into, is refused.
     path: datacenters list
+    example: |
+      ca datacenters list
   createBucket:
+    long: >-
+      Orders a bucket. The platform names it, and it shows in `ca buckets list` once it exists. A bucket
+      past the account's bucket limit is refused, with the reason. Needs write:s3.
     example: ca buckets create --display-name backups
   deleteBucket:
+    long: >-
+      Deletes the bucket and every object in it. It cannot be undone, and the name can never be used
+      again. --confirm-bucket-name must spell the bucket's name exactly as `ca buckets list` shows it. A
+      second delete while one is running is refused. Needs read:s3 as well, because ca looks the bucket up
+      in your bucket list. Needs protected:s3.
     flags:
       confirmBucketName: {help: "the bucket's name, spelled exactly as ca buckets list shows it"}
     example: ca buckets delete logs-7f3a --confirm-bucket-name logs-7f3a
@@ -230,6 +348,10 @@ operations:
     path: buckets versioning get
     positional: id
   updateBucketVersioning:
+    long: >-
+      Turns versioning on. It cannot be turned off again, and ca cannot suspend it. Do not suspend it from
+      an S3 client either: a known storage fault can corrupt a suspended bucket. Needs protected:s3. Needs
+      read:s3 as well, because ca looks the bucket up in your bucket list.
     path: buckets versioning set
     positional: id
     example: ca buckets versioning set logs-7f3a --mode enabled
@@ -238,22 +360,43 @@ operations:
     positional: id
     example: ca buckets protection logs-7f3a
   listBucketObjects:
+    long: >-
+      Lists the objects in key order, under --prefix or across the bucket. With --limit, a page can be
+      short or empty while more follow: keep going until it has no nextCursor.
     path: buckets objects list
     positional: id
     example: ca buckets objects list logs-7f3a --prefix reports/2026/ --limit 50
   listBucketDeletedObjects:
+    long: >-
+      Lists the keys whose current version is a delete marker, under --prefix or across the bucket:
+      deleted, with earlier versions still held. Each row is that delete marker. With --limit, a page can
+      be short or empty while more follow: keep going until it has no nextCursor.
     path: buckets objects list-deleted
     positional: id
     example: ca buckets objects list-deleted logs-7f3a --prefix reports/
   listBucketObjectVersions:
+    long: >-
+      Lists every version of one key, delete markers included: the current version first, then newest
+      first. A bucket that was never versioned lists one entry with no version id. A version written while
+      the list runs can show twice, the second time as noncurrent; one that becomes current because newer
+      versions were deleted meanwhile can be missed. With --limit, a page can be short or empty while more
+      follow: keep going until it has no nextCursor.
     path: buckets objects versions
     positional: id
     example: ca buckets objects versions logs-7f3a --key reports/q3.pdf
   getBucketObjectMetadata:
+    long: >-
+      Shows the current version's content headers, user metadata, tags and retention. A missing key, or
+      one whose current version is a delete marker, is refused.
     path: buckets objects get
     positional: id
     example: ca buckets objects get logs-7f3a --key reports/q3.pdf
   createObjectDownloadUrl:
+    long: >-
+      Prints a URL that downloads the object, or the version --version-id names, with no other
+      credentials, for about a minute. Treat it as a secret while it works. A missing key, an unknown
+      version, or a delete marker is refused. Needs read:s3 as well, because ca looks the bucket up in
+      your bucket list.
     path: buckets objects download-url
     positional: id
     flags:
@@ -262,6 +405,12 @@ operations:
       # -q prints the URL, which expires in about a minute
       URL=$(ca buckets objects download-url logs-7f3a --key reports/q3.pdf --yes -q) && curl -fsS -o q3.pdf "$URL"
   createObjectUploadUrl:
+    long: >-
+      Prints a URL and headers to upload one new object of at most 25 MiB. The PUT must send every header
+      exactly as given, because they are signed into the URL, and exactly --content-length bytes. A key
+      that already exists is refused. On a bucket with versioning on, a later write to the key becomes a
+      new version and keeps this one. For a larger file or an overwrite, use an S3 client with a bucket
+      key. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
     path: buckets objects upload-url
     positional: id
     flags:
@@ -272,10 +421,22 @@ operations:
       ca buckets objects upload-url logs-7f3a --key reports/q3.pdf --content-type application/pdf \
         --content-length 2048 -o json
   getBucketLifecycle:
+    long: >-
+      Shows the bucket's lifecycle rules, read live from the storage cluster. `unsupported` means the
+      bucket also holds rules ca cannot show.
     path: buckets lifecycle get
     positional: id
     example: ca buckets lifecycle get logs-7f3a
   replaceBucketLifecycle:
+    long: >-
+      Replaces every lifecycle rule with the rules you send; an empty list removes them all. Send the
+      rules `ca buckets lifecycle get` returned as basedOn: the change is refused when the stored rules
+      differ, or when you leave basedOn out and the bucket has rules. --replace-unsupported skips that
+      check and replaces whatever is stored. Enabling a rule, or --replace-unsupported, is a protected
+      action. Prints the rules as stored. Needs read:s3 as well, because ca looks the bucket up in your
+      bucket list.
+    flags:
+      replaceUnsupported: {help: "replace whatever is stored, without the basedOn check; always a protected action"}
     path: buckets lifecycle set
     positional: id
     example: |
@@ -288,6 +449,11 @@ operations:
     positional: id
     example: ca buckets cors get logs-7f3a
   replaceBucketCors:
+    long: >-
+      Replaces every CORS rule with the rules you send; an empty list removes them all. Send the rules `ca
+      buckets cors get` returned as basedOn: the change is refused when the stored rules differ, or when
+      you leave basedOn out and the bucket has rules. Prints the rules as stored. Needs read:s3 as well,
+      because ca looks the bucket up in your bucket list.
     path: buckets cors set
     positional: id
     example: |
@@ -296,25 +462,44 @@ operations:
         | jq '{rules: [], basedOn: .rules}' \
         | ca buckets cors set logs-7f3a -d @- --yes
   createBucketKey:
+    long: >-
+      Creates an access key, attached to a bucket with --bucket-resource-id or account-wide without it.
+      The secret is printed once, here; `ca bucket-keys reveal-secret` shows it again. A name another key
+      holds is refused, and so is a key past the account's key limit. If ca fails without an answer, run
+      `ca bucket-keys list` before trying again: a second run can create a second live key. Needs
+      protected:s3.
     flags:
       bucketResourceId: {help: "the id of the bucket to attach the key to (ca buckets get NAME -q prints it), not its name; omit for an account-level key"}
     example: |
       # -q prints the secret key, not the id
       SECRET=$(ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)" --yes -q)
   revealBucketKeySecret:
+    short: Show a key's secret
+    long: >-
+      Shows the key's secret. A key created before secrets were stored has none, and the answer says so
+      with available=false. Needs protected:s3.
     example: |
       # -q prints the secret key, not the id
       SECRET=$(ca bucket-keys reveal-secret ci --yes -q)
   grantBucketKeyBucketAccess:
+    long: >-
+      Gives the key its permission (read or full) on the bucket, and rewrites the bucket's policy to name
+      it. Needs read:s3 as well, because ca looks the bucket up in your bucket list. Needs protected:s3.
     path: bucket-keys grant
     positional: keyId
     example: ca bucket-keys grant ci --bucket logs-7f3a
   revokeBucketKeyBucketAccess:
+    long: >-
+      Rewrites the bucket's policy without the key; the key stays in the account. Needs read:s3 as well,
+      because ca looks the bucket up in your bucket list. Needs protected:s3.
     path: bucket-keys revoke
     positional: keyId
     example: ca bucket-keys revoke ci --bucket logs-7f3a
 
   getAccount:
+    long: >-
+      Shows the account you are signed in to, the scopes your sign-in or token holds, and the rate-limit
+      budget left.
     example: ca account get
   getAccountLimits:
     path: account limits
@@ -322,9 +507,17 @@ operations:
   getAccountDeletedVmBackupRetention:
     path: account backup-retention
   listActivity:
+    long: >-
+      Lists the account's activity, newest first. --types narrows it to kinds of resource. --subject-type
+      with --subject-id shows one resource's newest activity instead, at most 50 rows and in one page. The
+      two do not mix. You see the rows your scopes could read directly; teammates show by display name,
+      and an account service token as "Service token". Needs no scope of its own.
     exclusive: [[types], [subject-type, subject-id]]
     example: ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
   listBackupPolicies:
+    long: >-
+      Lists the backup policy of each live VM, with the VM's id. A deleted VM's policy is not listed; `ca
+      vms backup-policy get` still shows it.
     path: backup-policies list
   listBackupWindows:
     path: backup-windows list
@@ -337,51 +530,278 @@ operations:
   getBillingDetails:
     path: billing details get
   updateBillingDetails:
+    flags:
+      billingEmail: {help: "billing email address; leave it out to keep the current value"}
+      companyNumber: {help: "company registration number; leave it out to keep the current value"}
+      vatNumber: {help: "VAT registration number; leave it out to keep the current value"}
+      postalAddress1: {help: "postal address line 1; leave it out to keep the current value"}
+      postalAddress2: {help: "postal address line 2; leave it out to keep the current value"}
+      postalAddress3: {help: "postal address line 3; leave it out to keep the current value"}
+      postalAddress4: {help: "postal address line 4; leave it out to keep the current value"}
+      postalAddress5: {help: "postal address line 5; leave it out to keep the current value"}
+    long: >-
+      Changes the fields you give and leaves the rest. On an account with no billing record yet, the
+      address must be complete. Needs protected:billing.
     path: billing details set
     atLeastOne: [billing-email, vat-number, company-number, postal-address1, postal-address2, postal-address3, postal-address4, postal-address5, country-code]
     example: ca billing details set --billing-email accounts@example.com
   listTransactions:
+    long: >-
+      Lists invoices and credit notes, newest first. Credit notes are negative and appear once posted to
+      the accounting system. When credit notes cannot be read, the list fails rather than leave them out.
     example: ca transactions list
   createMember:
+    long: >-
+      Invites someone by email. The invitation stays pending until they accept it, so they have no access
+      yet when this returns. Inviting an accepted member changes nothing. Needs protected:team.
     example: ca members create --email jo@example.com --role operator
   deleteMember:
+    long: >-
+      Removes the member, and revokes their personal API tokens for this account so a token they hold
+      stops working here. Removing someone who is not a member is refused. Needs protected:team.
     example: ca members delete jo@example.com
   cancelMemberInvitation:
+    long: >-
+      Withdraws an invitation that has not been accepted. An accepted invitation is refused; remove that
+      member with `ca members delete`.
     example: ca members cancel-invitation jo@example.com
   resendMemberInvitation:
+    long: >-
+      Sends a pending invitation again. It is refused when the invitation was already accepted, or when
+      there is no one to send it to; remove an accepted member with `ca members delete`.
     example: ca members resend-invitation jo@example.com
   updateMemberRole:
+    long: >-
+      Sets the role: operator, admin, billing or viewer. Only an owner can change a role to or from
+      billing. It works on a pending invitee too. owner is refused, and so is changing an owner's role:
+      ownership is transferred, not granted. Needs protected:team.
     path: members role set
     positional: userId
     example: ca members role set jo@example.com --role admin
   getPlacementFeasibility:
+    long: >-
+      Shows how many of --count VMs of this shape the datacenter could place, optionally in a placement
+      group. Nothing is reserved. --count defaults to 1 and the answer never exceeds it; the platform may
+      lower a large count, and the output's `requested` shows the count it used. --extra-disks-gib is the
+      total of all extra disks, not one disk.
     path: datacenters feasibility
     flags:
       datacenterSlug: {name: datacenter}
       ramMib: {name: ram-gib, scale: 1024, help: the VM's RAM in GiB}
     example: ca datacenters feasibility --datacenter jnb --vcpu 4 --ram-gib 8 --boot-disk-gib 40
   createProject:
+    long: >-
+      Creates an empty project. Only an account admin's own sign-in or personal token can; an account
+      service token is refused. --slug is 2 to 5 letters or digits starting with a letter, upper-cased
+      (prd becomes PRD); DEF is reserved, it is derived from the name when you leave it out (Production
+      gives PRD), and it cannot be changed. A name (ignoring case) or slug another project has is refused.
     example: ca projects create --name Production --slug PRD
   updateProject:
+    long: >-
+      Renames the project. A name another project has, ignoring case, is refused. Needs an account admin's
+      sign-in or personal token, or an account service token with service_admin.
     example: ca projects update prod --name Production
   moveProjectResource:
+    long: >-
+      Moves a resource into the project from whichever project holds it now; repeating it changes nothing.
+      Prints the project. It works within one account only, and resources that belong to another, such as
+      public IPs and firewall rules, cannot be moved. Needs an account admin's sign-in or personal token,
+      or an account service token with service_admin.
     path: projects resources move
     positional: resourceId
     example: ca projects resources move "$(ca vms get web-01 -q)" --project prod
   listSupportTickets:
+    long: >-
+      Lists the account's tickets, most recently updated first. --status filters by status (open,
+      waiting-on-you, resolved or closed) and --search by text. It shows tickets raised through the portal
+      or the API for this account and, with a personal token, that person's own requests too. Internal
+      notes are never shown, and HTML is sanitised.
     flags:
-      q: {name: search}
+      q: {name: search, help: "only tickets that match this text"}
     example: ca support tickets list --status open,waiting-on-you
   getSupportTicket:
+    long: >-
+      Shows the ticket, its description and its visible conversation, oldest first. It covers tickets
+      raised through the portal or the API for this account and, with a personal token, that person's own
+      requests. Internal notes are never shown, and HTML is sanitised.
     example: ca support tickets get 1234
   createSupportTicket:
+    long: >-
+      Raises a ticket and prints its summary; `ca support tickets get` shows the conversation. An account
+      or service token must name the member it acts for with --requester-email; a personal token must not.
     example: ca support tickets create --subject "Backup failed" --description "The nightly backup of web-01 failed"
   createSupportTicketReply:
+    long: >-
+      Posts a reply on the ticket and prints the ticket summary. An account or service token must name the
+      member it acts for with --author-email; a personal token must not.
     path: support tickets reply
     positional: id
     example: ca support tickets reply 1234 --body "That fixed it"
   resolveSupportTicket:
     example: ca support tickets resolve 1234
+  createPlacementGroup:
+    long: >-
+      Creates an empty placement group in the datacenter --datacenter-id names. spread keeps its VMs on
+      different hosts; gather keeps them together.
+    flags:
+      datacenterId: {help: "the datacenter's slug, from ca datacenters list"}
+    example: |
+      ca placement-groups create --name spread --strategy spread --datacenter-id <dc-slug>
+  createSshKey:
+    long: >-
+      Registers a public key as yours. An account service token has no person to own the key, and is
+      refused.
+    example: |
+      ca ssh-keys create --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)"
+  createVmPrivateIp:
+    long: >-
+      Adds the next free private address on one of the VM's interfaces; you pick the interface, not the
+      address. Needs write:network.
+    flags:
+      nicId: {help: "the interface's id, from ca vms nics list"}
+    example: |
+      ca vms private-ips create --vm web-01 --nic-id "$(ca vms nics list --vm web-01 -q | head -1)"
+  createVpcReservedIp:
+    long: >-
+      Reserves a free public address from the pool for the account until you release it. It counts against
+      the account's public-IP limit whether or not it is attached. It is refused when no address is free.
+      If ca fails without an answer, run `ca vpcs reserved-ips list` before trying again: a second run can
+      reserve a second address. Needs write:network.
+    example: |
+      ca vpcs reserved-ips create --vpc web
+  deleteBucketKey:
+    long: >-
+      Detaches the key from every bucket, then deletes it. The account's master key cannot be deleted,
+      because every bucket it owns would be orphaned. Needs protected:s3.
+  deleteProject:
+    long: >-
+      Deletes an empty project. The default project and projects the platform manages cannot be deleted,
+      and a project that holds resources is refused: move them out first. Only an account admin's own
+      sign-in or personal token can delete; an account service token is refused.
+  deleteSshKey:
+    long: >-
+      Deletes the key. A key still attached to a VM is refused: detach it with `ca vms ssh-keys detach`
+      first.
+  deleteVm:
+    long: >-
+      Deletes the VM and its disks. It cannot be undone. The VM must be stopped: a running VM is refused.
+      Needs protected:compute.
+    example: |
+      ca vms delete web-01
+  deleteVmBackup:
+    long: >-
+      Permanently deletes one backup. STARTED_AT is the backup's start time as `ca vms backups list` shows
+      it; one that matches no backup, or more than one, is refused. Needs protected:backup.
+    example: |
+      ca vms backups delete 2026-11-01T02:00:00Z --vm web-01
+  deleteVmBackupPolicy:
+    long: >-
+      Stops future scheduled backups. Existing backups are kept. A VM with no policy is refused.
+  deleteVpc:
+    long: >-
+      Deletes the VPC and returns its address range to the pool. It cannot be undone. A VPC that a VM
+      still uses is refused, without naming the VM: `ca vms list` and `ca vms nics list` find it. Needs
+      protected:network.
+    example: |
+      ca vpcs delete web
+  deleteVpcReservedIp:
+    long: >-
+      Releases the reserved address back to the pool. An address a VM or VIP still holds is refused:
+      detach it first. Needs protected:network.
+  forceStopVm:
+    long: >-
+      Cuts the VM's power without asking the guest. Writes not yet flushed may be lost.
+    example: |
+      ca vms force-stop web-01
+  getVmBackupPolicy:
+    long: >-
+      Shows the VM's backup policy. A VM with no policy is refused, the same as an unknown VM.
+  listOsImages:
+    long: >-
+      Lists the images a VM can be created from. Pass the id to `ca vms create --image`. requiresSshKey
+      says whether a VM from the image needs at least one SSH key (true) or takes none (false, for Windows
+      images).
+    example: |
+      ca os-images list
+  listVips:
+    long: >-
+      Lists every virtual IP in the account, with its private address, its public address if it has one,
+      and the VMs that serve it.
+  listVmBackupRestoreSites:
+    long: >-
+      Lists the datacenters that can take this backup as a new VM, each with whether it has room. An empty
+      list means it cannot be restored to a new VM. --backup is the backup's start time as
+      `ca vms backups list` shows it; one that matches no backup, or more than one, is refused.
+  listVmPrivateIps:
+    long: >-
+      Lists the VM's private addresses across all its interfaces. Pass an id to `ca vms public-ips attach
+      --private-lease-id`. Private addresses cannot be released.
+  rebootVm:
+    long: >-
+      Shuts the VM down and starts it again.
+    example: |
+      ca vms reboot web-01
+  restoreVm:
+    long: >-
+      Restores the VM from one of its backups, overwriting everything written since. --started-at is the
+      backup's start time in epoch seconds; `ca vms backups list` shows it in RFC 3339, so convert it
+      first. One that matches no backup, or more than one, is refused. Needs protected:backup.
+    flags:
+      startedAt: {help: "the backup's start time in epoch seconds (ca vms backups list shows it in RFC 3339)"}
+    example: |
+      # --started-at is the backup's start time in epoch seconds (2026-11-01T02:00:00Z)
+      ca vms restore web-01 --started-at 1761962400
+  restoreVmBackupToNewVm:
+    long: >-
+      Creates a new, billable VM from the backup and leaves the source VM as it is. Choose
+      --datacenter-slug from `ca vms backups restore-sites list`. Without --vpc-resource-id the VM is
+      public-only and needs --public-ip. --terms-accepted is required. Needs protected:backup and
+      write:compute, and protected:network with --public-ip. STARTED_AT is the backup's start time as `ca
+      vms backups list` shows it; one that matches no backup, or more than one, is refused.
+    flags:
+      datacenterSlug: {help: "the datacenter for the new VM, from ca vms backups restore-sites list"}
+      vpcResourceId: {help: "the VPC the new VM joins; leave it out for a public-only VM, which needs --public-ip"}
+    example: |
+      ca vms backups restore-to-new-vm 2026-11-01T02:00:00Z --vm web-01 --name web-01-copy \
+        --datacenter-slug <dc-slug> --vpc-resource-id "$(ca vpcs get main -q)" --terms-accepted
+  updateSshKey:
+    long: >-
+      Renames the key. The key itself cannot be changed: delete it and create a new one.
+  updateVmBackupPolicy:
+    flags:
+      planId: {help: "catalogue plan to copy; leave it out for a custom set"}
+    long: >-
+      Replaces the whole policy: a retention tier you leave out is dropped, not kept. Give --plan-id, or
+      --cadence-kind with a retention, not both. A VM that another scheduler already backs up is refused.
+    example: |
+      # A weekly backup on Sundays, overnight
+      ca vms backup-policy set --vm web-01 --cadence-kind weekly --cadence-day 7 --window-preference overnight
+  updateVpc:
+    long: >-
+      Renames the VPC. Its id, range and VMs are unchanged.
+  createVmFirewallRule:
+    long: >-
+      Adds a firewall rule to the VM. A VM at its firewall-rule limit is refused.
+    example: |
+      # Allow HTTPS from anywhere
+      ca vms firewall-rules create --vm web-01 --protocol tcp --from-port 443 --to-port 443 --source any
+  listProjectResources:
+    long: >-
+      Lists every live resource the project holds, by name, including kinds that cannot be moved out of
+      it: they still count toward the project and keep it from being deleted.
+  listVpcReservedIps:
+    long: >-
+      Lists the account's reserved public IPs in address order, attached or idle. They belong to the
+      account, not to the VPC --vpc names, so any of its VPCs lists the same ones. Needs read:network.
+  listVmBackups:
+    example: |
+      ca vms backups list --vm web-01
+  getOperation:
+    example: |
+      ca operations get <operation-id>
+  getVpc:
+    example: |
+      ca vpcs get web
 
 columns:
   PublicVmDto:

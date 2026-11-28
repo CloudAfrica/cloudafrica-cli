@@ -12,6 +12,12 @@ Waits for the operation to finish; --no-wait prints it and returns.
 ca vms backups create [flags]
 ```
 
+### Examples
+
+```
+  ca vms backups create --vm web-01
+```
+
 ### Options
 
 ```

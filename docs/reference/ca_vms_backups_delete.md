@@ -4,10 +4,16 @@ Forget one backup of a virtual machine
 
 ### Synopsis
 
-Requires protected:backup. Permanently deletes the named backup's archive. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+Permanently deletes one backup. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused. Needs protected:backup.
 
 ```
 ca vms backups delete STARTED_AT [flags]
+```
+
+### Examples
+
+```
+  ca vms backups delete 2026-11-01T02:00:00Z --vm web-01
 ```
 
 ### Options

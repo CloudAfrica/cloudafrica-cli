@@ -4,12 +4,19 @@ Set a virtual machine's backup policy
 
 ### Synopsis
 
-Replaces the whole policy: an omitted retention tier is dropped, not left alone. Send a planId, or a cadenceKind with a retention — not both. 409 when another scheduler already backs this VM up.
+Replaces the whole policy: a retention tier you leave out is dropped, not kept. Give --plan-id, or --cadence-kind with a retention, not both. A VM that another scheduler already backs up is refused.
 
 Some fields of the request body have no flag; set them with --data.
 
 ```
 ca vms backup-policy set [flags]
+```
+
+### Examples
+
+```
+  # A weekly backup on Sundays, overnight
+  ca vms backup-policy set --vm web-01 --cadence-kind weekly --cadence-day 7 --window-preference overnight
 ```
 
 ### Options
@@ -20,7 +27,7 @@ ca vms backup-policy set [flags]
   -d, --data string                the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help                       help for set
       --paused                     Start the policy paused.
-      --plan-id string             Catalogue plan to copy. Null for a custom set.
+      --plan-id string             catalogue plan to copy; leave it out for a custom set
       --vm string                  the vm id or name (required)
       --window-preference string   overnight, morning, afternoon or evening.
 ```

@@ -4,10 +4,16 @@ Delete a VPC
 
 ### Synopsis
 
-Retracts the VPC and returns its range to the pool. Irreversible. Requires protected:network. Synchronous: returns 204. Refuses with 409 while a VM still holds a lease on its private network. The backend's typed blocker list is not forwarded, and its body carries no detail for the gateway to read, so the 409 names neither the VMs nor how many: the detail is this API's generic conflict sentence.
+Deletes the VPC and returns its address range to the pool. It cannot be undone. A VPC that a VM still uses is refused, without naming the VM: `ca vms list` and `ca vms nics list` find it. Needs protected:network.
 
 ```
 ca vpcs delete VPC [flags]
+```
+
+### Examples
+
+```
+  ca vpcs delete web
 ```
 
 ### Options

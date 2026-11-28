@@ -4,17 +4,23 @@ Create a placement group
 
 ### Synopsis
 
-Created empty and owned by this token's account — the body names no account. `datacenterId` must be a slug from GET /v1/placement-groups/datacenters. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request.
+Creates an empty placement group in the datacenter --datacenter-id names. spread keeps its VMs on different hosts; gather keeps them together.
 
 ```
 ca placement-groups create [flags]
+```
+
+### Examples
+
+```
+  ca placement-groups create --name spread --strategy spread --datacenter-id <dc-slug>
 ```
 
 ### Options
 
 ```
   -d, --data string            the JSON request body: a literal, @file or @- (stdin); flags override its fields
-      --datacenter-id string   A datacenter slug from GET /v1/placement-groups/datacenters. (required)
+      --datacenter-id string   the datacenter's slug, from ca datacenters list (required)
   -h, --help                   help for create
       --name string            Display name. (required)
       --strategy string        spread (anti-affinity) or gather (affinity). (required)
