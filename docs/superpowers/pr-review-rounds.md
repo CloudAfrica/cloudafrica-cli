@@ -6,8 +6,10 @@ One row per panel round. `rule` = the loop rule in force; origin = where the fin
 |---|---|---|---|---|---|---|
 | #27 docs: one example per section | 1 | fe48165 | gating | 8 / 1, +1 pre-existing, 1 false positive | silent-failure 0/0, code-quality 2/2, comments 4/4, tests 2/1, senior-generalist 5/4 | ship-pr (any gating round) |
 | #27 | 2 (fix-gate) | 8f082f9 | advisory | 1 / 1, +1 pre-existing | reconcile-critic 3/2 | ship-pr |
+| CA-5701 CLI docs: help in ca's words | 1 | 4bf2901 | gating | 10 / 3 | silent-failure 1/1, code-quality 2/2, comments 5/5, tests 4/4, senior-generalist 5/5 | legacy |
+| CA-5701 | 2 (fix-gate) | c35c7ca | advisory | 1 / 2 | reconcile-critic 3/3 | legacy |
 
-criteriaReceipts: every round-1 reviewer `review:general=28 of 28`, `review:code=18 of 18` plus its own tag; round 2 `review:reconcile-critic=6 of 6`.
+criteriaReceipts: every round-1 reviewer `review:general=28 of 28`, `review:code=18 of 18` plus its own tag; round 2 `review:reconcile-critic=6 of 6`. CA-5701: the same in both rounds.
 
 ## Author misses (what the self-check had to do)
 
