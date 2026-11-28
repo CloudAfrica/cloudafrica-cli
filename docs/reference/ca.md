@@ -20,7 +20,7 @@ ca [flags]
 * [ca account](ca_account.md)	 - Show the account and its limits
 * [ca activity](ca_activity.md)	 - List account activity
 * [ca auth](ca_auth.md)	 - Sign in, sign out and list profiles
-* [ca backup-policies](ca_backup-policies.md)	 - List the backup policy of every VM
+* [ca backup-policies](ca_backup-policies.md)	 - List the backup policy of every live VM
 * [ca backup-windows](ca_backup-windows.md)	 - List the backup windows
 * [ca billing](ca_billing.md)	 - Read the balance and accrual, and manage the billing details
 * [ca bucket-keys](ca_bucket-keys.md)	 - Manage object storage access keys

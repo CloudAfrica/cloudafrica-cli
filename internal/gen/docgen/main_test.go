@@ -191,7 +191,8 @@ func allFlags(c *cobra.Command, into map[string]bool) {
 }
 
 // A backticked `--flag` in prose is not a full `ca ...` invocation, so TestDocumentedCommandsExist
-// does not see it; each must still name a flag some command has.
+// does not see it; each must still name a flag some command has. It does not check that the flag
+// belongs to the command the prose names, and it skips short flags and `-d/--data`.
 func TestDocumentedFlagSpansExist(t *testing.T) {
 	known := map[string]bool{"help": true}
 	allFlags(root(), known)

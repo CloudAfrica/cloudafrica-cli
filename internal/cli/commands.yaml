@@ -40,7 +40,7 @@ groups:
   placement-groups members: Manage a placement group's members
   account: Show the account and its limits
   activity: List account activity
-  backup-policies: List the backup policy of every VM
+  backup-policies: List the backup policy of every live VM
   backup-windows: List the backup windows
   billing: Read the balance and accrual, and manage the billing details
   billing details: Read and change the billing details

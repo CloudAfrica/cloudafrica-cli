@@ -139,7 +139,7 @@ var genOps = []cmdspec.Op{
 var genGroups = []cmdspec.Group{
 	cmdspec.Group{Path: []string{"account"}, Short: "Show the account and its limits", Aliases: []string(nil), GroupID: "account"},
 	cmdspec.Group{Path: []string{"activity"}, Short: "List account activity", Aliases: []string(nil), GroupID: "account"},
-	cmdspec.Group{Path: []string{"backup-policies"}, Short: "List the backup policy of every VM", Aliases: []string{"backup-policy"}, GroupID: "compute"},
+	cmdspec.Group{Path: []string{"backup-policies"}, Short: "List the backup policy of every live VM", Aliases: []string{"backup-policy"}, GroupID: "compute"},
 	cmdspec.Group{Path: []string{"backup-windows"}, Short: "List the backup windows", Aliases: []string{"backup-window"}, GroupID: "compute"},
 	cmdspec.Group{Path: []string{"billing"}, Short: "Read the balance and accrual, and manage the billing details", Aliases: []string(nil), GroupID: "account"},
 	cmdspec.Group{Path: []string{"billing", "details"}, Short: "Read and change the billing details", Aliases: []string{}, GroupID: ""},

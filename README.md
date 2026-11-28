@@ -71,7 +71,7 @@ cosign signature. To go back to an earlier release, rerun the install script wit
 
 ## Quick start
 
-This one is a walkthrough: run the commands in order, each after the one before it. Elsewhere in these docs, commands are described one by one, with one example per section.
+This one is a walkthrough: run the commands in order, each after the one before it. Elsewhere in these docs, commands are described one by one.
 
 ```sh
 ca auth login
