@@ -16,7 +16,6 @@ ca buckets create [flags]
 
 ```
   ca buckets create --display-name backups
-  ca buckets create --display-name audit --object-lock --versioning enabled
 ```
 
 ### Options

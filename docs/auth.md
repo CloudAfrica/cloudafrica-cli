@@ -2,14 +2,18 @@
 
 ## Signing in
 
+`ca auth login` signs in. It opens the browser, or prints a code on a machine without one. Three flags change it:
+
+- `--device` always uses a code.
+- `--scope` also requests a scope that login does not ask for by default, such as `write:billing`.
+- `--profile` and `--account` sign in to a specific account, under its own profile.
+
+`ca auth status` shows the selected profile's sign-in, `ca auth list` lists your profiles, and `ca auth logout` revokes the selected profile's session and deletes the profile.
+
+For example, signing in to a specific account:
+
 ```sh
-ca auth login     # opens the browser, or prints a code on a machine without one
-ca auth login --device     # always use a code
-ca auth login --scope write:billing   # also request a scope login does not ask for by default
-ca auth login --profile globex --account <account-id>   # sign in to a specific account
-ca auth status
-ca auth list
-ca auth logout
+ca auth login --profile globex --account <account-id>
 ```
 
 Tokens are stored per profile in the user config directory (`~/.config/cloudafrica/<profile>.json`

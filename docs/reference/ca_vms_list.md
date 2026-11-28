@@ -14,7 +14,6 @@ ca vms list [flags]
 
 ```
   ca vms list
-  ca vms list -o json
 ```
 
 ### Options

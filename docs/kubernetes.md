@@ -3,12 +3,12 @@
 > **Not yet available in production.** These commands are in `ca` but hidden from the command list and the
 > reference until managed Kubernetes is offered in production.
 
+`ca k8s list` shows your clusters, with the workers' upgrade state in the UPGRADE column. `ca k8s get` shows one cluster's versions, upgrade state and deadlines, worker targets and nodes. `ca k8s upgrade-workers` upgrades the workers; `--version v1.33.1` picks the version, and `--no-wait` and `--timeout 30m` control waiting. `ca k8s kubeconfig` prints the cluster's kubeconfig, and `--managed-vpn` prints the one that reaches the cluster over the account's Managed VPN. `ca k8s token` prints the 15-minute credential kubectl reads; the kubeconfig runs it.
+
+For example, upgrading the workers to a chosen version:
+
 ```sh
-ca k8s list               # UPGRADE: the workers' upgrade state
-ca k8s get <id>           # versions, upgrade state and deadlines, worker targets, nodes
-ca k8s upgrade-workers <id> [--version v1.33.1] [--no-wait] [--timeout 30m]
-ca k8s kubeconfig <id> [--managed-vpn] > prod.kubeconfig
-ca k8s token <id>         # the 15-minute credential kubectl reads; the kubeconfig runs it
+ca k8s upgrade-workers <id> --version v1.33.1
 ```
 
 The group also answers to `kubernetes`. Its commands take flags only, not `--data`. `upgrade-workers` is a

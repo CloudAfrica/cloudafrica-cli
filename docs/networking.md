@@ -8,15 +8,16 @@ Some of these commands, deletes among them, are protected actions: sign in with 
 protected command that is refused exits 5 and prints the remedy. See [Protected actions](auth.md#protected-actions),
 or [Scripts and CI](auth.md#scripts-and-ci) when you sign in with a token.
 
+Each command below is a separate command, run on its own. The example after each group shows one of them.
+
 ## VPCs
 
+`ca vpcs list` shows your VPCs and `ca vpcs get` one of them. `ca vpcs create` makes a VPC, `ca vpcs update` renames it and `ca vpcs delete` removes it. `ca vpcs firewall-rules list` shows the firewall rules that apply to it.
+
+For example, creating a VPC:
+
 ```sh
-ca vpcs list
-ca vpcs get web
 ca vpcs create --name web
-ca vpcs update web ...
-ca vpcs delete web
-ca vpcs firewall-rules list --vpc web
 ```
 
 ## Internal DNS
@@ -24,11 +25,12 @@ ca vpcs firewall-rules list --vpc web
 Internal DNS is not yet generally available: these commands work only on an account that has it enabled, and
 otherwise the API answers 403 `feature-not-enabled`.
 
+`ca vpcs internal-dns get` shows the state, the resolver addresses and the draining time. Add `-o json` to see the records, clashes and skipped VMs too. `ca vpcs internal-dns set` turns it on with `--enabled=true` and off with `--enabled=false`.
+
+For example, turning it on:
+
 ```sh
-ca vpcs internal-dns get --vpc web                    # state, resolver addresses, draining time
-ca vpcs internal-dns get --vpc web -o json            # records, clashes and skipped VMs too
 ca vpcs internal-dns set --vpc web --enabled=true
-ca vpcs internal-dns set --vpc web --enabled=false
 ```
 
 `get` prints the state (`off`, `setting_up`, `active`, `not_serving` or `winding_down`) and the
@@ -40,23 +42,33 @@ again to see the state settle.
 
 ## Reserved public IPs
 
+`ca vpcs reserved-ips list` shows the reserved public IPs, `ca vpcs reserved-ips create` reserves one and `ca vpcs reserved-ips delete` releases one. Each takes `--vpc`.
+
+For example, listing a VPC's reserved IPs:
+
 ```sh
-ca vpcs reserved-ips list|create|delete --vpc web
+ca vpcs reserved-ips list --vpc web
 ```
 
 `ca vms create --reserved-ip` builds a VM onto a reserved IP.
 
 ## Virtual IPs
 
+- `ca vips list` shows every VIP in the account.
+- `ca vips create` reserves a VIP in a VPC and `ca vips delete` releases it. Both take `--vpc`.
+- `ca vips public-ip attach` gives a VIP a public IP and `ca vips public-ip detach` takes it off. Both take `--vpc` and `--vip`.
+- `ca vips firewall-rules list` shows a VIP's firewall rules; `ca vips firewall-rules create`, `ca vips firewall-rules update` and `ca vips firewall-rules delete` change them. All take `--vpc` and `--vip`.
+- `ca vms vips add` makes a VM a member of a VIP and `ca vms vips remove` takes it out.
+
+For example, the firewall rules of one VIP:
+
 ```sh
-ca vips list                            # every VIP in the account
-ca vips create|delete --vpc web
-ca vips public-ip attach|detach --vpc web --vip lb1
-ca vips firewall-rules list|create|delete|update --vpc web --vip lb1
-ca vms vips add|remove lb1 --vm web-01  # membership
+ca vips firewall-rules list --vpc web --vip lb1
 ```
 
 ## Every address
+
+`ca ips list` shows every IP address the account holds.
 
 ```sh
 ca ips list

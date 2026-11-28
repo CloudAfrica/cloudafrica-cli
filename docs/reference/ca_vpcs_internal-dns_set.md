@@ -14,7 +14,6 @@ ca vpcs internal-dns set [flags]
 
 ```
   ca vpcs internal-dns set --vpc web --enabled=true
-  ca vpcs internal-dns set --vpc web --enabled=false
 ```
 
 ### Options

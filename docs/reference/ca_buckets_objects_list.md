@@ -13,7 +13,6 @@ ca buckets objects list BUCKET [flags]
 ### Examples
 
 ```
-  ca buckets objects list logs-7f3a
   ca buckets objects list logs-7f3a --prefix reports/2026/ --limit 50
 ```
 

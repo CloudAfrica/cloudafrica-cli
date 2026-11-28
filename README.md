@@ -57,11 +57,12 @@ cosign verify-blob cloudafrica-cli_<version>_SHA256SUMS \
 
 ## Update
 
+`ca update` installs the latest release of a `ca` that came from `install.sh` or `install.ps1`: it downloads the release, checks it against `SHA256SUMS` and replaces the program. `ca update --check` only reports whether a newer release exists. A `ca` from Homebrew or Scoop is updated with that tool instead: `brew upgrade ca` for Homebrew, `scoop update ca` for Scoop.
+
+For example, checking for a newer release:
+
 ```sh
-ca update           # a ca from install.sh or install.ps1: download, check against SHA256SUMS, replace
-ca update --check   # only report whether a newer release exists
-brew upgrade ca     # Homebrew
-scoop update ca     # Scoop
+ca update --check
 ```
 
 `ca update` on a Homebrew or Scoop install changes nothing and names that command instead. It checks the
@@ -69,6 +70,8 @@ download against the release's `SHA256SUMS`, the same check the install scripts 
 cosign signature. To go back to an earlier release, rerun the install script with `CA_VERSION`.
 
 ## Quick start
+
+This one is a walkthrough: run the commands in order, each after the one before it. Elsewhere in these docs, commands are described one by one, each with its own example.
 
 ```sh
 ca auth login
@@ -91,11 +94,12 @@ ca vms delete web-01
 
 ## Shell completion
 
+Pick the command for the shell you use. `ca completion bash`, `ca completion zsh`, `ca completion fish` and `ca completion powershell` each print the completion script for that shell, and you load it by running what it prints. bash needs the bash-completion package.
+
+For example, in bash:
+
 ```sh
-source <(ca completion bash)          # bash; needs the bash-completion package
-source <(ca completion zsh)           # zsh
-ca completion fish | source           # fish
-ca completion powershell | Out-String | Invoke-Expression   # PowerShell
+source <(ca completion bash)
 ```
 
 `ca completion <shell> --help` shows how to load it in every new session.
