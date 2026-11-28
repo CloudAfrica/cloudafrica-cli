@@ -65,7 +65,9 @@ func (a *App) vmCreate() *cobra.Command {
 		Use:   "create",
 		Short: "Create a VM",
 		Long:  "Creates a VM from flags; it takes no --data.\n\n" + cmdspec.WaitLine,
-		Args:  noArgs,
+		Example: "  ca vms create --name web-01 --datacenter <datacenter-slug> --image <image-id> --vpc main \\\n" +
+			"    --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key laptop --public-ip --accept-terms",
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireFlags(cmd, "name", "datacenter", "image", "vpc", "vcpu", "ram-gib", "boot-disk-gib"); err != nil {
 				return err
@@ -131,14 +133,14 @@ func (a *App) vmCreate() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&req.Name, "name", "", "DNS-style name, unique in the account (required)")
-	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug, from `ca datacenters list` (required)")
+	f.StringVar(&req.DatacenterSlug, "datacenter", "", "datacenter slug, from ca datacenters list (required)")
 	f.StringVar(&req.OsImageId, "image", "", "OS image id (required)")
-	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id or name the VM joins, from `ca vpcs list` (required)")
+	f.StringVar(&req.VpcResourceId, "vpc", "", "VPC id or name the VM joins, from ca vpcs list (required)")
 	f.Int32Var(&req.Vcpu, "vcpu", 0, "vCPU count, even (required)")
 	f.Int64Var(&ramGib, "ram-gib", 0, "RAM in GiB, even (required)")
 	f.Int64Var(&req.BootDiskGib, "boot-disk-gib", 0, "boot disk size in GiB (required)")
 	f.Int64SliceVar(&extraDisks, "extra-disk-gib", nil, "extra data disk in GiB (repeatable, max 8)")
-	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id or name to install, from `ca ssh-keys list` (repeatable)")
+	f.StringSliceVar(&sshKeys, "ssh-key", nil, "SSH key id or name to install, from ca ssh-keys list (repeatable)")
 	f.BoolVar(&publicIP, "public-ip", false, "attach a public IP")
 	f.StringVar(&reservedIP, "reserved-ip", "", "build onto this reserved public IP id")
 	f.StringVar(&placementGroup, "placement-group", "", "placement group id or name")

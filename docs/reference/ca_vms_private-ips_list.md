@@ -4,7 +4,7 @@ List the private IP addresses leased to a virtual machine
 
 ### Synopsis
 
-One entry per lease, across all of the VM's network interfaces. The id is the leaseId that privateLeaseId on POST /v1/vms/{id}/public-ips takes. Private addresses cannot be released through the API.
+Lists the VM's private addresses across all its interfaces. Pass an id to `ca vms public-ips attach --private-lease-id`. Private addresses cannot be released.
 
 ```
 ca vms private-ips list [flags]

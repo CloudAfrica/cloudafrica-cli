@@ -4,7 +4,7 @@ Create an object storage access key
 
 ### Synopsis
 
-Creates one key, optionally attached to a bucket in the same call. Must carry an Idempotency-Key header — a blind retry without one mints a second live credential. The secret is in this response and in the list nowhere: a caller who discards it retrieves it through the reveal action. Returns 201 with the key and its secret. A retry carrying the same Idempotency-Key replays the 201 with the key and without the secret — a credential is never held for a replay — so a caller that lost the response reads the secret with the reveal action, which needs protected:s3. Refuses with 422 limit-reached (the BIGSTORAGE_KEY key) at the account's key cap, 400 for a name another key already holds, and 404 for a bucketResourceId that resolves to no bucket here. Requires protected:s3.
+Creates an access key, attached to a bucket with --bucket-resource-id or account-wide without it. The secret is printed once, here; `ca bucket-keys reveal-secret` shows it again. A name another key holds is refused, and so is a key past the account's key limit. If ca fails without an answer, run `ca bucket-keys list` before trying again: a second run can create a second live key. Needs protected:s3.
 
 ```
 ca bucket-keys create [flags]

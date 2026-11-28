@@ -4,7 +4,7 @@ List the account's support tickets
 
 ### Synopsis
 
-Cursor-paginated, most recently updated first. Pass `?cursor=…` from the previous response's nextCursor to fetch the next page. Filter with `status` (repeatable: open, waiting-on-you, resolved, closed) and `q` (free text). The tickets returned are those raised through the portal or the API for this account, plus, for a personal token, the token owner's own requests. Internal notes are never returned, and HTML bodies are sanitised.
+Lists the account's tickets, most recently updated first. --status filters by status (open, waiting-on-you, resolved or closed) and --search by text. It shows tickets raised through the portal or the API for this account and, with a personal token, that person's own requests too. Internal notes are never shown, and HTML is sanitised.
 
 ```
 ca support tickets list [flags]
@@ -22,7 +22,7 @@ ca support tickets list [flags]
       --cursor string    with --limit, the page to fetch (the previous page's nextCursor)
   -h, --help             help for list
       --limit int        fetch one page of at most this many rows (the route's cap applies) and print it as returned
-      --search string    
+      --search string    only tickets that match this text
       --status strings   (repeat the flag or separate values with commas)
 ```
 

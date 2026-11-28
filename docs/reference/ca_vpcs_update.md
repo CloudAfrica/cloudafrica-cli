@@ -4,7 +4,7 @@ Rename a VPC
 
 ### Synopsis
 
-Changes the display name only; the id, range and attached VMs are untouched. Answered from the backend's own post-write read, so the new name renders without waiting on a projection that can lag a sync cycle.
+Renames the VPC. Its id, range and VMs are unchanged.
 
 ```
 ca vpcs update VPC [flags]

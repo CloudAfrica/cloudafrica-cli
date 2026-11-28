@@ -4,7 +4,7 @@ List transactions for the account
 
 ### Synopsis
 
-Invoices and credit notes, cursor-paginated, newest first. Credit notes are negative and appear once posted to the accounting system. Pass `?cursor=…` from the previous response's nextCursor to fetch the next page. Answers 502 when credit notes cannot be read, rather than a page without them.
+Lists invoices and credit notes, newest first. Credit notes are negative and appear once posted to the accounting system. When credit notes cannot be read, the list fails rather than leave them out.
 
 ```
 ca transactions list [flags]

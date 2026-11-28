@@ -4,7 +4,7 @@ Delete a bucket and everything in it
 
 ### Synopsis
 
-Irreversible: the objects go with the bucket, and the name is never reusable afterwards. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route. Requires protected:s3. The body must carry confirmBucketName, the bucket's name spelled exactly as the list returns it — the comparison is exact, matching the backend's own. Asynchronous: returns 202 with the operation to poll at Location, and 409 when a delete for this bucket is already in flight. 503 when the control plane is unavailable: the gateway renders it as its generic upstream-unavailable, an instruction to retry shortly.
+Deletes the bucket and every object in it. It cannot be undone, and the name can never be used again. --confirm-bucket-name must spell the bucket's name exactly as `ca buckets list` shows it. A second delete while one is running is refused. Needs read:s3 as well, because ca looks the bucket up in your bucket list. Needs protected:s3.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 

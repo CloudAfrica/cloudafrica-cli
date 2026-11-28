@@ -4,7 +4,7 @@ Rename a project
 
 ### Synopsis
 
-Changes the display name only. Answers with the renamed project. 409 if the account already has a project with this name, ignoring case. Needs an account admin's personal token or an account-service token with service_admin; any other credential is refused with 403.
+Renames the project. A name another project has, ignoring case, is refused. Needs an account admin's sign-in or personal token, or an account service token with service_admin.
 
 ```
 ca projects update PROJECT [flags]

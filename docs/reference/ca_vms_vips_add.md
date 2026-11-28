@@ -4,12 +4,18 @@ Make a VM a member of a VIP
 
 ### Synopsis
 
-Requires protected:network, and manage access to both the VM and the VIP's VPC. Declares the VM as a server that answers for the VIP's address and permits the VIP's traffic to it; the platform does not elect a holder, so the guest must configure the address itself. Declaring a VM that is already a member changes nothing. Refuses with 409 for a VIP that a Kubernetes cluster's LoadBalancer Service owns, a VM the platform manages, and a VIP with no VPC on record.
+Makes the VM a server for the virtual IP's address and lets the VIP's traffic reach it. The platform does not choose a holder, so the guest must configure the address itself. Adding a member again changes nothing. A VIP owned by a Kubernetes LoadBalancer Service, a VM the platform manages, or a VIP with no VPC is refused. Needs protected:network and access to both the VM and the VIP's VPC.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms vips add VIP [flags]
+```
+
+### Examples
+
+```
+  ca vms vips add lb1 --vm web-01
 ```
 
 ### Options

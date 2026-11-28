@@ -27,7 +27,7 @@ func missingSecret(operationID, name string, resp []byte) error {
 	if operationID == "revealBucketKeySecret" {
 		if field(v, "available") == "false" {
 			return &hintedError{
-				err:  errors.New("the backend holds no secret for this key"),
+				err:  errors.New("this key has no stored secret: it was created before secrets were stored"),
 				hint: "A key created now carries a secret: ca bucket-keys create --name NAME --access-type read|full",
 			}
 		}

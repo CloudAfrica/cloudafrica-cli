@@ -4,7 +4,7 @@ Take a VIP's public IP off
 
 ### Synopsis
 
-Requires protected:network. Returns the address to the pool. Synchronous: returns 200 with the VIP; a VIP with no public IP answers 200 unchanged. Refuses with 409 while firewall rules on the VIP remain (remove them with /v1/vpcs/{id}/vips/{vipId}/firewall-rules first), and for a VIP the platform manages.
+Returns the virtual IP's public address to the pool; a VIP with none is left as it is. A VIP that still has firewall rules is refused: delete them with `ca vips firewall-rules delete` first. A VIP the platform manages is refused too. Needs protected:network.
 
 ```
 ca vips public-ip detach [flags]

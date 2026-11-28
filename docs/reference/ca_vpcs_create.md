@@ -4,7 +4,7 @@ Create a VPC
 
 ### Synopsis
 
-Creates one VPC, owned by this token's account. Requires write:network. Must carry an Idempotency-Key header, which the backend dedupes on, so a retried create returns the first VPC rather than a second. Synchronous: returns 201 with the VPC. A no-capacity answer is 409.
+Creates a VPC. It is refused when there is no capacity for it. Needs write:network.
 
 ```
 ca vpcs create [flags]

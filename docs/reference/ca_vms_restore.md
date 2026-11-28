@@ -4,12 +4,19 @@ Restore a virtual machine from one of its backups
 
 ### Synopsis
 
-Requires protected:backup. Overwrites everything written since the named backup. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+Restores the VM from one of its backups, overwriting everything written since. --started-at is the backup's start time in epoch seconds; `ca vms backups list` shows it in RFC 3339, so convert it first. One that matches no backup, or more than one, is refused. Needs protected:backup.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms restore VM [flags]
+```
+
+### Examples
+
+```
+  # --started-at is the backup's start time in epoch seconds (2026-11-01T02:00:00Z)
+  ca vms restore web-01 --started-at 1793498400
 ```
 
 ### Options
@@ -18,7 +25,7 @@ ca vms restore VM [flags]
   -d, --data string        the JSON request body: a literal, @file or @- (stdin); flags override its fields
   -h, --help               help for restore
       --no-wait            print the operation and return without waiting for it
-      --started-at int     The whole-second startedAt of the backup, from GET …/backups. (required)
+      --started-at int     the backup's start time in epoch seconds (ca vms backups list shows it in RFC 3339) (required)
       --timeout duration   how long to wait for the operation (default 10m0s)
   -y, --yes                do not ask for confirmation
 ```

@@ -4,7 +4,7 @@ List the datacenters a backup can be restored to as a new VM
 
 ### Synopsis
 
-The datacenters that can take this backup as a new virtual machine, each with whether it has room. An empty list means the backup cannot be restored to a new VM. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+Lists the datacenters that can take this backup as a new VM, each with whether it has room. An empty list means it cannot be restored to a new VM. --backup is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused.
 
 ```
 ca vms backups restore-sites list [flags]

@@ -4,7 +4,7 @@ Check whether a datacenter can take a VM shape
 
 ### Synopsis
 
-Answers how many of `count` VMs of this shape would be placed in the datacenter, optionally joining a placement group. Read-only: nothing is reserved. `count` defaults to 1 and the answer never exceeds it; the platform may clamp a large `count`, which the response's `requested` reports. `extraDisksGib` is the TOTAL of the extra disks a create would request, not one disk, and defaults to 0.
+Shows how many of --count VMs of this shape the datacenter could place, optionally in a placement group. Nothing is reserved. --count defaults to 1 and the answer never exceeds it; the platform may lower a large count, and the output's `requested` shows the count it used. --extra-disks-gib is the total of all extra disks, not one disk.
 
 ```
 ca datacenters feasibility [flags]

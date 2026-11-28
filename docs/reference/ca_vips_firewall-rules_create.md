@@ -12,6 +12,12 @@ Waits for the operation to finish; --no-wait prints it and returns.
 ca vips firewall-rules create [flags]
 ```
 
+### Examples
+
+```
+  ca vips firewall-rules create --vpc web --vip lb1 --protocol tcp --from-port 443 --to-port 443 --source any
+```
+
 ### Options
 
 ```

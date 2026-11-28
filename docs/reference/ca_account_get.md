@@ -4,7 +4,7 @@ Introspect the calling token + account
 
 ### Synopsis
 
-The account this API token is bound to, the token's active scopes, and the remaining rate-limit budget.
+Shows the account you are signed in to, the scopes your sign-in or token holds, and the rate-limit budget left.
 
 ```
 ca account get [flags]

@@ -4,10 +4,16 @@ Register an SSH public key
 
 ### Synopsis
 
-The key belongs to the token's own person. The owner is taken from the token and cannot be named in the request; an ACCOUNT_SERVICE token has no person and is refused. Must carry an Idempotency-Key header: a retry under the same key replays the first call's stored response rather than starting a second, 409 while that first call is still in flight, and 422 if the key is reused for a different request.
+Registers a public key as yours. An account service token has no person to own the key, and is refused.
 
 ```
 ca ssh-keys create [flags]
+```
+
+### Examples
+
+```
+  ca ssh-keys create --name laptop --public-key "$(cat ~/.ssh/id_ed25519.pub)"
 ```
 
 ### Options

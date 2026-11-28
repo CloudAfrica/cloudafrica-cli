@@ -4,7 +4,7 @@ Move a resource into a project
 
 ### Synopsis
 
-Files the resource in this project, moving it out of whichever project it is in now; repeating the call is harmless. Answers with the destination project. Within one account only, and not every kind of resource can be moved: those authorized through a parent, such as public IPs and firewall rules, are refused. Needs an account admin's personal token or an account-service token with service_admin; any other credential is refused with 403.
+Moves a resource into the project from whichever project holds it now; repeating it changes nothing. Prints the project. It works within one account only, and resources that belong to another, such as public IPs and firewall rules, cannot be moved. Needs an account admin's sign-in or personal token, or an account service token with service_admin.
 
 ```
 ca projects resources move RESOURCE_ID [flags]

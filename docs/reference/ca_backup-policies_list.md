@@ -4,7 +4,7 @@ List the account's backup policies
 
 ### Synopsis
 
-Each live virtual machine's backup policy, tagged with the VM's id. Only live VMs are listed: a deleted VM's policy is not, though /v1/vms/{id}/backup-policy still answers it.
+Lists the backup policy of each live VM, with the VM's id. A deleted VM's policy is not listed; `ca vms backup-policy get` still shows it.
 
 ```
 ca backup-policies list [flags]

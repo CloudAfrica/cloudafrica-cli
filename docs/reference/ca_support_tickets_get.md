@@ -4,7 +4,7 @@ Get a support ticket and its conversation
 
 ### Synopsis
 
-The ticket, its original description and its visible conversation, oldest first. The tickets returned are those raised through the portal or the API for this account, plus, for a personal token, the token owner's own requests. Internal notes are never returned, and HTML bodies are sanitised.
+Shows the ticket, its description and its visible conversation, oldest first. It covers tickets raised through the portal or the API for this account and, with a personal token, that person's own requests. Internal notes are never shown, and HTML is sanitised.
 
 ```
 ca support tickets get SUPPORT_TICKET [flags]

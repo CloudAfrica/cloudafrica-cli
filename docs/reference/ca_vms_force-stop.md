@@ -4,12 +4,18 @@ Force a virtual machine off
 
 ### Synopsis
 
-Cuts power without asking the guest; unflushed writes may be lost. Asynchronous: returns 202 with the operation to poll.
+Cuts the VM's power without asking the guest. Writes not yet flushed may be lost.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms force-stop VM [flags]
+```
+
+### Examples
+
+```
+  ca vms force-stop web-01
 ```
 
 ### Options

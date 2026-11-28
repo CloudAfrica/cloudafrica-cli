@@ -4,7 +4,7 @@ Revoke a key's access to a bucket
 
 ### Synopsis
 
-Rewrites the bucket's policy without the key; the key itself stays in the account. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route. Requires protected:s3. Returns 204.
+Rewrites the bucket's policy without the key; the key stays in the account. Needs read:s3 as well, because ca looks the bucket up in your bucket list. Needs protected:s3.
 
 ```
 ca bucket-keys revoke BUCKET_KEY [flags]

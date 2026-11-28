@@ -6,6 +6,8 @@ package gen
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +71,19 @@ type OpOverlay struct {
 	AtLeastOne []string               `json:"atLeastOne"`
 	Exclusive  [][]string             `json:"exclusive"`
 	Example    string                 `json:"example"`
+	// Short and Long replace the API summary and description as the command's help, for one that describes
+	// the HTTP API rather than what ca does.
+	Short string `json:"short"`
+	Long  string `json:"long"`
+	// APIText is apiTextHash of the summary and description that Short and Long replace, so a change to
+	// either stops the generator until someone rereads the override.
+	APIText string `json:"apiText"`
+}
+
+// apiTextHash identifies an operation's summary and description.
+func apiTextHash(op operation) string {
+	sum := sha256.Sum256([]byte(op.Summary + "\n" + op.Description))
+	return hex.EncodeToString(sum[:6])
 }
 
 // FlagOverlay renames, scales or hides a query or body field.
@@ -532,6 +547,19 @@ func cliVoice(desc string) string {
 func (g *generator) build(method, url string, op operation, oo OpOverlay) (cmdspec.Op, bool) {
 	c := cmdspec.Op{OperationID: op.OperationID, Method: method, URL: url,
 		Short: firstLine(op.Summary), Long: cliVoice(op.Description), Example: strings.TrimSpace(oo.Example)}
+	if oo.Short != "" || oo.Long != "" {
+		if h := apiTextHash(op); oo.APIText != h {
+			g.fail("%s: the API's summary or description is not the one short:/long: replaced: reread them, then set apiText: %s (commands.yaml)", op.OperationID, h)
+		}
+	} else if oo.APIText != "" {
+		g.fail("%s: apiText without short: or long: (commands.yaml)", op.OperationID)
+	}
+	if oo.Short != "" {
+		c.Short = strings.TrimSpace(oo.Short)
+	}
+	if oo.Long != "" {
+		c.Long = strings.TrimSpace(oo.Long)
+	}
 	if c.Short == "" {
 		c.Short = op.OperationID
 	}

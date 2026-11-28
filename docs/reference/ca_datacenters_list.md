@@ -4,10 +4,16 @@ List the datacenters a placement group can be created in
 
 ### Synopsis
 
-The slug on each entry is the only value create accepts as `datacenterId`. Create refuses anything else — a display name, or a site this account cannot place into — because a group in a site the placement engine cannot match is silently inert. Read the slug from here rather than composing one.
+Lists the datacenters, each with its slug. `ca placement-groups create --datacenter-id` takes only a slug from this list: a display name, or a datacenter the account cannot place into, is refused.
 
 ```
 ca datacenters list [flags]
+```
+
+### Examples
+
+```
+  ca datacenters list
 ```
 
 ### Options

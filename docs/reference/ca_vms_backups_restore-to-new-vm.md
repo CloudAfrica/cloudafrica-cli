@@ -4,7 +4,7 @@ Restore a backup onto a new virtual machine
 
 ### Synopsis
 
-Creates a new, billable VM from the named backup and leaves the source VM untouched. Requires protected:backup, and the token must also hold write:compute, plus protected:network when `publicIp` is set; a token without them is refused with 403. `termsAccepted` must be true. Choose `datacenterSlug` from GET …/restore-sites. A VM with no `vpcResourceId` is public-only and needs `publicIp`. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+Creates a new, billable VM from the backup and leaves the source VM as it is. Choose --datacenter-slug from `ca vms backups restore-sites list`. Without --vpc-resource-id the VM is public-only and needs --public-ip. --terms-accepted is required. Needs protected:backup and write:compute, and protected:network with --public-ip. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
@@ -12,11 +12,18 @@ Waits for the operation to finish; --no-wait prints it and returns.
 ca vms backups restore-to-new-vm STARTED_AT [flags]
 ```
 
+### Examples
+
+```
+  ca vms backups restore-to-new-vm 2026-11-01T02:00:00Z --vm web-01 --name web-01-copy \
+    --datacenter-slug <dc-slug> --vpc-resource-id "$(ca vpcs get main -q)" --terms-accepted
+```
+
 ### Options
 
 ```
   -d, --data string              the JSON request body: a literal, @file or @- (stdin); flags override its fields
-      --datacenter-slug string   The datacenter slug for the new VM; see GET …/restore-sites. (required)
+      --datacenter-slug string   the datacenter for the new VM, from ca vms backups restore-sites list (required)
   -h, --help                     help for restore-to-new-vm
       --name string              DNS-style name of the new VM, unique in the account. (required)
       --no-wait                  print the operation and return without waiting for it
@@ -24,7 +31,7 @@ ca vms backups restore-to-new-vm STARTED_AT [flags]
       --terms-accepted           Acceptance of the terms of use. Must be true. (required)
       --timeout duration         how long to wait for the operation (default 10m0s)
       --vm string                the vm id or name (required)
-      --vpc-resource-id string   The VPC the new VM joins. Omit for a public-only VM, which needs publicIp.
+      --vpc-resource-id string   the VPC the new VM joins; leave it out for a public-only VM, which needs --public-ip
   -y, --yes                      do not ask for confirmation
 ```
 

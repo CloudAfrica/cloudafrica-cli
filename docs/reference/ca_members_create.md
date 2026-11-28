@@ -4,7 +4,7 @@ Invite someone to the account's team
 
 ### Synopsis
 
-The invitation is PENDING until it is accepted: a 200 means the membership row exists, not that the person has access yet. Inviting someone who is already an accepted member changes nothing and answers 200 the same way. Requires protected:team — the backend requires a recent second factor for a session and the matching scope for a token.
+Invites someone by email. The invitation stays pending until they accept it, so they have no access yet when this returns. Inviting an accepted member changes nothing. Needs protected:team.
 
 ```
 ca members create [flags]

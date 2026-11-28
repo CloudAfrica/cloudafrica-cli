@@ -4,10 +4,16 @@ Reserve a public IP
 
 ### Synopsis
 
-Requires write:network. Takes a free public address from the pool and holds it for the account until it is released; the address is not a parameter. Synchronous: returns 200 with the reservation. Refuses with 409 when no address is free, and with 422 limit-reached at the account's public-IP cap (the PUBLIC_IP key), which a reservation counts against whether or not it is attached. A retry with the same Idempotency-Key replays a 200 already returned; after a timeout or 5xx, or under a new key, it may reserve a second address, so list GET /v1/vpcs/{id}/reserved-ips first.
+Reserves a free public address from the pool for the account until you release it. It counts against the account's public-IP limit whether or not it is attached. It is refused when no address is free. If ca fails without an answer, run `ca vpcs reserved-ips list` before trying again: a second run can reserve a second address. Needs write:network.
 
 ```
 ca vpcs reserved-ips create [flags]
+```
+
+### Examples
+
+```
+  ca vpcs reserved-ips create --vpc web
 ```
 
 ### Options

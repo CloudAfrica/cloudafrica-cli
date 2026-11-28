@@ -4,12 +4,19 @@ Add a firewall rule to a virtual machine
 
 ### Synopsis
 
-Refuses with 422 limit-reached (the FIREWALL_RULES_PER_VM key) at the VM's rule cap.
+Adds a firewall rule to the VM. A VM at its firewall-rule limit is refused.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms firewall-rules create [flags]
+```
+
+### Examples
+
+```
+  # Allow HTTPS from anywhere
+  ca vms firewall-rules create --vm web-01 --protocol tcp --from-port 443 --to-port 443 --source any
 ```
 
 ### Options

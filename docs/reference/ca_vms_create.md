@@ -12,25 +12,32 @@ Waits for the operation to finish; --no-wait prints it and returns.
 ca vms create [flags]
 ```
 
+### Examples
+
+```
+  ca vms create --name web-01 --datacenter <datacenter-slug> --image <image-id> --vpc main \
+    --vcpu 2 --ram-gib 4 --boot-disk-gib 40 --ssh-key laptop --public-ip --accept-terms
+```
+
 ### Options
 
 ```
-      --accept-terms                     accept the terms of use (required)
-      --boot-disk-gib int                boot disk size in GiB (required)
-      --datacenter ca datacenters list   datacenter slug, from ca datacenters list (required)
-      --extra-disk-gib int64Slice        extra data disk in GiB (repeatable, max 8) (default [])
-  -h, --help                             help for create
-      --image string                     OS image id (required)
-      --name string                      DNS-style name, unique in the account (required)
-      --no-wait                          print the operation and return without waiting for it
-      --placement-group string           placement group id or name
-      --public-ip                        attach a public IP
-      --ram-gib int                      RAM in GiB, even (required)
-      --reserved-ip string               build onto this reserved public IP id
-      --ssh-key ca ssh-keys list         SSH key id or name to install, from ca ssh-keys list (repeatable)
-      --timeout duration                 how long to wait for the operation (default 10m0s)
-      --vcpu int32                       vCPU count, even (required)
-      --vpc ca vpcs list                 VPC id or name the VM joins, from ca vpcs list (required)
+      --accept-terms                accept the terms of use (required)
+      --boot-disk-gib int           boot disk size in GiB (required)
+      --datacenter string           datacenter slug, from ca datacenters list (required)
+      --extra-disk-gib int64Slice   extra data disk in GiB (repeatable, max 8) (default [])
+  -h, --help                        help for create
+      --image string                OS image id (required)
+      --name string                 DNS-style name, unique in the account (required)
+      --no-wait                     print the operation and return without waiting for it
+      --placement-group string      placement group id or name
+      --public-ip                   attach a public IP
+      --ram-gib int                 RAM in GiB, even (required)
+      --reserved-ip string          build onto this reserved public IP id
+      --ssh-key strings             SSH key id or name to install, from ca ssh-keys list (repeatable)
+      --timeout duration            how long to wait for the operation (default 10m0s)
+      --vcpu int32                  vCPU count, even (required)
+      --vpc string                  VPC id or name the VM joins, from ca vpcs list (required)
 ```
 
 ### Options inherited from parent commands

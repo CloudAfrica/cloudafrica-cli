@@ -4,7 +4,7 @@ Get a VPC's internal DNS
 
 ### Synopsis
 
-Whether internal DNS is on for the VPC, whether it is serving, and the names its VMs and virtual IPs resolve. 503 when the platform cannot be asked right now.
+Shows whether internal DNS is on for the VPC and serving, and the names its VMs and virtual IPs resolve to. It fails when the platform cannot be asked right now; try again shortly.
 
 ```
 ca vpcs internal-dns get [flags]

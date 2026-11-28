@@ -4,7 +4,7 @@ List the objects in a bucket
 
 ### Synopsis
 
-Lists the objects under `prefix`, or every object when it is omitted, in key order. Cursor-paginated. Follow nextCursor until it is null; a page can be short or even empty while more follow, so never infer the end from a page's size.
+Lists the objects in key order, under --prefix or across the bucket. With --limit, a page can be short or empty while more follow: keep going until it has no nextCursor.
 
 ```
 ca buckets objects list BUCKET [flags]

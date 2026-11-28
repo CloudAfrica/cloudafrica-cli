@@ -12,6 +12,12 @@ Waits for the operation to finish; --no-wait prints it and returns.
 ca vms apply-pending-restart VM [flags]
 ```
 
+### Examples
+
+```
+  ca vms apply-pending-restart web-01
+```
+
 ### Options
 
 ```

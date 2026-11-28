@@ -4,12 +4,18 @@ Restart a virtual machine
 
 ### Synopsis
 
-Shuts the virtual machine down and starts it again. Asynchronous: returns 202 with the operation to poll.
+Shuts the VM down and starts it again.
 
 Waits for the operation to finish; --no-wait prints it and returns.
 
 ```
 ca vms reboot VM [flags]
+```
+
+### Examples
+
+```
+  ca vms reboot web-01
 ```
 
 ### Options

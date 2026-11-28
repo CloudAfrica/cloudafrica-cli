@@ -4,7 +4,7 @@ List deleted objects that can still be recovered
 
 ### Synopsis
 
-Lists the keys whose current version is a delete marker, under `prefix` or across the bucket: deleted, with earlier versions still held. Each row is that delete marker. Cursor-paginated. Follow nextCursor until it is null; a page can be short or even empty while more follow, so never infer the end from a page's size.
+Lists the keys whose current version is a delete marker, under --prefix or across the bucket: deleted, with earlier versions still held. Each row is that delete marker. With --limit, a page can be short or empty while more follow: keep going until it has no nextCursor.
 
 ```
 ca buckets objects list-deleted BUCKET [flags]

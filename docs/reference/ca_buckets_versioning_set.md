@@ -4,7 +4,7 @@ Change a bucket's versioning state
 
 ### Synopsis
 
-Turns versioning on. It cannot be turned off afterwards, and this API does not suspend it. Do not suspend it from an S3 client: a known storage fault can corrupt a suspended bucket. Requires protected:s3 for every mode. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route.
+Turns versioning on. It cannot be turned off again, and ca cannot suspend it. Do not suspend it from an S3 client either: a known storage fault can corrupt a suspended bucket. Needs protected:s3. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
 
 ```
 ca buckets versioning set BUCKET [flags]

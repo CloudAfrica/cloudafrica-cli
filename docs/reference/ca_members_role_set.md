@@ -4,7 +4,7 @@ Change a member's role
 
 ### Synopsis
 
-`operator`, `admin`, `billing` or `viewer`; only an owner may change a role to or from `billing`. Valid for a pending invitee too, whose role is set before they ever sign in. `owner` is refused, and an owner's role cannot be changed here either: ownership is transferred, not granted. Requires protected:team — the backend requires a recent second factor for a session and the matching scope for a token.
+Sets the role: operator, admin, billing or viewer. Only an owner can change a role to or from billing. It works on a pending invitee too. owner is refused, and so is changing an owner's role: ownership is transferred, not granted. Needs protected:team.
 
 ```
 ca members role set MEMBER [flags]

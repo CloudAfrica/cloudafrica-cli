@@ -4,7 +4,7 @@ Get a virtual machine's backup policy
 
 ### Synopsis
 
-404 for either an unknown VM or a VM with no policy — absence is the status, not a policy with empty fields.
+Shows the VM's backup policy. A VM with no policy is refused, the same as an unknown VM.
 
 ```
 ca vms backup-policy get [flags]

@@ -4,10 +4,16 @@ Protect or release one backup
 
 ### Synopsis
 
-A protected backup is skipped by rotation, which is what stops a retention tightening from deleting it. `startedAt` is the whole-second value the backup list returns; a timestamp that matches no backup is 404, and one that matches more than one is 409.
+Protects a backup from rotation, or releases it. A protected backup is not deleted when retention tightens. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused. Needs protected:backup.
 
 ```
 ca vms backups set-protection STARTED_AT [flags]
+```
+
+### Examples
+
+```
+  ca vms backups set-protection 2026-11-01T02:00:00Z --vm web-01 --protected
 ```
 
 ### Options

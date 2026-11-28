@@ -268,7 +268,7 @@ func TestBucketKeyRevealAndDelete(t *testing.T) {
 	if got := strings.Join(strings.Fields(h.stdout.String()), " "); got != "KEY ID AVAILABLE SECRET KEY k-0 no" {
 		t.Errorf("unavailable row %q", got)
 	}
-	contains(t, h.stderr.String(), "holds no secret", "ca bucket-keys create")
+	contains(t, h.stderr.String(), "has no stored secret", "ca bucket-keys create")
 	if strings.Contains(h.stderr.String(), "delete") {
 		t.Errorf("the hint advises a delete: %s", h.stderr)
 	}

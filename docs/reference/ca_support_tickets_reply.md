@@ -4,7 +4,7 @@ Reply on a support ticket
 
 ### Synopsis
 
-Posts a reply on the ticket and answers with the ticket summary. An account or service token must name the member it acts for (requesterEmail on create, authorEmail on reply); a personal token must not.
+Posts a reply on the ticket and prints the ticket summary. An account or service token must name the member it acts for with --author-email; a personal token must not.
 
 ```
 ca support tickets reply SUPPORT_TICKET [flags]

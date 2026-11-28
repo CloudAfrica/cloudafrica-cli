@@ -4,7 +4,7 @@ Mint a short-lived URL that downloads one object
 
 ### Synopsis
 
-Returns a URL that downloads the object, or the earlier version `versionId` names, with no further credentials until `expiresAt` — about a minute. Treat it as a secret while it lives. 404 for a missing key, an unknown version id, or a delete marker's. An Idempotency-Key on this call replays an empty 200, not the URL: mint again without one. Needs read:s3 as well as this route's own scope: the bucket is named by id, and the gateway resolves it through the account's gated bucket list, which is itself a read:s3 route.
+Prints a URL that downloads the object, or the version --version-id names, with no other credentials, for about a minute. Treat it as a secret while it works. A missing key, an unknown version, or a delete marker is refused. Needs protected:s3, and read:s3 as well, because ca looks the bucket up in your bucket list.
 
 ```
 ca buckets objects download-url BUCKET [flags]

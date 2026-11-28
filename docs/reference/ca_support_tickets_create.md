@@ -4,7 +4,7 @@ Raise a support ticket
 
 ### Synopsis
 
-Raises a ticket for the account and answers with the ticket summary; the conversation is read by getting the ticket. An account or service token must name the member it acts for (requesterEmail on create, authorEmail on reply); a personal token must not. Requires an idempotency key: a retry under the same key returns the first call's ticket rather than raising a second.
+Raises a ticket and prints its summary; `ca support tickets get` shows the conversation. An account or service token must name the member it acts for with --requester-email; a personal token must not.
 
 ```
 ca support tickets create [flags]

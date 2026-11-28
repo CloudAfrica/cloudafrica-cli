@@ -4,11 +4,7 @@ VPCs and what belongs to them: reserved public IPs, virtual IPs (VIPs) and their
 own interfaces, IPs and firewall rules are under [Compute](compute.md). Every command is in the
 [reference](reference/ca.md).
 
-Some of these commands, deletes among them, are protected actions: sign in with `ca auth login` and approve them on the consent page. A
-protected command that is refused exits 5 and prints the remedy. See [Protected actions](auth.md#protected-actions),
-or [Scripts and CI](auth.md#scripts-and-ci) when you sign in with a token.
-
-Each command below is a separate command, run on its own. The example after each group shows one of them.
+Some commands, `vpcs delete` among them, are [protected actions](auth.md#protected-actions).
 
 ## VPCs
 
