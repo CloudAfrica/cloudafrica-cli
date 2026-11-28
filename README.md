@@ -71,7 +71,7 @@ cosign signature. To go back to an earlier release, rerun the install script wit
 
 ## Quick start
 
-This one is a walkthrough: run the commands in order, each after the one before it. Elsewhere in these docs, commands are described one by one, each with its own example.
+This one is a walkthrough: run the commands in order, each after the one before it. Elsewhere in these docs, commands are described one by one, with one example per section.
 
 ```sh
 ca auth login
@@ -94,13 +94,15 @@ ca vms delete web-01
 
 ## Shell completion
 
-Pick the command for the shell you use. `ca completion bash`, `ca completion zsh`, `ca completion fish` and `ca completion powershell` each print the completion script for that shell, and you load it by running what it prints. bash needs the bash-completion package.
+Pick the command for the shell you use. `ca completion bash`, `ca completion zsh`, `ca completion fish` and `ca completion powershell` each print the completion script for that shell, and you load it as shown below. bash needs the bash-completion package.
 
 For example, in bash:
 
 ```sh
 source <(ca completion bash)
 ```
+
+In zsh, `source <(ca completion zsh)`; in fish, `ca completion fish | source`; in PowerShell, `ca completion powershell | Out-String | Invoke-Expression`.
 
 `ca completion <shell> --help` shows how to load it in every new session.
 

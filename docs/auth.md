@@ -2,7 +2,7 @@
 
 ## Signing in
 
-`ca auth login` signs in. It opens the browser, or prints a code on a machine without one. Three flags change it:
+`ca auth login` signs in. It opens the browser, or prints a code on a machine without one. These flags change it:
 
 - `--device` always uses a code.
 - `--scope` also requests a scope that login does not ask for by default, such as `write:billing`.

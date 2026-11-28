@@ -63,11 +63,11 @@ The `vms backups` commands name a backup by its start time, RFC 3339 or epoch se
 epoch seconds only.
 
 - `ca vms backups list` shows a VM's backups and `ca vms backups create` takes one now.
-- `ca vms backups delete` forgets one backup, and `ca vms backups set-protection` protects or releases one.
+- `ca vms backups delete` permanently deletes one backup, and `ca vms backups set-protection` protects or releases one.
 - `ca vms backups restore-sites list` shows the datacenters a backup can be restored to as a new VM, and `ca vms backups restore-to-new-vm` does the restore.
 - `ca vms restore` restores the VM itself from one of its backups.
 - `ca vms backup-policy get` shows a VM's backup policy; `ca vms backup-policy set` and `ca vms backup-policy delete` change it, and `ca vms backup-policy preview-rotation` shows what a retention set would delete.
-- `ca backup-policies list` shows the policy of every VM, `ca backup-windows list` the backup window catalogue, and `ca account backup-retention` how long a deleted VM's newest backup is kept.
+- `ca backup-policies list` shows the backup policy of every live VM, `ca backup-windows list` the backup window catalogue, and `ca account backup-retention` how long a deleted VM's newest backup is kept.
 
 For example, taking a backup now:
 

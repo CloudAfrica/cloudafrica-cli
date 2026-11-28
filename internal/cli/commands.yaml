@@ -211,7 +211,7 @@ operations:
     path: vpcs internal-dns get
   setVpcInternalDns:
     path: vpcs internal-dns set
-    example: ca vpcs internal-dns set --vpc web --enabled=true
+    example: ca vpcs internal-dns set --vpc web --enabled=false
   listIpAddresses:
     example: ca ips list
   listPlacementGroupDatacenters:
@@ -298,9 +298,13 @@ operations:
   createBucketKey:
     flags:
       bucketResourceId: {help: "the id of the bucket to attach the key to (ca buckets get NAME -q prints it), not its name; omit for an account-level key"}
-    example: ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)"
+    example: |
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-keys create --name ci --access-type read --bucket-resource-id "$(ca buckets get logs-7f3a -q)" --yes -q)
   revealBucketKeySecret:
-    example: ca bucket-keys reveal-secret ci
+    example: |
+      # -q prints the secret key, not the id
+      SECRET=$(ca bucket-keys reveal-secret ci --yes -q)
   grantBucketKeyBucketAccess:
     path: bucket-keys grant
     positional: keyId
@@ -319,10 +323,7 @@ operations:
     path: account backup-retention
   listActivity:
     exclusive: [[types], [subject-type, subject-id]]
-    example: |
-      ca activity list --limit 20
-      ca activity list --types vm,vpc
-      ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
+    example: ca activity list --subject-type vm --subject-id "$(ca vms get web-01 -q)"
   listBackupPolicies:
     path: backup-policies list
   listBackupWindows:
@@ -370,9 +371,7 @@ operations:
   listSupportTickets:
     flags:
       q: {name: search}
-    example: |
-      ca support tickets list
-      ca support tickets list --status open,waiting-on-you
+    example: ca support tickets list --status open,waiting-on-you
   getSupportTicket:
     example: ca support tickets get 1234
   createSupportTicket:
