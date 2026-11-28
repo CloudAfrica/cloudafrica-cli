@@ -4,7 +4,7 @@ Replace a bucket's CORS rules
 
 ### Synopsis
 
-Replaces every CORS rule with the rules you send; an empty list removes them all. Send the rules `ca buckets cors get` returned as basedOn: the change is refused when the stored rules differ, or when you leave basedOn out and the bucket has rules. Prints the rules as stored. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
+Replaces every CORS rule with the rules you send; an empty list removes them all. Send the rules `ca buckets cors get` returned as basedOn: the change is refused when the stored rules differ, or when you leave basedOn out and the bucket has rules. Prints the rules as stored. Needs protected:s3, but no pairing, and read:s3 as well, because ca looks the bucket up in your bucket list.
 
 Some fields of the request body have no flag; set them with --data.
 

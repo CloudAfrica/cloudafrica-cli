@@ -64,3 +64,22 @@ func TestEveryWaitingCommandSaysItWaits(t *testing.T) {
 	}
 	walk(treeRoot())
 }
+
+// Every protected: scope an operation needs is named in its help, so a user can tell which pairing to ask for.
+func TestLongHelpNamesEveryProtectedScope(t *testing.T) {
+	checked := 0
+	for _, op := range genOps {
+		for _, s := range op.Scopes {
+			if !strings.HasPrefix(s, "protected:") {
+				continue
+			}
+			checked++
+			if !strings.Contains(longHelp(op), s) {
+				t.Errorf("%s needs %s but its help does not say so", op.OperationID, s)
+			}
+		}
+	}
+	if checked < 30 {
+		t.Fatalf("checked %d protected scopes: the walk is wrong", checked)
+	}
+}

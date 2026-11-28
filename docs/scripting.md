@@ -7,8 +7,9 @@ at a terminal needs `--yes` off one. The [conventions](conventions.md) and the
 
 ## Ids and fields
 
-`-q` prints ids only, one per line. A name works wherever a command takes a resource, so a script
-rarely needs the id, but a flag ending in `-resource-id` does:
+`-q` prints ids only, one per line (for `bucket-keys create` and `reveal-secret`, the secret key
+instead). A name works for most resources, so a script rarely needs their ids, but a flag ending in
+`-resource-id` does:
 
 ```sh
 vpc=$(ca vpcs get main -q)
@@ -64,4 +65,5 @@ has the steps. A teardown job then runs:
 ca vms delete web-01 --yes
 ```
 
-Exit code 5 means the pairing has ended: pair the token again.
+Exit code 5 means the token is not paired, or lacks the scope: pair it again, and check the token's
+scopes if that does not help. The [exit codes](conventions.md#exit-codes) list the rest.

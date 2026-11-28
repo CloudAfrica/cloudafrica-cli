@@ -3,7 +3,7 @@
 Virtual machines and what attaches to them, their backups, placement groups, and the catalogues a VM
 is created from. Every command is in the [reference](reference/ca.md).
 
-Deletes and some other commands are [protected actions](auth.md#protected-actions).
+Some commands, `vms delete` among them, are [protected actions](auth.md#protected-actions).
 
 ## Before you create a VM
 

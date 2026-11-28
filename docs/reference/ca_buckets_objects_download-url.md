@@ -4,7 +4,7 @@ Mint a short-lived URL that downloads one object
 
 ### Synopsis
 
-Prints a URL that downloads the object, or the version --version-id names, with no other credentials, for about a minute. Treat it as a secret while it works. A missing key, an unknown version, or a delete marker is refused. Needs read:s3 as well, because ca looks the bucket up in your bucket list.
+Prints a URL that downloads the object, or the version --version-id names, with no other credentials, for about a minute. Treat it as a secret while it works. A missing key, an unknown version, or a delete marker is refused. Needs protected:s3, and read:s3 as well, because ca looks the bucket up in your bucket list.
 
 ```
 ca buckets objects download-url BUCKET [flags]

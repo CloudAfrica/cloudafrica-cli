@@ -4,7 +4,7 @@ Protect or release one backup
 
 ### Synopsis
 
-Protects a backup from rotation, or releases it. A protected backup is not deleted when retention tightens. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused.
+Protects a backup from rotation, or releases it. A protected backup is not deleted when retention tightens. STARTED_AT is the backup's start time as `ca vms backups list` shows it; one that matches no backup, or more than one, is refused. Needs protected:backup.
 
 ```
 ca vms backups set-protection STARTED_AT [flags]

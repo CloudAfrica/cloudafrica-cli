@@ -2,7 +2,7 @@
 
 Buckets, their objects, and the access keys that reach them. Every command is in the [reference](reference/ca.md).
 
-Deletes and some other commands are [protected actions](auth.md#protected-actions).
+Some commands, `buckets delete` among them, are [protected actions](auth.md#protected-actions).
 
 ## Buckets
 

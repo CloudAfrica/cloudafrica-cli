@@ -4,7 +4,7 @@ VPCs and what belongs to them: reserved public IPs, virtual IPs (VIPs) and their
 own interfaces, IPs and firewall rules are under [Compute](compute.md). Every command is in the
 [reference](reference/ca.md).
 
-Deletes and some other commands are [protected actions](auth.md#protected-actions).
+Some commands, `vpcs delete` among them, are [protected actions](auth.md#protected-actions).
 
 ## VPCs
 

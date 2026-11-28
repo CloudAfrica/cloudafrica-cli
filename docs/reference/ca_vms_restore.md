@@ -16,7 +16,7 @@ ca vms restore VM [flags]
 
 ```
   # --started-at is the backup's start time in epoch seconds (2026-11-01T02:00:00Z)
-  ca vms restore web-01 --started-at 1761962400
+  ca vms restore web-01 --started-at 1793498400
 ```
 
 ### Options

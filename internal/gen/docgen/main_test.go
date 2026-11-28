@@ -24,8 +24,8 @@ func handWritten(t *testing.T) []string {
 var inlineCa = regexp.MustCompile("`(ca [^`]+)`")
 
 // fencedCa finds a `ca ...` invocation at the start of a line, inside $(...),
-// or on the right of an assignment or && — up to the end of that command.
-var fencedCa = regexp.MustCompile(`(?:^|\$\(|=\s*|&&\s*|;\s*)(ca\s[^)&;|]*)`)
+// on the right of an assignment, &&, ; or a pipe — up to the end of that command.
+var fencedCa = regexp.MustCompile(`(?:^|\$\(|=\s*|&&\s*|;\s*|\|\s*)(ca\s[^)&;|]*)`)
 
 // commandLines returns each `ca ...` line in a fenced block and each `ca ...`
 // code span, with backslash continuations joined.
@@ -229,12 +229,12 @@ func TestRunReplacesOnlyReferencePages(t *testing.T) {
 
 func TestCommandLinesFindsCapturedInvocations(t *testing.T) {
 	page := filepath.Join(t.TempDir(), "p.md")
-	body := "```\nX=$(ca auth elevate) || exit\n$env:X = ca auth elevate\nca vm list -o json | jq .\n```\n"
+	body := "```\nX=$(ca auth elevate) || exit\n$env:X = ca auth elevate\nca vm list -o json | jq . | ca vm create -d @-\n```\n"
 	if err := os.WriteFile(page, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got := strings.Join(commandLines(t, page), "\n")
-	want := "ca auth elevate\nca auth elevate\nca vm list -o json"
+	want := "ca auth elevate\nca auth elevate\nca vm list -o json\nca vm create -d @-"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -279,7 +279,20 @@ func TestReferenceLinksExist(t *testing.T) {
 
 // apiWords are API transport details a `ca` user never sees: `ca` waits on operations, follows pages,
 // sends the Idempotency-Key and maps statuses to exit codes, and its users run commands, not routes.
-var apiWords = regexp.MustCompile(`\b(GET|POST|PUT|PATCH|DELETE) [/…]|/v1/|\bthis route\b|Idempotency-Key|(?i:\b(returns|answers|refuses with|refused with|is a|is) [1-5][0-9][0-9]\b)|\b[1-5]0[0-9]s?\b|\b5xx\b|Asynchronous|Synchronous|\bLocation\b|\bgateway\b|\bbackend\b|\bthis API\b|(?i:cursor-paginated)|\?cursor=|previous response|\b[A-Z][A-Z_]{3,} key\b|\bNull\b|\bnull\b|\bthe caller\b`)
+var apiWords = regexp.MustCompile(`\b(GET|POST|PUT|PATCH|DELETE) [/…]|/v1/|\bthis route\b|Idempotency-Key|(?i:\b(returns|answers|refuses with|refused with|is a|is) [1-5][0-9][0-9]\b)|\b[1-5]0[0-9]s?\b|\b[45][0-9][0-9]s?\b|\b5xx\b|Asynchronous|Synchronous|\bLocation\b|\bgateway\b|\bbackend\b|\bthis API\b|(?i:cursor-paginated)|\?cursor=|previous response|\b[A-Z][A-Z_]{3,} key\b|\bNull\b|\bnull\b|\bthe caller\b`)
+
+func TestApiWordsCatchesTransportDetail(t *testing.T) {
+	for _, s := range []string{"refused with 422", "a 429 means wait", "410s", "GET /v1/vms", "sends Idempotency-Key"} {
+		if apiWords.FindString(s) == "" {
+			t.Errorf("apiWords misses %q", s)
+		}
+	}
+	for _, s := range []string{"--hours 168", "at most 120 characters", "keeps the last 4"} {
+		if m := apiWords.FindString(s); m != "" {
+			t.Errorf("apiWords flags %q in %q", m, s)
+		}
+	}
+}
 
 // commands is every command under c; hidden ones only when withHidden.
 func commands(c *cobra.Command, withHidden bool, into *[]*cobra.Command) {
@@ -341,7 +354,11 @@ func TestExamplesResolve(t *testing.T) {
 		if err := os.WriteFile(page, []byte("```\n"+c.Example+"\n```\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		for _, line := range commandLines(t, page) {
+		lines := commandLines(t, page)
+		if len(lines) == 0 {
+			t.Errorf("%s example has no ca line the check can read: %q", c.CommandPath(), c.Example)
+		}
+		for _, line := range lines {
 			found, flags, problem := resolve(r, line)
 			if problem != "" {
 				t.Errorf("%s example %q: %s", c.CommandPath(), line, problem)

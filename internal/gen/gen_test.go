@@ -258,23 +258,42 @@ func TestGenerateStringListQuery(t *testing.T) {
 
 // short: and long: replace the API's summary and description; an operation without them keeps the API's.
 func TestGenerateHelpOverrides(t *testing.T) {
-	overlay := strings.Replace(fixtureOverlay, "  createWidget:\n",
-		"  createWidget:\n    short: Make a widget\n    long: >-\n      Makes a widget,\n      in ca's words.\n", 1)
-	out, _, err := generate(t, fixtureDoc(), overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := opByID(t, out, "createWidget")
-	if c.Short != "Make a widget" || c.Long != "Makes a widget, in ca's words." {
-		t.Errorf("createWidget help = %q / %q", c.Short, c.Long)
-	}
 	plain, _, err := generate(t, fixtureDoc(), fixtureOverlay)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := opByID(t, plain, "listWidgets")
-	if got := opByID(t, out, "listWidgets"); got.Short != want.Short || got.Long != want.Long {
-		t.Errorf("listWidgets help changed: %q / %q", got.Short, got.Long)
+	api := opByID(t, plain, "createWidget")
+	const hash = "    apiText: \"01ba4719c80b\"\n"
+	for name, c := range map[string]struct{ entry, short, long string }{
+		"both":       {"    short: Make a widget\n    long: >-\n      Makes a widget,\n      in ca's words.\n", "Make a widget", "Makes a widget, in ca's words."},
+		"short only": {"    short: Make a widget\n", "Make a widget", api.Long},
+		"long only":  {"    long: Makes a widget.\n", api.Short, "Makes a widget."},
+	} {
+		out, _, err := generate(t, fixtureDoc(), strings.Replace(fixtureOverlay, "  createWidget:\n", "  createWidget:\n"+c.entry+hash, 1))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := opByID(t, out, "createWidget"); got.Short != c.short || got.Long != c.long {
+			t.Errorf("%s: createWidget help = %q / %q", name, got.Short, got.Long)
+		}
+		want := opByID(t, plain, "listWidgets")
+		if got := opByID(t, out, "listWidgets"); got.Short != want.Short || got.Long != want.Long {
+			t.Errorf("%s: listWidgets help changed: %q / %q", name, got.Short, got.Long)
+		}
+	}
+}
+
+// An override is refused once the API text it replaced has changed, and a hash with no override is refused.
+func TestGenerateRefusesAStaleOverride(t *testing.T) {
+	for name, c := range map[string]struct{ entry, want string }{
+		"no hash":     {"    long: Makes a widget.\n", "createWidget: the API's summary or description is not the one short:/long: replaced: reread them, then set apiText: 01ba4719c80b"},
+		"stale hash":  {"    long: Makes a widget.\n    apiText: \"000000000000\"\n", "set apiText: 01ba4719c80b"},
+		"no override": {"    apiText: \"01ba4719c80b\"\n", "createWidget: apiText without short: or long:"},
+	} {
+		_, _, err := generate(t, fixtureDoc(), strings.Replace(fixtureOverlay, "  createWidget:\n", "  createWidget:\n"+c.entry, 1))
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, c.want)
+		}
 	}
 }
 

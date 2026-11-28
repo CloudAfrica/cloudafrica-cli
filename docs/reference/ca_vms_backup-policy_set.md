@@ -15,8 +15,9 @@ ca vms backup-policy set [flags]
 ### Examples
 
 ```
-  # A weekly backup on Sundays, overnight
-  ca vms backup-policy set --vm web-01 --cadence-kind weekly --cadence-day 7 --window-preference overnight
+  # A weekly backup on Sundays, overnight, keeping 8 of them; retention has no flag, so it goes in -d
+  ca vms backup-policy set --vm web-01 --cadence-kind weekly --cadence-day 7 --window-preference overnight \
+    -d '{"retention": {"keepWeekly": 8}}'
 ```
 
 ### Options
