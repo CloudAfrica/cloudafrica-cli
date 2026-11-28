@@ -134,3 +134,12 @@ Author misses the PR review caught. Check these before opening a PR.
   browser flow once `DeviceLogin` took it (#24).
 - **A retry keyed on error type enumerates every error the helper returns.** `postForm` returned a body read
   failure bare, so the poll ended on a lost answer it promised to repeat (#24).
+- **A doc sentence about every command needs a test over every command.** "Its help says which `protected:`
+  scope it needs" was backed by a test over generated commands only, and `k8s upgrade-workers` is
+  hand-written (#28).
+- **A value in an example is computed, not typed.** The `vms restore` epoch decoded to a year before the date
+  in its own comment, and the `backup-policy set` example left out the retention its help requires (#28).
+- **"Deletes and some other commands" is a claim about every delete.** Enumerate the class before writing
+  it: five deletes are not protected (#28).
+- **Undo a test-breaking edit from a copy, not with `git checkout`.** Checking out the file also discarded an
+  uncommitted fix in it (#28).
