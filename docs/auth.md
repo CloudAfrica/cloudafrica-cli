@@ -44,8 +44,7 @@ code signs them in as you. If the server cancels the sign-in because the code wa
 
 ## Protected actions
 
-A protected action is one that is hard to undo, such as `vms delete`. It runs only for a sign-in or
-API token that is **paired**, which means a person allowed protected actions for it in the portal, as
+A protected action is a command that needs a `protected:` scope, such as `vms delete`. It runs only for a sign-in or API token that is **paired**, which means a person allowed protected actions for it in the portal, as
 below. A pairing lasts for the **elevation window**, a period set by CloudAfrica; after it ends, pair
 again. A protected command that is refused as not paired exits 5 and prints the remedy.
 
